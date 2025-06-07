@@ -9,5 +9,5 @@ Each Records has a value and a key. If no #[key] is provided the first field is 
 ## Progress
 
 * [x] First field is key
-* [ ] Specified field is key
-* [ ] Composite keys
+* [x] Specified field is key
+* [x] Composite keys
