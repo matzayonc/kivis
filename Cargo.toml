@@ -1,0 +1,10 @@
+[workspace]
+members = ["kivis", "kivis-derive"]
+resolver = "2"
+
+
+[workspace.dependencies]
+kivis = { path = "kivis" }
+kivis-derive = { path = "kivis-derive" }
+
+serde = { version = "1.0.219", features = ["derive"] }
