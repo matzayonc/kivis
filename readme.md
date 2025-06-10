@@ -11,3 +11,4 @@ Each Records has a value and a key. If no #[key] is provided the first field is 
 * [x] First field is key
 * [x] Specified field is key
 * [x] Composite keys
+* [x] Indexes

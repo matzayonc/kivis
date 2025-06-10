@@ -7,12 +7,19 @@ pub struct SchemaKey {
     pub ty: Type,
 }
 
+#[derive(Clone)]
+pub struct SchemaIndex {
+    pub name: Ident,
+    pub ty: Type,
+}
+
 pub struct Schema {
     pub name: Ident,
     pub generics: syn::Generics,
     pub attrs: Vec<syn::Attribute>,
     pub table_value: u8,
     pub keys: Vec<SchemaKey>,
+    pub indexes: Vec<SchemaIndex>,
 }
 
 impl Schema {
@@ -75,8 +82,12 @@ impl Schema {
 
         // Find fields marked with #[key] attribute
         let mut key_fields = Vec::new();
+        let mut index_fields = Vec::new();
+
         for field in named_fields {
             let has_key_attr = field.attrs.iter().any(|attr| attr.path().is_ident("key"));
+            let has_index_attr = field.attrs.iter().any(|attr| attr.path().is_ident("index"));
+
             if has_key_attr {
                 if let Some(ident) = &field.ident {
                     key_fields.push(SchemaKey {
@@ -85,6 +96,19 @@ impl Schema {
                     });
                 } else {
                     return Err(Error::new_spanned(&name, "Key field must have a name")
+                        .to_compile_error()
+                        .into());
+                }
+            }
+
+            if has_index_attr {
+                if let Some(ident) = &field.ident {
+                    index_fields.push(SchemaIndex {
+                        name: ident.clone(),
+                        ty: field.ty.clone(),
+                    });
+                } else {
+                    return Err(Error::new_spanned(&name, "Index field must have a name")
                         .to_compile_error()
                         .into());
                 }
@@ -116,6 +140,7 @@ impl Schema {
             attrs,
             table_value,
             keys: key_fields,
+            indexes: index_fields,
         })
     }
 }

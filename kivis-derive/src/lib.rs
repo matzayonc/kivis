@@ -7,7 +7,7 @@ mod schema;
 use crate::generator::generate_record_impl;
 use crate::schema::Schema;
 
-#[proc_macro_derive(Record, attributes(table, key))]
+#[proc_macro_derive(Record, attributes(table, key, index))]
 pub fn derive_record(input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree
     let input = parse_macro_input!(input as DeriveInput);
