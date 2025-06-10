@@ -10,12 +10,26 @@ pub trait Recordable: Serialize + DeserializeOwned + Debug {
     fn key(&self) -> Self::Key;
 }
 
+pub trait Indexable<R: Recordable> {
+    type IndexValue: Serialize + DeserializeOwned + Ord + Clone + Debug;
+    
+    fn index_value(&self, record: &R) -> Self::IndexValue;
+}
+
 pub trait Store<R: Recordable> {
     type SerializationError;
 
     fn insert(&mut self, record: R) -> Result<(), Self::SerializationError>;
     fn get(&self, key: &R::Key) -> Result<Option<R>, Self::SerializationError>;
     fn remove(&mut self, key: &R::Key) -> Result<Option<R>, Self::SerializationError>;
+}
+
+pub trait IndexedStore<R: Recordable>: Store<R> {
+    type IndexError;
+    
+    fn insert_with_indexes(&mut self, record: R) -> Result<(), Self::IndexError>;
+    fn remove_with_indexes(&mut self, key: &R::Key) -> Result<Option<R>, Self::IndexError>;
+    fn get_by_index<I: Indexable<R>>(&self, index_value: &I::IndexValue) -> Result<Vec<R>, Self::IndexError>;
 }
 
 impl<R: Recordable + Clone> Store<R> for BTreeMap<R::Key, R> {
