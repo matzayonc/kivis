@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, fmt::Debug};
+use core::fmt;
+use std::{
+    collections::BTreeMap,
+    fmt::{Debug, Display},
+};
 
 pub use kivis_derive::Record;
 use serde::{Serialize, de::DeserializeOwned};
@@ -8,6 +12,80 @@ pub trait Recordable: Serialize + DeserializeOwned + Debug {
     type Key: Serialize + DeserializeOwned + Ord + Clone + Eq + Debug;
 
     fn key(&self) -> Self::Key;
+}
+
+#[derive(Debug, Clone)]
+pub enum DatabaseError<S: Debug + Display + Eq + PartialEq> {
+    Serialization(bcs::Error),
+    Deserialization(bcs::Error),
+    Io(S),
+}
+
+impl<S: Debug + Display + Eq + PartialEq> fmt::Display for DatabaseError<S> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Self::Serialization(ref e) => write!(f, "Serialization error: {}", e),
+            Self::Deserialization(ref e) => write!(f, "Deserialization error: {}", e),
+            Self::Io(ref s) => write!(f, "IO error: {}", s),
+        }
+    }
+}
+
+pub struct Database<S: RawStore> {
+    store: S,
+}
+
+impl<S: RawStore> Database<S> {
+    pub fn new(store: S) -> Self {
+        Database { store }
+    }
+
+    pub fn insert<R: Recordable>(
+        &mut self,
+        record: R,
+    ) -> Result<(), DatabaseError<<S as RawStore>::StoreError>> {
+        let key = bcs::to_bytes(&record.key()).map_err(DatabaseError::Serialization)?;
+        let value = bcs::to_bytes(&record).map_err(DatabaseError::Serialization)?;
+        self.store.insert(key, value).map_err(DatabaseError::Io)
+    }
+
+    pub fn get<R: Recordable>(
+        &self,
+        key: &R::Key,
+    ) -> Result<Option<R>, DatabaseError<S::StoreError>> {
+        let serialized_key = bcs::to_bytes(key).map_err(DatabaseError::Serialization)?;
+        match self.store.get(&serialized_key).map_err(DatabaseError::Io)? {
+            Some(value) => Ok(Some(
+                bcs::from_bytes(&value).map_err(DatabaseError::Deserialization)?,
+            )),
+            None => Ok(None),
+        }
+    }
+
+    pub fn remove<R: Recordable>(
+        &mut self,
+        key: &R::Key,
+    ) -> Result<Option<R>, DatabaseError<S::StoreError>> {
+        let serialized_key = bcs::to_bytes(key).map_err(DatabaseError::Serialization)?;
+        match self
+            .store
+            .remove(&serialized_key)
+            .map_err(DatabaseError::Io)?
+        {
+            Some(value) => Ok(Some(
+                bcs::from_bytes(&value).map_err(DatabaseError::Deserialization)?,
+            )),
+            None => Ok(None),
+        }
+    }
+}
+
+pub trait RawStore {
+    type StoreError: Debug + Display + Eq + PartialEq;
+
+    fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError>;
+    fn get(&self, key: &Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError>;
+    fn remove(&mut self, key: &Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError>;
 }
 
 pub trait Store<R: Recordable> {
