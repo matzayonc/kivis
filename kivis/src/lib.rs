@@ -2,6 +2,7 @@ use core::fmt;
 use std::{
     collections::BTreeMap,
     fmt::{Debug, Display},
+    ops::{Range, RangeBounds},
 };
 
 pub use kivis_derive::Record;
@@ -16,6 +17,9 @@ pub trait Recordable: Serialize + DeserializeOwned + Debug {
         Ok(vec![])
     }
 }
+
+type DatabaseIteratorItem<R, S> =
+    Result<<R as Recordable>::Key, DatabaseError<<S as RawStore>::StoreError>>;
 
 pub trait Indexed: Serialize + DeserializeOwned + Debug {
     type Key;
@@ -129,14 +133,59 @@ impl<S: RawStore> Database<S> {
             bcs::from_bytes(&value).map_err(DatabaseError::Deserialization)?,
         ))
     }
+
+    pub fn iter_keys<R: Recordable>(
+        &mut self,
+        range: Range<&R::Key>,
+    ) -> Result<impl Iterator<Item = DatabaseIteratorItem<R, S>>, DatabaseError<S::StoreError>>
+    {
+        let start_wrapped = Wrap {
+            scope: R::SCOPE,
+            subtable: Subtable::Main,
+            key: range.start.clone(),
+        };
+        let end_wrapped = Wrap {
+            scope: R::SCOPE,
+            subtable: Subtable::Main,
+            key: range.end.clone(),
+        };
+        let start = bcs::to_bytes(&start_wrapped).map_err(DatabaseError::Serialization)?;
+        let end = bcs::to_bytes(&end_wrapped).map_err(DatabaseError::Serialization)?;
+        let raw_iter = self
+            .store
+            .iter_keys(start..end)
+            .map_err(DatabaseError::Io)?;
+
+        Ok(
+            raw_iter.map(|elem: Result<Vec<u8>, <S as RawStore>::StoreError>| {
+                let value = match elem {
+                    Ok(value) => value,
+                    Err(e) => return Err(DatabaseError::Io(e)),
+                };
+
+                let deserialized: Wrap<R::Key> = match bcs::from_bytes(&value) {
+                    Ok(deserialized) => deserialized,
+                    Err(e) => return Err(DatabaseError::Deserialization(e)),
+                };
+
+                Ok(deserialized.key)
+            }),
+        )
+
+        // Ok(DatabaseTypedIterator::new(raw_iter))
+    }
 }
 
-pub trait RawStore {
+pub trait RawStore: Sized {
     type StoreError: Debug + Display + Eq + PartialEq;
 
     fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError>;
     fn get(&self, key: &Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError>;
     fn remove(&mut self, key: &Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError>;
+    fn iter_keys(
+        &mut self,
+        range: impl RangeBounds<Vec<u8>>,
+    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError>;
 }
 
 pub trait Store<R: Recordable> {
@@ -145,6 +194,7 @@ pub trait Store<R: Recordable> {
     fn insert(&mut self, record: R) -> Result<(), Self::SerializationError>;
     fn get(&self, key: &R::Key) -> Result<Option<R>, Self::SerializationError>;
     fn remove(&mut self, key: &R::Key) -> Result<Option<R>, Self::SerializationError>;
+    fn iter_keys(&mut self, range: Range<&R::Key>) -> Result<Option<R>, Self::SerializationError>;
 }
 
 impl<R: Recordable + Clone> Store<R> for BTreeMap<R::Key, R> {
@@ -162,31 +212,13 @@ impl<R: Recordable + Clone> Store<R> for BTreeMap<R::Key, R> {
     fn remove(&mut self, key: &R::Key) -> Result<Option<R>, Self::SerializationError> {
         Ok(self.remove(key))
     }
-}
 
-impl<R: Recordable> Store<R> for BTreeMap<Vec<u8>, Vec<u8>> {
-    type SerializationError = bcs::Error;
-
-    fn insert(&mut self, record: R) -> Result<(), Self::SerializationError> {
-        let key = bcs::to_bytes(&record.key())?;
-        let value = bcs::to_bytes(&record)?;
-        self.insert(key, value);
-        Ok(())
-    }
-
-    fn get(&self, key: &R::Key) -> Result<Option<R>, Self::SerializationError> {
-        let serialized_key = bcs::to_bytes(key)?;
-        let Some(value) = self.get(&serialized_key) else {
-            return Ok(None);
-        };
-        bcs::from_bytes(&value).map(Some)
-    }
-
-    fn remove(&mut self, key: &R::Key) -> Result<Option<R>, Self::SerializationError> {
-        let key = bcs::to_bytes(key)?;
-        let Some(value) = self.remove(&key) else {
-            return Ok(None);
-        };
-        bcs::from_bytes(&value).map(Some)
+    fn iter_keys(&mut self, range: Range<&R::Key>) -> Result<Option<R>, Self::SerializationError> {
+        let mut iter = self.range(range);
+        if let Some((_, record)) = iter.next() {
+            Ok(Some(record.clone()))
+        } else {
+            Ok(None)
+        }
     }
 }

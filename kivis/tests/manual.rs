@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::BTreeMap, fmt::Display};
 
 use kivis::{Indexed, Recordable};
 
@@ -49,8 +49,9 @@ struct Pet {
 }
 
 // Define storage for the database.
+#[derive(Default)]
 struct Storage {
-    data: HashMap<Vec<u8>, Vec<u8>>,
+    data: BTreeMap<Vec<u8>, Vec<u8>>,
 }
 #[derive(Debug, PartialEq, Eq)]
 struct NoError;
@@ -74,13 +75,19 @@ impl kivis::RawStore for Storage {
     fn remove(&mut self, key: &Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
         Ok(self.data.remove(key))
     }
+
+    fn iter_keys(
+        &mut self,
+        range: impl std::ops::RangeBounds<Vec<u8>>,
+    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError> {
+        let iter = self.data.range(range);
+        Ok(iter.map(|(k, _v)| Ok(k.clone())))
+    }
 }
 
 #[test]
 fn test_user_record() {
-    let db = Storage {
-        data: HashMap::new(),
-    };
+    let db = Storage::default();
     let mut database = kivis::Database::new(db);
 
     let user = User {
@@ -97,9 +104,7 @@ fn test_user_record() {
 
 #[test]
 fn test_pet_record() {
-    let db = Storage {
-        data: HashMap::new(),
-    };
+    let db = Storage::default();
     let mut database = kivis::Database::new(db);
 
     let pet = Pet {
@@ -116,9 +121,7 @@ fn test_pet_record() {
 
 #[test]
 fn test_get_owner_of_pet() {
-    let db = Storage {
-        data: HashMap::new(),
-    };
+    let db = Storage::default();
     let mut database = kivis::Database::new(db);
 
     let user = User {
@@ -144,9 +147,7 @@ fn test_get_owner_of_pet() {
 
 #[test]
 fn test_index() {
-    let db = Storage {
-        data: HashMap::new(),
-    };
+    let db = Storage::default();
     let mut database = kivis::Database::new(db);
 
     let user = User {
@@ -165,4 +166,27 @@ fn test_index() {
     assert_eq!(retrieved, user);
 
     assert_eq!(database.dissolve().data.len(), 2)
+}
+
+#[test]
+fn test_iter() {
+    let db = Storage::default();
+    let mut database = kivis::Database::new(db);
+
+    let pet = Pet {
+        id: 42,
+        name: "Fido".to_string(),
+        owner: UserKey(1),
+    };
+
+    database.insert(pet.clone()).unwrap();
+
+    let retrieved = database
+        .iter_keys::<Pet>(&PetKey(1)..&PetKey(222))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(retrieved, PetKey(42));
 }
