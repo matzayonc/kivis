@@ -12,6 +12,13 @@ pub trait Recordable: Serialize + DeserializeOwned + Debug {
     type Key: Serialize + DeserializeOwned + Ord + Clone + Eq + Debug;
 
     fn key(&self) -> Self::Key;
+    fn index_keys(&self) -> Result<Vec<Vec<u8>>, bcs::Error> {
+        Ok(vec![])
+    }
+}
+
+pub trait Indexed: Serialize + DeserializeOwned + Debug {
+    type Key;
 }
 
 #[derive(Debug, Clone)]
@@ -54,6 +61,10 @@ impl<S: RawStore> Database<S> {
         Database { store }
     }
 
+    pub fn dissolve(self) -> S {
+        self.store
+    }
+
     pub fn insert<R: Recordable>(
         &mut self,
         record: R,
@@ -64,6 +75,21 @@ impl<S: RawStore> Database<S> {
             key: record.key(),
         };
         let key = bcs::to_bytes(&wrapped).map_err(DatabaseError::Serialization)?;
+
+        for (index, index_key) in record.index_keys().iter().enumerate() {
+            // Index keys will be double serialized, but this will safe a serialization at read.
+            let wrapped_index = Wrap {
+                scope: R::SCOPE,
+                subtable: Subtable::Index(index as u8),
+                key: (index_key, record.key()),
+            };
+            let index_value =
+                bcs::to_bytes(&wrapped_index).map_err(DatabaseError::Serialization)?;
+            self.store
+                .insert(index_value, Vec::new())
+                .map_err(DatabaseError::Io)?
+        }
+
         let value = bcs::to_bytes(&record).map_err(DatabaseError::Serialization)?;
         self.store.insert(key, value).map_err(DatabaseError::Io)
     }

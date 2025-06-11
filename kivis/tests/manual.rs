@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt::Display};
 
-use kivis::Recordable;
+use kivis::{Indexed, Recordable};
 
 // Define a record type for an User.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
@@ -12,6 +12,16 @@ impl kivis::Recordable for User {
     fn key(&self) -> Self::Key {
         UserKey(self.id)
     }
+
+    fn index_keys(&self) -> Result<Vec<Vec<u8>>, bcs::Error> {
+        Ok([bcs::to_bytes(&self.name)?].to_vec())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+pub struct UserNameIndex(pub String);
+impl Indexed for UserNameIndex {
+    type Key = UserKey;
 }
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 struct User {
@@ -130,4 +140,29 @@ fn test_get_owner_of_pet() {
 
     let owner: User = database.get(&pet.owner).unwrap().unwrap();
     assert_eq!(owner, user);
+}
+
+#[test]
+fn test_index() {
+    let db = Storage {
+        data: HashMap::new(),
+    };
+    let mut database = kivis::Database::new(db);
+
+    let user = User {
+        id: 1,
+        name: "Alice".to_string(),
+        email: "alice@example.com".to_string(),
+    };
+
+    database.insert(user.clone()).unwrap();
+
+    let index_keys = user.index_keys().unwrap();
+    assert_eq!(index_keys.len(), 1);
+    assert_eq!(index_keys[0], bcs::to_bytes(&user.name.clone()).unwrap());
+
+    let retrieved: User = database.get(&user.key()).unwrap().unwrap();
+    assert_eq!(retrieved, user);
+
+    assert_eq!(database.dissolve().data.len(), 2)
 }
