@@ -5,7 +5,7 @@ use std::{
 };
 
 pub use kivis_derive::Record;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 pub trait Recordable: Serialize + DeserializeOwned + Debug {
     const SCOPE: u8;
@@ -35,6 +35,20 @@ pub struct Database<S: RawStore> {
     store: S,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+enum Subtable {
+    Main,
+    MetadataSingleton,
+    Index(u8),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Wrap<R> {
+    scope: u8,
+    subtable: Subtable,
+    key: R,
+}
+
 impl<S: RawStore> Database<S> {
     pub fn new(store: S) -> Self {
         Database { store }
@@ -44,7 +58,12 @@ impl<S: RawStore> Database<S> {
         &mut self,
         record: R,
     ) -> Result<(), DatabaseError<<S as RawStore>::StoreError>> {
-        let key = bcs::to_bytes(&record.key()).map_err(DatabaseError::Serialization)?;
+        let wrapped = Wrap {
+            scope: R::SCOPE,
+            subtable: Subtable::Main,
+            key: record.key(),
+        };
+        let key = bcs::to_bytes(&wrapped).map_err(DatabaseError::Serialization)?;
         let value = bcs::to_bytes(&record).map_err(DatabaseError::Serialization)?;
         self.store.insert(key, value).map_err(DatabaseError::Io)
     }
@@ -53,30 +72,36 @@ impl<S: RawStore> Database<S> {
         &self,
         key: &R::Key,
     ) -> Result<Option<R>, DatabaseError<S::StoreError>> {
-        let serialized_key = bcs::to_bytes(key).map_err(DatabaseError::Serialization)?;
-        match self.store.get(&serialized_key).map_err(DatabaseError::Io)? {
-            Some(value) => Ok(Some(
-                bcs::from_bytes(&value).map_err(DatabaseError::Deserialization)?,
-            )),
-            None => Ok(None),
-        }
+        let wrapped = Wrap {
+            scope: R::SCOPE,
+            subtable: Subtable::Main,
+            key,
+        };
+        let key = bcs::to_bytes(&wrapped).map_err(DatabaseError::Serialization)?;
+        let Some(value) = self.store.get(&key).map_err(DatabaseError::Io)? else {
+            return Ok(None);
+        };
+        Ok(Some(
+            bcs::from_bytes(&value).map_err(DatabaseError::Deserialization)?,
+        ))
     }
 
     pub fn remove<R: Recordable>(
         &mut self,
         key: &R::Key,
     ) -> Result<Option<R>, DatabaseError<S::StoreError>> {
-        let serialized_key = bcs::to_bytes(key).map_err(DatabaseError::Serialization)?;
-        match self
-            .store
-            .remove(&serialized_key)
-            .map_err(DatabaseError::Io)?
-        {
-            Some(value) => Ok(Some(
-                bcs::from_bytes(&value).map_err(DatabaseError::Deserialization)?,
-            )),
-            None => Ok(None),
-        }
+        let wrapped = Wrap {
+            scope: R::SCOPE,
+            subtable: Subtable::Main,
+            key,
+        };
+        let key = bcs::to_bytes(&wrapped).map_err(DatabaseError::Serialization)?;
+        let Some(value) = self.store.remove(&key).map_err(DatabaseError::Io)? else {
+            return Ok(None);
+        };
+        Ok(Some(
+            bcs::from_bytes(&value).map_err(DatabaseError::Deserialization)?,
+        ))
     }
 }
 

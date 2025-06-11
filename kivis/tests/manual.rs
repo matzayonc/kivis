@@ -24,7 +24,7 @@ struct User {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct PetKey(pub u64);
 impl kivis::Recordable for Pet {
-    const SCOPE: u8 = 1;
+    const SCOPE: u8 = 2;
     type Key = PetKey;
 
     fn key(&self) -> Self::Key {
@@ -117,9 +117,9 @@ fn test_get_owner_of_pet() {
         email: "alice@example.com".to_string(),
     };
     let pet = Pet {
-        id: 2,
+        id: 1,
         name: "Fido".to_string(),
-        owner: UserKey(1),
+        owner: user.key(),
     };
 
     database.insert(user.clone()).unwrap();
