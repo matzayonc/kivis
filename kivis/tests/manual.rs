@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fmt::Display};
 
-use kivis::{Indexed, Recordable};
+use kivis::{Indexed, Recordable, SerializationError, wrap_index};
 
 // Define a record type for an User.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
@@ -13,8 +13,12 @@ impl kivis::Recordable for User {
         UserKey(self.id)
     }
 
-    fn index_keys(&self) -> Result<Vec<Vec<u8>>, bcs::Error> {
-        Ok([bcs::to_bytes(&self.name)?].to_vec())
+    fn index_keys(&self) -> Result<Vec<Vec<u8>>, SerializationError> {
+        Ok([wrap_index::<Self, UserNameIndex>(
+            self.key(),
+            UserNameIndex(self.name.clone()),
+        )?]
+        .to_vec())
     }
 }
 
@@ -22,9 +26,11 @@ impl kivis::Recordable for User {
 pub struct UserNameIndex(pub String);
 impl Indexed for UserNameIndex {
     type Key = UserKey;
+    type Record = User;
+    const INDEX: u8 = 1;
 }
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
-struct User {
+pub struct User {
     id: u64,
     name: String,
     email: String,
@@ -160,7 +166,10 @@ fn test_index() {
 
     let index_keys = user.index_keys().unwrap();
     assert_eq!(index_keys.len(), 1);
-    assert_eq!(index_keys[0], bcs::to_bytes(&user.name.clone()).unwrap());
+    assert_eq!(
+        index_keys[0],
+        wrap_index::<User, UserNameIndex>(user.key(), UserNameIndex(user.name.clone())).unwrap()
+    );
 
     let retrieved: User = database.get(&user.key()).unwrap().unwrap();
     assert_eq!(retrieved, user);
@@ -189,4 +198,28 @@ fn test_iter() {
         .unwrap();
 
     assert_eq!(retrieved, PetKey(42));
+}
+
+#[test]
+fn test_iter_index() {
+    let db = Storage::default();
+    let mut database = kivis::Database::new(db);
+
+    let user = User {
+        id: 42,
+        name: "Al".to_string(),
+        email: "alice@example.com".to_string(),
+    };
+
+    database.insert(user.clone()).unwrap();
+
+    let retrieved: UserKey = database
+        .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap();
+    assert_eq!(retrieved, UserKey(42));
+
+    // database.insert(user.clone()).unwrap();
 }

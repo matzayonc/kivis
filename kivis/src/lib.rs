@@ -1,3 +1,5 @@
+mod wrap;
+
 use core::fmt;
 use std::{
     collections::BTreeMap,
@@ -6,14 +8,19 @@ use std::{
 };
 
 pub use kivis_derive::Record;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Serialize, de::DeserializeOwned};
+pub use wrap::{wrap, wrap_index};
+
+use crate::wrap::{Wrap, decode_value, encode_value, wrap_just_index};
+
+pub type SerializationError = bcs::Error;
 
 pub trait Recordable: Serialize + DeserializeOwned + Debug {
     const SCOPE: u8;
     type Key: Serialize + DeserializeOwned + Ord + Clone + Eq + Debug;
 
     fn key(&self) -> Self::Key;
-    fn index_keys(&self) -> Result<Vec<Vec<u8>>, bcs::Error> {
+    fn index_keys(&self) -> Result<Vec<Vec<u8>>, SerializationError> {
         Ok(vec![])
     }
 }
@@ -22,13 +29,15 @@ type DatabaseIteratorItem<R, S> =
     Result<<R as Recordable>::Key, DatabaseError<<S as RawStore>::StoreError>>;
 
 pub trait Indexed: Serialize + DeserializeOwned + Debug {
-    type Key;
+    type Key: Serialize + DeserializeOwned + Ord + Clone + Eq + Debug;
+    type Record: Recordable;
+    const INDEX: u8;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum DatabaseError<S: Debug + Display + Eq + PartialEq> {
-    Serialization(bcs::Error),
-    Deserialization(bcs::Error),
+    Serialization(SerializationError),
+    Deserialization(SerializationError),
     Io(S),
 }
 
@@ -46,20 +55,6 @@ pub struct Database<S: RawStore> {
     store: S,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-enum Subtable {
-    Main,
-    MetadataSingleton,
-    Index(u8),
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Wrap<R> {
-    scope: u8,
-    subtable: Subtable,
-    key: R,
-}
-
 impl<S: RawStore> Database<S> {
     pub fn new(store: S) -> Self {
         Database { store }
@@ -73,28 +68,15 @@ impl<S: RawStore> Database<S> {
         &mut self,
         record: R,
     ) -> Result<(), DatabaseError<<S as RawStore>::StoreError>> {
-        let wrapped = Wrap {
-            scope: R::SCOPE,
-            subtable: Subtable::Main,
-            key: record.key(),
-        };
-        let key = bcs::to_bytes(&wrapped).map_err(DatabaseError::Serialization)?;
+        let key = wrap::<R>(&record.key()).map_err(DatabaseError::Serialization)?;
 
-        for (index, index_key) in record.index_keys().iter().enumerate() {
-            // Index keys will be double serialized, but this will safe a serialization at read.
-            let wrapped_index = Wrap {
-                scope: R::SCOPE,
-                subtable: Subtable::Index(index as u8),
-                key: (index_key, record.key()),
-            };
-            let index_value =
-                bcs::to_bytes(&wrapped_index).map_err(DatabaseError::Serialization)?;
+        for index_value in record.index_keys().map_err(DatabaseError::Serialization)? {
             self.store
                 .insert(index_value, Vec::new())
                 .map_err(DatabaseError::Io)?
         }
 
-        let value = bcs::to_bytes(&record).map_err(DatabaseError::Serialization)?;
+        let value = encode_value(&record).map_err(DatabaseError::Serialization)?;
         self.store.insert(key, value).map_err(DatabaseError::Io)
     }
 
@@ -102,17 +84,12 @@ impl<S: RawStore> Database<S> {
         &self,
         key: &R::Key,
     ) -> Result<Option<R>, DatabaseError<S::StoreError>> {
-        let wrapped = Wrap {
-            scope: R::SCOPE,
-            subtable: Subtable::Main,
-            key,
-        };
-        let key = bcs::to_bytes(&wrapped).map_err(DatabaseError::Serialization)?;
+        let key = wrap::<R>(key).map_err(DatabaseError::Serialization)?;
         let Some(value) = self.store.get(&key).map_err(DatabaseError::Io)? else {
             return Ok(None);
         };
         Ok(Some(
-            bcs::from_bytes(&value).map_err(DatabaseError::Deserialization)?,
+            decode_value(&value).map_err(DatabaseError::Deserialization)?,
         ))
     }
 
@@ -120,17 +97,12 @@ impl<S: RawStore> Database<S> {
         &mut self,
         key: &R::Key,
     ) -> Result<Option<R>, DatabaseError<S::StoreError>> {
-        let wrapped = Wrap {
-            scope: R::SCOPE,
-            subtable: Subtable::Main,
-            key,
-        };
-        let key = bcs::to_bytes(&wrapped).map_err(DatabaseError::Serialization)?;
+        let key = wrap::<R>(key).map_err(DatabaseError::Serialization)?;
         let Some(value) = self.store.remove(&key).map_err(DatabaseError::Io)? else {
             return Ok(None);
         };
         Ok(Some(
-            bcs::from_bytes(&value).map_err(DatabaseError::Deserialization)?,
+            decode_value(&value).map_err(DatabaseError::Deserialization)?,
         ))
     }
 
@@ -139,18 +111,8 @@ impl<S: RawStore> Database<S> {
         range: Range<&R::Key>,
     ) -> Result<impl Iterator<Item = DatabaseIteratorItem<R, S>>, DatabaseError<S::StoreError>>
     {
-        let start_wrapped = Wrap {
-            scope: R::SCOPE,
-            subtable: Subtable::Main,
-            key: range.start.clone(),
-        };
-        let end_wrapped = Wrap {
-            scope: R::SCOPE,
-            subtable: Subtable::Main,
-            key: range.end.clone(),
-        };
-        let start = bcs::to_bytes(&start_wrapped).map_err(DatabaseError::Serialization)?;
-        let end = bcs::to_bytes(&end_wrapped).map_err(DatabaseError::Serialization)?;
+        let start = wrap::<R>(range.start).map_err(DatabaseError::Serialization)?;
+        let end = wrap::<R>(range.end).map_err(DatabaseError::Serialization)?;
         let raw_iter = self
             .store
             .iter_keys(start..end)
@@ -171,8 +133,41 @@ impl<S: RawStore> Database<S> {
                 Ok(deserialized.key)
             }),
         )
+    }
 
-        // Ok(DatabaseTypedIterator::new(raw_iter))
+    pub fn iter_by_index<I: Indexed>(
+        &mut self,
+        range: Range<I>,
+    ) -> Result<
+        impl Iterator<Item = DatabaseIteratorItem<I::Record, S>>,
+        DatabaseError<S::StoreError>,
+    > {
+        let start =
+            wrap_just_index::<I::Record, I>(range.start).map_err(DatabaseError::Serialization)?;
+        let end =
+            wrap_just_index::<I::Record, I>(range.end).map_err(DatabaseError::Serialization)?;
+
+        let raw_iter = self
+            .store
+            .iter_keys(start..end)
+            .map_err(DatabaseError::Io)?;
+
+        Ok(
+            raw_iter.map(|elem: Result<Vec<u8>, <S as RawStore>::StoreError>| {
+                let value = match elem {
+                    Ok(value) => value,
+                    Err(e) => return Err(DatabaseError::Io(e)),
+                };
+
+                let deserialized: Wrap<(Vec<u8>, <I::Record as Recordable>::Key)> =
+                    match bcs::from_bytes(&value) {
+                        Ok(deserialized) => deserialized,
+                        Err(e) => return Err(DatabaseError::Deserialization(e)),
+                    };
+
+                Ok(deserialized.key.1)
+            }),
+        )
     }
 }
 
