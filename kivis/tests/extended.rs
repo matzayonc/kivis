@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 // Test 1: Default behavior (first field as key) - existing test
 #[derive(Record, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[table(1)]
 struct UserRecord {
     id: u64,
     data: Vec<u8>,
@@ -12,6 +13,7 @@ struct UserRecord {
 
 // Test 2: Specified field as key
 #[derive(Record, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[table(2)]
 struct ProductRecord {
     name: String,
     #[key]
@@ -21,6 +23,7 @@ struct ProductRecord {
 
 // Test 3: Composite key (multiple fields)
 #[derive(Record, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[table(3)]
 struct OrderRecord {
     #[key]
     user_id: u64,

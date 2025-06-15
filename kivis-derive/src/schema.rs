@@ -13,22 +13,53 @@ pub struct Schema {
     pub attrs: Vec<syn::Attribute>,
     pub table_value: u8,
     pub keys: Vec<SchemaKey>,
+    pub indexes: Vec<SchemaKey>,
 }
 
 impl Schema {
     pub fn from_derive_input(input: DeriveInput) -> Result<Self, TokenStream> {
         let name = input.ident;
         let generics = input.generics;
-        let attrs = input.attrs.clone();
+        let attrs = input
+            .attrs
+            .iter()
+            .filter(|a| !a.path().is_ident("table"))
+            .cloned()
+            .collect::<Vec<_>>();
 
         // Look for the table attribute to get the record type
-        let table_value = input
+        let Some(table_value) = input
             .attrs
             .iter()
             .find(|attr| attr.path().is_ident("table"))
-            .and_then(|attr| attr.parse_args::<syn::LitInt>().ok())
-            .map(|lit| lit.base10_parse::<u8>().unwrap_or(1))
-            .unwrap_or(1);
+        else {
+            return Err({
+                Error::new_spanned(
+                    &name,
+                    "Missing #[table(value)] attribute. Please specify a table identifier.",
+                )
+                .to_compile_error()
+                .into()
+            });
+        };
+
+        let Some(table_value) = table_value.parse_args::<syn::LitInt>().ok() else {
+            return Err(Error::new_spanned(
+                &name,
+                "Invalid #[table(value)] attribute. Expected an integer literal.",
+            )
+            .to_compile_error()
+            .into());
+        };
+
+        let Ok(table_value) = table_value.base10_parse::<u8>() else {
+            return Err(Error::new_spanned(
+                &name,
+                "Invalid #[table(value)] attribute could not be parsed. Expected an integer literal.",
+            )
+            .to_compile_error()
+            .into());
+        };
 
         // Ensure it's a struct
         let fields = match input.data {
@@ -110,12 +141,27 @@ impl Schema {
             }
         }
 
+        let index_fields = named_fields
+            .iter()
+            .filter_map(|field| {
+                if field.attrs.iter().any(|attr| attr.path().is_ident("index")) {
+                    field.ident.as_ref().map(|ident| SchemaKey {
+                        name: ident.clone(),
+                        ty: field.ty.clone(),
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
         Ok(Schema {
             name,
             generics,
             attrs,
             table_value,
             keys: key_fields,
+            indexes: index_fields,
         })
     }
 }
