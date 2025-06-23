@@ -3,7 +3,6 @@ mod wrap;
 
 use core::fmt;
 use std::{
-    collections::BTreeMap,
     fmt::{Debug, Display},
     ops::{Range, RangeBounds},
 };
@@ -20,10 +19,15 @@ pub trait Recordable: Serialize + DeserializeOwned + Debug {
     const SCOPE: u8;
     type Key: Serialize + DeserializeOwned + Ord + Clone + Eq + Debug;
 
-    fn key(&self) -> Self::Key;
-    fn index_keys(&self) -> Result<Vec<Vec<u8>>, SerializationError> {
+    fn key(&self) -> Option<Self::Key>; // Autoincrement if none
+    fn index_keys(&self, _key: Self::Key) -> Result<Vec<Vec<u8>>, SerializationError> {
         Ok(vec![])
     }
+}
+
+pub trait Incrementable: Sized {
+    fn bounds() -> Option<Range<Self>>;
+    fn next_id(&self) -> Option<Self>;
 }
 
 type DatabaseIteratorItem<R, S> =
@@ -40,6 +44,8 @@ pub enum DatabaseError<S: Debug + Display + Eq + PartialEq> {
     Serialization(SerializationError),
     Deserialization(SerializationError),
     Io(S),
+    Autoincrement,
+    ToAutoincrement,
 }
 
 impl<S: Debug + Display + Eq + PartialEq> fmt::Display for DatabaseError<S> {
@@ -48,6 +54,8 @@ impl<S: Debug + Display + Eq + PartialEq> fmt::Display for DatabaseError<S> {
             Self::Serialization(ref e) => write!(f, "Serialization error: {}", e),
             Self::Deserialization(ref e) => write!(f, "Deserialization error: {}", e),
             Self::Io(ref s) => write!(f, "IO error: {}", s),
+            Self::Autoincrement => write!(f, "Autoincrement error"),
+            Self::ToAutoincrement => write!(f, "Failed to convert to autoincrement key"),
         }
     }
 }
@@ -68,17 +76,34 @@ impl<S: RawStore> Database<S> {
     pub fn insert<R: Recordable>(
         &mut self,
         record: R,
-    ) -> Result<(), DatabaseError<<S as RawStore>::StoreError>> {
-        let key = wrap::<R>(&record.key()).map_err(DatabaseError::Serialization)?;
+    ) -> Result<R::Key, DatabaseError<<S as RawStore>::StoreError>>
+    where
+        R::Key: Incrementable,
+    {
+        let original_key = if let Some(key) = record.key() {
+            key
+        } else {
+            let bounds = R::Key::bounds().ok_or(DatabaseError::ToAutoincrement)?;
+            let end = bounds.end.clone();
+            let mut first = self.iter_keys::<R>(bounds)?;
+            let a = first.next().transpose()?.unwrap_or(end);
+            R::Key::next_id(&a).ok_or(DatabaseError::Autoincrement)?
+        };
 
-        for index_value in record.index_keys().map_err(DatabaseError::Serialization)? {
+        let key = wrap::<R>(&original_key).map_err(DatabaseError::Serialization)?;
+
+        for index_value in record
+            .index_keys(original_key.clone())
+            .map_err(DatabaseError::Serialization)?
+        {
             self.store
                 .insert(index_value, Vec::new())
                 .map_err(DatabaseError::Io)?
         }
 
         let value = encode_value(&record).map_err(DatabaseError::Serialization)?;
-        self.store.insert(key, value).map_err(DatabaseError::Io)
+        self.store.insert(key, value).map_err(DatabaseError::Io)?;
+        Ok(original_key)
     }
 
     pub fn get<R: Recordable>(
@@ -109,11 +134,11 @@ impl<S: RawStore> Database<S> {
 
     pub fn iter_keys<R: Recordable>(
         &mut self,
-        range: Range<&R::Key>,
+        range: Range<R::Key>,
     ) -> Result<impl Iterator<Item = DatabaseIteratorItem<R, S>>, DatabaseError<S::StoreError>>
     {
-        let start = wrap::<R>(range.start).map_err(DatabaseError::Serialization)?;
-        let end = wrap::<R>(range.end).map_err(DatabaseError::Serialization)?;
+        let start = wrap::<R>(&range.start).map_err(DatabaseError::Serialization)?;
+        let end = wrap::<R>(&range.end).map_err(DatabaseError::Serialization)?;
         let raw_iter = self
             .store
             .iter_keys(start..end)
@@ -193,28 +218,41 @@ pub trait Store<R: Recordable> {
     fn iter_keys(&mut self, range: Range<&R::Key>) -> Result<Option<R>, Self::SerializationError>;
 }
 
-impl<R: Recordable + Clone> Store<R> for BTreeMap<R::Key, R> {
-    type SerializationError = ();
+// impl<R: Recordable + Clone> Store<R> for BTreeMap<R::Key, R>
+// where
+//     R::Key: Incrementable,
+// {
+//     type SerializationError = ();
 
-    fn insert(&mut self, record: R) -> Result<(), Self::SerializationError> {
-        self.insert(record.key(), record);
-        Ok(())
-    }
+//     fn insert(&mut self, record: R) -> Result<(), Self::SerializationError> {
+//         if let Some(key) = record.key() {
+//             key
+//         } else {
+//             let bounds = R::Key::bounds().ok_or(DatabaseError::ToAutoincrement)?;
+//             let end = bounds.end.clone();
+//             let mut first = self.iter_keys(bounds)?;
+//             let a = first.next().transpose()?.unwrap_or(end);
+//             R::Key::next_id(&a).ok_or(DatabaseError::Autoincrement)?
+//         };
 
-    fn get(&self, key: &R::Key) -> Result<Option<R>, Self::SerializationError> {
-        Ok(self.get(key).cloned())
-    }
+//         self.insert(record.key(), record);
+//         Ok(())
+//     }
 
-    fn remove(&mut self, key: &R::Key) -> Result<Option<R>, Self::SerializationError> {
-        Ok(self.remove(key))
-    }
+//     fn get(&self, key: &R::Key) -> Result<Option<R>, Self::SerializationError> {
+//         Ok(self.get(key).cloned())
+//     }
 
-    fn iter_keys(&mut self, range: Range<&R::Key>) -> Result<Option<R>, Self::SerializationError> {
-        let mut iter = self.range(range);
-        if let Some((_, record)) = iter.next() {
-            Ok(Some(record.clone()))
-        } else {
-            Ok(None)
-        }
-    }
-}
+//     fn remove(&mut self, key: &R::Key) -> Result<Option<R>, Self::SerializationError> {
+//         Ok(self.remove(key))
+//     }
+
+//     fn iter_keys(&mut self, range: Range<&R::Key>) -> Result<Option<R>, Self::SerializationError> {
+//         let mut iter = self.range(range);
+//         if let Some((_, record)) = iter.next() {
+//             Ok(Some(record.clone()))
+//         } else {
+//             Ok(None)
+//         }
+//     }
+// }

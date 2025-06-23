@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fmt::Display};
 
-use kivis::{Indexed, Recordable, SerializationError, wrap_index};
+use kivis::{Incrementable, Indexed, Recordable, SerializationError, wrap_index};
 
 // Define a record type for an User.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
@@ -9,16 +9,25 @@ impl kivis::Recordable for User {
     const SCOPE: u8 = 1;
     type Key = UserKey;
 
-    fn key(&self) -> Self::Key {
-        UserKey(self.id)
+    fn key(&self) -> Option<Self::Key> {
+        Some(UserKey(self.id))
     }
 
-    fn index_keys(&self) -> Result<Vec<Vec<u8>>, SerializationError> {
+    fn index_keys(&self, key: Self::Key) -> Result<Vec<Vec<u8>>, SerializationError> {
         Ok([wrap_index::<Self, UserNameIndex>(
-            self.key(),
+            key,
             UserNameIndex(self.name.clone()),
         )?]
         .to_vec())
+    }
+}
+
+impl Incrementable for UserKey {
+    fn bounds() -> Option<std::ops::Range<Self>> {
+        Some(UserKey(0)..UserKey(u64::MAX))
+    }
+    fn next_id(&self) -> Option<Self> {
+        self.0.checked_sub(1).map(UserKey)
     }
 }
 
@@ -43,13 +52,20 @@ impl kivis::Recordable for Pet {
     const SCOPE: u8 = 2;
     type Key = PetKey;
 
-    fn key(&self) -> Self::Key {
-        PetKey(self.id)
+    fn key(&self) -> Option<Self::Key> {
+        None
+    }
+}
+impl Incrementable for PetKey {
+    fn bounds() -> Option<std::ops::Range<Self>> {
+        Some(PetKey(0)..PetKey(u64::MAX))
+    }
+    fn next_id(&self) -> Option<Self> {
+        self.0.checked_sub(1).map(PetKey)
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 struct Pet {
-    id: u64,
     name: String,
     owner: UserKey,
 }
@@ -104,7 +120,7 @@ fn test_user_record() {
 
     database.insert(user.clone()).unwrap();
 
-    let retrieved: User = database.get(&user.key()).unwrap().unwrap();
+    let retrieved: User = database.get(&user.key().unwrap()).unwrap().unwrap();
     assert_eq!(retrieved, user);
 }
 
@@ -114,14 +130,13 @@ fn test_pet_record() {
     let mut database = kivis::Database::new(db);
 
     let pet = Pet {
-        id: 1,
         name: "Fido".to_string(),
         owner: UserKey(1),
     };
 
-    database.insert(pet.clone()).unwrap();
+    let pet_key = database.insert(pet.clone()).unwrap();
 
-    let retrieved: Pet = database.get(&pet.key()).unwrap().unwrap();
+    let retrieved: Pet = database.get(&pet_key).unwrap().unwrap();
     assert_eq!(retrieved, pet);
 }
 
@@ -130,21 +145,20 @@ fn test_get_owner_of_pet() {
     let db = Storage::default();
     let mut database = kivis::Database::new(db);
 
-    let user = User {
+    let mut user = User {
         id: 1,
         name: "Alice".to_string(),
         email: "alice@example.com".to_string(),
     };
     let pet = Pet {
-        id: 1,
         name: "Fido".to_string(),
-        owner: user.key(),
+        owner: user.key().unwrap(),
     };
 
-    database.insert(user.clone()).unwrap();
-    database.insert(pet.clone()).unwrap();
+    user.id = database.insert(user.clone()).unwrap().0;
+    let pet_key = database.insert(pet.clone()).unwrap();
 
-    let retrieved: Pet = database.get(&pet.key()).unwrap().unwrap();
+    let retrieved: Pet = database.get(&pet_key).unwrap().unwrap();
     assert_eq!(retrieved, pet);
 
     let owner: User = database.get(&pet.owner).unwrap().unwrap();
@@ -162,16 +176,17 @@ fn test_index() {
         email: "alice@example.com".to_string(),
     };
 
-    database.insert(user.clone()).unwrap();
+    let user_key = database.insert(user.clone()).unwrap();
 
-    let index_keys = user.index_keys().unwrap();
+    let index_keys = user.index_keys(user_key).unwrap();
     assert_eq!(index_keys.len(), 1);
     assert_eq!(
         index_keys[0],
-        wrap_index::<User, UserNameIndex>(user.key(), UserNameIndex(user.name.clone())).unwrap()
+        wrap_index::<User, UserNameIndex>(user.key().unwrap(), UserNameIndex(user.name.clone()))
+            .unwrap()
     );
 
-    let retrieved: User = database.get(&user.key()).unwrap().unwrap();
+    let retrieved: User = database.get(&user.key().unwrap()).unwrap().unwrap();
     assert_eq!(retrieved, user);
 
     assert_eq!(database.dissolve().data.len(), 2)
@@ -183,21 +198,20 @@ fn test_iter() {
     let mut database = kivis::Database::new(db);
 
     let pet = Pet {
-        id: 42,
         name: "Fido".to_string(),
         owner: UserKey(1),
     };
 
-    database.insert(pet.clone()).unwrap();
+    let pet_key = database.insert(pet.clone()).unwrap();
 
     let retrieved = database
-        .iter_keys::<Pet>(&PetKey(1)..&PetKey(222))
+        .iter_keys::<Pet>(PetKey(1)..PetKey(u64::MAX))
         .unwrap()
         .next()
         .unwrap()
         .unwrap();
 
-    assert_eq!(retrieved, PetKey(42));
+    assert_eq!(retrieved, pet_key);
 }
 
 #[test]

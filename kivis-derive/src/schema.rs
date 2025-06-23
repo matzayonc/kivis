@@ -122,25 +122,6 @@ impl Schema {
             }
         }
 
-        // If no key fields are specified, use the first field
-        if key_fields.is_empty() {
-            if let Some(field) = named_fields.first() {
-                if let Some(ident) = &field.ident {
-                    key_fields.push(SchemaKey {
-                        name: ident.clone(),
-                        ty: field.ty.clone(),
-                    });
-                } else {
-                    return Err(Error::new_spanned(
-                        &name,
-                        "Couldn't find field identifier for first field",
-                    )
-                    .to_compile_error()
-                    .into());
-                }
-            }
-        }
-
         let index_fields = named_fields
             .iter()
             .filter_map(|field| {

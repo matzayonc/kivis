@@ -3,9 +3,10 @@ use std::collections::BTreeMap;
 use kivis::{Database, Record};
 use serde::{Deserialize, Serialize};
 
-#[derive(Record, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Record, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[table(1)]
 struct UserRecord {
+    #[key]
     id: u64,
     data: Vec<u8>,
 }
@@ -18,11 +19,11 @@ fn test_lifecycle() {
         id: 1,
         data: vec![1, 2, 3, 4],
     };
-
-    let user_key = store.insert(user.clone()).unwrap();
-    assert_eq!(store.get(&user_key).unwrap(), Some(user.clone()));
-    store.remove::<UserRecord>(&user_key).unwrap();
-    assert_eq!(store.get::<UserRecord>(&user_key).unwrap(), None);
+    let key = store.insert(user.clone()).unwrap();
+    assert_eq!(store.get(&key).unwrap(), Some(user.clone()));
+    assert_eq!(key, UserRecordKey(1));
+    store.remove::<UserRecord>(&key).unwrap();
+    assert_eq!(store.get::<UserRecord>(&key).unwrap(), None);
 }
 
 #[test]

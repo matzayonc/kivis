@@ -39,15 +39,15 @@ fn test_default_key() {
         id: 1,
         data: vec![1, 2, 3, 4],
     };
-    let key = user.key();
-    assert_eq!(key, UserRecordKey(user.id));
 
     let mut store = Database::new(BTreeMap::<Vec<u8>, Vec<u8>>::new());
 
-    store.insert(user.clone()).unwrap();
-    assert_eq!(store.get(&key).unwrap(), Some(user.clone()));
-    store.remove::<UserRecord>(&key).unwrap();
-    assert_eq!(store.get::<UserRecord>(&key).unwrap(), None);
+    let user_key = store.insert(user.clone()).unwrap();
+    assert_eq!(user_key, UserRecordKey(18446744073709551614));
+
+    assert_eq!(store.get(&user_key).unwrap(), Some(user.clone()));
+    store.remove::<UserRecord>(&user_key).unwrap();
+    assert_eq!(store.get::<UserRecord>(&user_key).unwrap(), None);
 }
 
 #[test]
@@ -64,8 +64,8 @@ fn test_specified_key() {
         price: 1099,
     };
 
-    let key1 = product1.key();
-    let key2 = product2.key();
+    let key1 = product1.key().unwrap();
+    let key2 = product2.key().unwrap();
 
     // Keys should be equal because SKU is the same
     assert_eq!(key1, key2);
@@ -104,9 +104,9 @@ fn test_composite_key() {
         total: 3000,
     };
 
-    let key1 = order1.key();
-    let key2 = order2.key();
-    let key3 = order3.key();
+    let key1 = order1.key().unwrap();
+    let key2 = order2.key().unwrap();
+    let key3 = order3.key().unwrap();
 
     assert_eq!(key1, OrderRecordKey(123, "2024-01-01".to_string()));
 
