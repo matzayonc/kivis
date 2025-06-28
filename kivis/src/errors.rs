@@ -9,6 +9,7 @@ pub enum DatabaseError<S: Debug + Display + Eq + PartialEq> {
     Io(S),
     Autoincrement,
     ToAutoincrement,
+    SchemaError(String),
 }
 
 impl<S: Debug + Display + Eq + PartialEq> fmt::Display for DatabaseError<S> {
@@ -19,6 +20,7 @@ impl<S: Debug + Display + Eq + PartialEq> fmt::Display for DatabaseError<S> {
             Self::Io(ref s) => write!(f, "IO error: {}", s),
             Self::Autoincrement => write!(f, "Autoincrement error"),
             Self::ToAutoincrement => write!(f, "Failed to convert to autoincrement key"),
+            Self::SchemaError(ref msg) => write!(f, "Schema error: {}", msg),
         }
     }
 }

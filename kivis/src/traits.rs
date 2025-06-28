@@ -10,8 +10,11 @@ pub type SerializationError = bcs::Error;
 pub trait Recordable: Serialize + DeserializeOwned + Debug {
     const SCOPE: u8;
     type Key: Serialize + DeserializeOwned + Ord + Clone + Eq + Debug;
+    const SHOULD_INCREMENT: bool = false;
 
-    fn key(&self) -> Option<Self::Key>; // Autoincrement if none
+    fn key(&self) -> Option<Self::Key> {
+        None
+    }
     fn index_keys(&self, _key: Self::Key) -> Result<Vec<Vec<u8>>, SerializationError> {
         Ok(vec![])
     }
