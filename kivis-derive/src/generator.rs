@@ -74,7 +74,7 @@ pub fn generate_record_impl(schema: &Schema) -> TokenStream {
             #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
             pub struct #index_name(pub #index_type);
 
-            impl kivis::Indexed for #index_name {
+            impl kivis::Index for #index_name {
                 type Key = #key_type;
                 type Record = #name;
                 const INDEX: u8 = #i as u8;

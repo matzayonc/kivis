@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{Indexed, Recordable, SerializationError};
+use crate::{Index, Recordable, SerializationError};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) enum Subtable {
@@ -25,7 +25,7 @@ pub fn wrap<R: Recordable>(item_key: &R::Key) -> Result<Vec<u8>, SerializationEr
     bcs::to_bytes(&wrapped)
 }
 
-pub fn wrap_index<R: Recordable, T: Indexed + Serialize>(
+pub fn wrap_index<R: Recordable, T: Index + Serialize>(
     key: R::Key,
     index_key: T,
 ) -> Result<Vec<u8>, SerializationError> {
@@ -37,7 +37,7 @@ pub fn wrap_index<R: Recordable, T: Indexed + Serialize>(
     bcs::to_bytes(&wrapped)
 }
 
-pub(crate) fn wrap_just_index<R: Recordable, I: Indexed + Serialize>(
+pub(crate) fn wrap_just_index<R: Recordable, I: Index + Serialize>(
     index_key: I,
 ) -> Result<Vec<u8>, SerializationError> {
     let wrapped = Wrap {

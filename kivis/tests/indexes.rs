@@ -113,7 +113,7 @@ fn test_iter() {
     store.insert(pet.clone()).unwrap();
 
     let retrieved = store
-        .iter_keys::<Pet>(PetKey(1)..PetKey(u64::MAXq))
+        .iter_keys::<Pet>(PetKey(1)..PetKey(u64::MAX))
         .unwrap()
         .next()
         .unwrap()

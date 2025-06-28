@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fmt::Display};
 
-use crate::RawStore;
+use crate::traits::Storage;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct NoError;
@@ -10,7 +10,7 @@ impl Display for NoError {
     }
 }
 
-impl RawStore for BTreeMap<Vec<u8>, Vec<u8>> {
+impl Storage for BTreeMap<Vec<u8>, Vec<u8>> {
     type StoreError = NoError;
 
     fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {

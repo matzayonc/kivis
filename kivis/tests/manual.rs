@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fmt::Display};
 
-use kivis::{Incrementable, Indexed, Recordable, SerializationError, wrap_index};
+use kivis::{Incrementable, Index, Recordable, SerializationError, wrap_index};
 
 // Define a record type for an User.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
@@ -33,7 +33,7 @@ impl Incrementable for UserKey {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct UserNameIndex(pub String);
-impl Indexed for UserNameIndex {
+impl Index for UserNameIndex {
     type Key = UserKey;
     type Record = User;
     const INDEX: u8 = 1;
@@ -82,7 +82,7 @@ impl Display for NoError {
         Ok(())
     }
 }
-impl kivis::RawStore for Storage {
+impl kivis::Storage for Storage {
     type StoreError = NoError;
 
     fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
