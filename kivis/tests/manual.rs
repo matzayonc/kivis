@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fmt::Display};
+use std::{collections::BTreeMap, fmt::Display, ops::Range};
 
 use kivis::{Incrementable, Index, Recordable, SerializationError, wrap_index};
 
@@ -22,12 +22,13 @@ impl kivis::Recordable for User {
     }
 }
 
+// Keys are always user defined, so we don't need to implement bounds or next_id.
 impl Incrementable for UserKey {
-    fn bounds() -> Option<std::ops::Range<Self>> {
-        Some(UserKey(0)..UserKey(u64::MAX))
+    fn bounds() -> Option<(Self, Self)> {
+        None
     }
     fn next_id(&self) -> Option<Self> {
-        self.0.checked_sub(1).map(UserKey)
+        None
     }
 }
 
@@ -57,8 +58,9 @@ impl kivis::Recordable for Pet {
     }
 }
 impl Incrementable for PetKey {
-    fn bounds() -> Option<std::ops::Range<Self>> {
-        Some(PetKey(0)..PetKey(u64::MAX))
+    fn bounds() -> Option<(Self, Self)> {
+        // Order is reversed here, as we want to be able to get the latest entries first for the auto-increment.
+        Some((PetKey(u64::MAX), PetKey(0)))
     }
     fn next_id(&self) -> Option<Self> {
         self.0.checked_sub(1).map(PetKey)
@@ -90,17 +92,17 @@ impl kivis::Storage for Storage {
         Ok(())
     }
 
-    fn get(&self, key: &Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-        Ok(self.data.get(key).cloned())
+    fn get(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
+        Ok(self.data.get(&key).cloned())
     }
 
-    fn remove(&mut self, key: &Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-        Ok(self.data.remove(key))
+    fn remove(&mut self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
+        Ok(self.data.remove(&key))
     }
 
     fn iter_keys(
-        &mut self,
-        range: impl std::ops::RangeBounds<Vec<u8>>,
+        &self,
+        range: Range<Vec<u8>>,
     ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError> {
         let iter = self.data.range(range);
         Ok(iter.map(|(k, _v)| Ok(k.clone())))

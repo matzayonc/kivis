@@ -1,6 +1,6 @@
-use std::{collections::BTreeMap, u64};
+use std::u64;
 
-use kivis::{Database, Record, Recordable, wrap_index};
+use kivis::{Database, MemoryStorage, Record, Recordable, wrap_index};
 
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
@@ -24,7 +24,7 @@ struct Pet {
 
 #[test]
 fn test_user_record() {
-    let mut store = Database::new(BTreeMap::<Vec<u8>, Vec<u8>>::new());
+    let mut store = Database::new(MemoryStorage::new());
 
     let user = User {
         name: "Alice".to_string(),
@@ -38,7 +38,7 @@ fn test_user_record() {
 
 #[test]
 fn test_pet_record() {
-    let mut store = Database::new(BTreeMap::<Vec<u8>, Vec<u8>>::new());
+    let mut store = Database::new(MemoryStorage::new());
 
     let pet = Pet {
         name: "Fido".to_string(),
@@ -53,7 +53,7 @@ fn test_pet_record() {
 
 #[test]
 fn test_get_owner_of_pet() {
-    let mut store = Database::new(BTreeMap::<Vec<u8>, Vec<u8>>::new());
+    let mut store = Database::new(MemoryStorage::new());
 
     let user = User {
         name: "Alice".to_string(),
@@ -78,7 +78,7 @@ fn test_get_owner_of_pet() {
 
 #[test]
 fn test_index() {
-    let mut store = Database::new(BTreeMap::<Vec<u8>, Vec<u8>>::new());
+    let mut store = Database::new(MemoryStorage::new());
 
     let user = User {
         name: "Alice".to_string(),
@@ -103,7 +103,7 @@ fn test_index() {
 
 #[test]
 fn test_iter() {
-    let mut store = Database::new(BTreeMap::<Vec<u8>, Vec<u8>>::new());
+    let mut store = Database::new(MemoryStorage::new());
 
     let pet = Pet {
         name: "Fido".to_string(),
@@ -113,18 +113,18 @@ fn test_iter() {
     store.insert(pet.clone()).unwrap();
 
     let retrieved = store
-        .iter_keys::<Pet>(PetKey(1)..PetKey(u64::MAX))
+        .iter_keys::<Pet>(PetKey(0)..PetKey(u64::MAX))
         .unwrap()
         .next()
         .unwrap()
         .unwrap();
 
-    assert_eq!(retrieved, PetKey(18446744073709551614));
+    assert_eq!(retrieved, PetKey(1));
 }
 
 #[test]
 fn test_iter_index() {
-    let mut store = Database::new(BTreeMap::<Vec<u8>, Vec<u8>>::new());
+    let mut store = Database::new(MemoryStorage::new());
 
     let user = User {
         name: "Al".to_string(),
@@ -139,5 +139,5 @@ fn test_iter_index() {
         .next()
         .unwrap()
         .unwrap();
-    assert_eq!(retrieved, UserKey(18446744073709551614));
+    assert_eq!(retrieved, UserKey(1));
 }

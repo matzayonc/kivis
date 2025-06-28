@@ -33,22 +33,22 @@ pub fn generate_record_impl(schema: &Schema) -> TokenStream {
     let incrementable = if only_id_type {
         quote! {
             impl kivis::Incrementable for #key_type {
-                fn bounds() -> Option<std::ops::Range<Self>> {
-                    Some(#key_type(0)..#key_type(u64::MAX))
+                fn bounds() -> Option<(Self, Self)> {
+                    Some((#key_type(0), #key_type(u64::MAX)))
                 }
                 fn next_id(&self) -> Option<Self> {
-                    self.0.checked_sub(1).map(|id| #key_type(id))
+                    self.0.checked_add(1).map(|id| #key_type(id))
                 }
             }
         }
     } else {
         quote! {
             impl kivis::Incrementable for #key_type {
-                fn bounds() -> Option<std::ops::Range<Self>> {
+                fn bounds() -> Option<(Self, Self)> {
                     None
                 }
                 fn next_id(&self) -> Option<Self> {
-                    None // No autoincrement for this key type
+                    None
                 }
             }
         }

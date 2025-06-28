@@ -1,6 +1,4 @@
-use std::collections::BTreeMap;
-
-use kivis::{Database, Record, Recordable};
+use kivis::{Database, MemoryStorage, Record, Recordable};
 use serde::{Deserialize, Serialize};
 
 // Test 1: Default behavior (first field as key) - existing test
@@ -40,10 +38,10 @@ fn test_default_key() {
         data: vec![1, 2, 3, 4],
     };
 
-    let mut store = Database::new(BTreeMap::<Vec<u8>, Vec<u8>>::new());
+    let mut store = Database::new(MemoryStorage::new());
 
     let user_key = store.insert(user.clone()).unwrap();
-    assert_eq!(user_key, UserRecordKey(18446744073709551614));
+    assert_eq!(user_key, UserRecordKey(1));
 
     assert_eq!(store.get(&user_key).unwrap(), Some(user.clone()));
     store.remove::<UserRecord>(&user_key).unwrap();
@@ -71,7 +69,7 @@ fn test_specified_key() {
     assert_eq!(key1, key2);
     assert_eq!(key1, ProductRecordKey("WID-001".to_string()));
 
-    let mut store = Database::new(BTreeMap::<Vec<u8>, Vec<u8>>::new());
+    let mut store = Database::new(MemoryStorage::new());
 
     store.insert(product1.clone()).unwrap();
     assert_eq!(store.get(&key1).unwrap(), Some(product1.clone()));
@@ -115,7 +113,7 @@ fn test_composite_key() {
     assert_ne!(key1, key3);
     assert_ne!(key2, key3);
 
-    let mut store = Database::new(BTreeMap::<Vec<u8>, Vec<u8>>::new());
+    let mut store = Database::new(MemoryStorage::new());
 
     // Insert all orders
     store.insert(order1.clone()).unwrap();

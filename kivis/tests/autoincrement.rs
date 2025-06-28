@@ -1,6 +1,4 @@
-use std::collections::BTreeMap;
-
-use kivis::{Database, Record};
+use kivis::{Database, MemoryStorage, Record};
 use serde::{Deserialize, Serialize};
 
 #[derive(Record, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -13,7 +11,7 @@ struct UserRecord {
 
 #[test]
 fn test_lifecycle() {
-    let mut store = Database::new(BTreeMap::<Vec<u8>, Vec<u8>>::new());
+    let mut store = Database::new(MemoryStorage::new());
 
     let user = UserRecord {
         id: 1,
@@ -28,7 +26,7 @@ fn test_lifecycle() {
 
 #[test]
 fn test_iter() {
-    let mut store = Database::new(BTreeMap::<Vec<u8>, Vec<u8>>::new());
+    let mut store = Database::new(MemoryStorage::new());
 
     let user = UserRecord {
         id: 1,

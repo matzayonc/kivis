@@ -1,6 +1,8 @@
-use std::{collections::BTreeMap, fmt::Display};
+use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
 use crate::traits::Storage;
+
+pub type MemoryStorage = BTreeMap<Reverse<Vec<u8>>, Vec<u8>>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct NoError;
@@ -10,27 +12,29 @@ impl Display for NoError {
     }
 }
 
-impl Storage for BTreeMap<Vec<u8>, Vec<u8>> {
+impl Storage for MemoryStorage {
     type StoreError = NoError;
 
     fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
-        self.insert(key, value);
+        self.insert(Reverse(key), value);
         Ok(())
     }
 
-    fn get(&self, key: &Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-        Ok(self.get(key).cloned())
+    fn get(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
+        Ok(self.get(&Reverse(key)).cloned())
     }
 
-    fn remove(&mut self, key: &Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-        Ok(self.remove(key))
+    fn remove(&mut self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
+        Ok(self.remove(&Reverse(key)))
     }
 
     fn iter_keys(
-        &mut self,
-        range: impl std::ops::RangeBounds<Vec<u8>>,
+        &self,
+        range: Range<Vec<u8>>,
     ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError> {
-        let iter = self.range(range);
-        Ok(iter.map(|(k, _v)| Ok(k.clone())))
+        let reverse_range = Reverse(range.end)..Reverse(range.start);
+
+        let iter = self.range(reverse_range);
+        Ok(iter.map(|(k, _v)| Ok(k.0.clone())))
     }
 }

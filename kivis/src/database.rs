@@ -29,17 +29,7 @@ impl<S: Storage> Database<S> {
         let original_key = if let Some(key) = record.key() {
             key
         } else {
-            if !R::SHOULD_INCREMENT {
-                return Err(DatabaseError::SchemaError(
-                    "Record does not have a key and autoincrement is disabled".to_string(),
-                ));
-            }
-
-            let bounds = R::Key::bounds().ok_or(DatabaseError::ToAutoincrement)?;
-            let end = bounds.end.clone();
-            let mut first = self.iter_keys::<R>(bounds)?;
-            let a = first.next().transpose()?.unwrap_or(end);
-            R::Key::next_id(&a).ok_or(DatabaseError::Autoincrement)?
+            R::Key::next_id(&self.last_id::<R>()?).ok_or(DatabaseError::FailedToIncrement)?
         };
 
         let key = wrap::<R>(&original_key).map_err(DatabaseError::Serialization)?;
@@ -63,7 +53,7 @@ impl<S: Storage> Database<S> {
         key: &R::Key,
     ) -> Result<Option<R>, DatabaseError<S::StoreError>> {
         let key = wrap::<R>(key).map_err(DatabaseError::Serialization)?;
-        let Some(value) = self.store.get(&key).map_err(DatabaseError::Io)? else {
+        let Some(value) = self.store.get(key).map_err(DatabaseError::Io)? else {
             return Ok(None);
         };
         Ok(Some(
@@ -76,7 +66,7 @@ impl<S: Storage> Database<S> {
         key: &R::Key,
     ) -> Result<Option<R>, DatabaseError<S::StoreError>> {
         let key = wrap::<R>(key).map_err(DatabaseError::Serialization)?;
-        let Some(value) = self.store.remove(&key).map_err(DatabaseError::Io)? else {
+        let Some(value) = self.store.remove(key).map_err(DatabaseError::Io)? else {
             return Ok(None);
         };
         Ok(Some(
@@ -85,7 +75,7 @@ impl<S: Storage> Database<S> {
     }
 
     pub fn iter_keys<R: Recordable>(
-        &mut self,
+        &self,
         range: Range<R::Key>,
     ) -> Result<impl Iterator<Item = DatabaseIteratorItem<R, S>>, DatabaseError<S::StoreError>>
     {
@@ -146,5 +136,19 @@ impl<S: Storage> Database<S> {
                 Ok(deserialized.key.1)
             }),
         )
+    }
+
+    pub fn last_id<R: Recordable>(&self) -> Result<R::Key, DatabaseError<S::StoreError>>
+    where
+        R::Key: Incrementable,
+    {
+        let (start, end) = R::Key::bounds().ok_or(DatabaseError::ToAutoincrement)?;
+        let range = if start < end {
+            start.clone()..end
+        } else {
+            end..start.clone()
+        };
+        let mut first = self.iter_keys::<R>(range)?;
+        Ok(first.next().transpose()?.unwrap_or(start))
     }
 }

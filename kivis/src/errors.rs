@@ -7,9 +7,8 @@ pub enum DatabaseError<S: Debug + Display + Eq + PartialEq> {
     Serialization(SerializationError),
     Deserialization(SerializationError),
     Io(S),
-    Autoincrement,
+    FailedToIncrement,
     ToAutoincrement,
-    SchemaError(String),
 }
 
 impl<S: Debug + Display + Eq + PartialEq> fmt::Display for DatabaseError<S> {
@@ -18,9 +17,8 @@ impl<S: Debug + Display + Eq + PartialEq> fmt::Display for DatabaseError<S> {
             Self::Serialization(ref e) => write!(f, "Serialization error: {}", e),
             Self::Deserialization(ref e) => write!(f, "Deserialization error: {}", e),
             Self::Io(ref s) => write!(f, "IO error: {}", s),
-            Self::Autoincrement => write!(f, "Autoincrement error"),
+            Self::FailedToIncrement => write!(f, "Autoincrement error"),
             Self::ToAutoincrement => write!(f, "Failed to convert to autoincrement key"),
-            Self::SchemaError(ref msg) => write!(f, "Schema error: {}", msg),
         }
     }
 }
