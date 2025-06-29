@@ -5,7 +5,7 @@ use syn;
 
 use crate::schema::{Schema, SchemaKey};
 
-pub fn generate_record_impl(schema: &Schema) -> TokenStream {
+pub fn generate_record_impl(schema: &Schema, visibility: syn::Visibility) -> TokenStream {
     let name = &schema.name;
     let generics = &schema.generics;
     let other_attrs = &schema.attrs;
@@ -57,7 +57,7 @@ pub fn generate_record_impl(schema: &Schema) -> TokenStream {
     let mut key_impl = quote! {
         #(#other_attrs)*
         #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
-        pub struct #key_type(#(pub #field_types),*);
+        #visibility struct #key_type(#(pub #field_types),*);
 
         #incrementable
     };
@@ -72,7 +72,7 @@ pub fn generate_record_impl(schema: &Schema) -> TokenStream {
         let index_type = &index.ty;
         let index_impl = quote! {
             #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
-            pub struct #index_name(pub #index_type);
+            #visibility struct #index_name(pub #index_type);
 
             impl kivis::Index for #index_name {
                 type Key = #key_type;

@@ -12,6 +12,8 @@ pub fn derive_record(input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree
     let input = parse_macro_input!(input as DeriveInput);
 
+    let visibility = input.vis.clone();
+
     // Create schema from the parsed input
     let schema = match Schema::from_derive_input(input) {
         Ok(schema) => schema,
@@ -19,5 +21,5 @@ pub fn derive_record(input: TokenStream) -> TokenStream {
     };
 
     // Generate the implementation
-    generate_record_impl(&schema)
+    generate_record_impl(&schema, visibility)
 }

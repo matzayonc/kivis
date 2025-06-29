@@ -5,15 +5,15 @@ use crate::traits::Storage;
 pub type MemoryStorage = BTreeMap<Reverse<Vec<u8>>, Vec<u8>>;
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct NoError;
-impl Display for NoError {
+pub struct MemoryStorageError;
+impl Display for MemoryStorageError {
     fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
 }
 
 impl Storage for MemoryStorage {
-    type StoreError = NoError;
+    type StoreError = MemoryStorageError;
 
     fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
         self.insert(Reverse(key), value);
