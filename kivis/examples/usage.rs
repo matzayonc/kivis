@@ -65,7 +65,7 @@ fn main() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
     let alex = Pet {
         name: "Alex".to_string(),
         owner: alice_key,
-        favourite_toy: toy.key().unwrap(), // TODO: Shouldn't have to unwrap.
+        favourite_toy: toy.maybe_key().unwrap(), // TODO: Shouldn't have to unwrap.
     };
     store.insert(alex)?;
     store.insert(toy)?;

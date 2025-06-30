@@ -27,7 +27,7 @@ impl<S: Storage> Database<S> {
     where
         R::Key: Incrementable,
     {
-        let original_key = if let Some(key) = record.key() {
+        let original_key = if let Some(key) = record.maybe_key() {
             key
         } else {
             R::Key::next_id(&self.last_id::<R>()?).ok_or(DatabaseError::FailedToIncrement)?

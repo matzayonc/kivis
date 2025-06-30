@@ -12,7 +12,7 @@ impl kivis::Recordable for User {
     const SCOPE: u8 = 1;
     type Key = UserKey;
 
-    fn key(&self) -> Option<Self::Key> {
+    fn maybe_key(&self) -> Option<Self::Key> {
         Some(UserKey(self.id))
     }
 
@@ -59,7 +59,7 @@ impl kivis::Recordable for Pet {
     const SCOPE: u8 = 2;
     type Key = PetKey;
 
-    fn key(&self) -> Option<Self::Key> {
+    fn maybe_key(&self) -> Option<Self::Key> {
         None
     }
 }
@@ -128,7 +128,7 @@ fn test_user_record() {
 
     database.insert(user.clone()).unwrap();
 
-    let retrieved: User = database.get(&user.key().unwrap()).unwrap().unwrap();
+    let retrieved: User = database.get(&user.maybe_key().unwrap()).unwrap().unwrap();
     assert_eq!(retrieved, user);
 }
 
@@ -160,7 +160,7 @@ fn test_get_owner_of_pet() {
     };
     let pet = Pet {
         name: "Fido".to_string(),
-        owner: user.key().unwrap(),
+        owner: user.maybe_key().unwrap(),
     };
 
     user.id = database.insert(user.clone()).unwrap().0;
@@ -190,11 +190,14 @@ fn test_index() {
     assert_eq!(index_keys.len(), 1);
     assert_eq!(
         index_keys[0],
-        wrap_index::<User, UserNameIndex>(user.key().unwrap(), UserNameIndex(user.name.clone()))
-            .unwrap()
+        wrap_index::<User, UserNameIndex>(
+            user.maybe_key().unwrap(),
+            UserNameIndex(user.name.clone())
+        )
+        .unwrap()
     );
 
-    let retrieved: User = database.get(&user.key().unwrap()).unwrap().unwrap();
+    let retrieved: User = database.get(&user.maybe_key().unwrap()).unwrap().unwrap();
     assert_eq!(retrieved, user);
 
     assert_eq!(database.dissolve().data.len(), 2)

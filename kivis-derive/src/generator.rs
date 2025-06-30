@@ -97,6 +97,18 @@ pub fn generate_record_impl(schema: &Schema, visibility: syn::Visibility) -> Tok
         }
     };
 
+    let keyed_recordable = if only_id_type {
+        quote! {}
+    } else {
+        quote! {
+            impl #impl_generics kivis::KeyedRecordable for #name #ty_generics #where_clause {
+                fn key(&self) -> Self::Key {
+                    #key_type(#(self.#field_names.clone()),*)
+                }
+            }
+        }
+    };
+
     let main_impl = quote! {
         #key_impl
 
@@ -108,7 +120,7 @@ pub fn generate_record_impl(schema: &Schema, visibility: syn::Visibility) -> Tok
             const SCOPE: u8 = #table_value;
             type Key = #key_type;
 
-            fn key(&self) -> Option<Self::Key> {
+            fn maybe_key(&self) -> Option<Self::Key> {
                 #autoincrement
             }
 
@@ -116,6 +128,8 @@ pub fn generate_record_impl(schema: &Schema, visibility: syn::Visibility) -> Tok
                 Ok(vec![#(#index_values,)*])
             }
         }
+
+        #keyed_recordable
     };
 
     TokenStream::from(main_impl)

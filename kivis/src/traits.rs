@@ -15,12 +15,16 @@ pub trait Recordable: Serialize + DeserializeOwned + Debug {
     const SCOPE: u8;
     type Key: RecordKey + Debug;
 
-    fn key(&self) -> Option<Self::Key> {
+    fn maybe_key(&self) -> Option<Self::Key> {
         None
     }
     fn index_keys(&self, _key: Self::Key) -> Result<Vec<Vec<u8>>, SerializationError> {
         Ok(vec![])
     }
+}
+
+pub trait KeyedRecordable: Recordable {
+    fn key(&self) -> Self::Key;
 }
 
 pub trait Incrementable: Sized {
