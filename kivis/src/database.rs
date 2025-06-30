@@ -25,12 +25,13 @@ impl<S: Storage> Database<S> {
         record: R,
     ) -> Result<R::Key, DatabaseError<<S as Storage>::StoreError>>
     where
-        R::Key: Incrementable,
+        R::Key: Incrementable + RecordKey,
+        <R::Key as RecordKey>::Record: Recordable<Key = R::Key>,
     {
         let original_key = if let Some(key) = record.maybe_key() {
             key
         } else {
-            R::Key::next_id(&self.last_id::<R>()?).ok_or(DatabaseError::FailedToIncrement)?
+            R::Key::next_id(&self.last_id::<R::Key>()?).ok_or(DatabaseError::FailedToIncrement)?
         };
 
         let key = wrap::<R>(&original_key).map_err(DatabaseError::Serialization)?;
@@ -81,13 +82,18 @@ impl<S: Storage> Database<S> {
         ))
     }
 
-    pub fn iter_keys<R: Recordable>(
+    pub fn iter_keys<K: RecordKey>(
         &self,
-        range: Range<R::Key>,
-    ) -> Result<impl Iterator<Item = DatabaseIteratorItem<R, S>>, DatabaseError<S::StoreError>>
+        range: Range<K>,
+    ) -> Result<
+        impl Iterator<Item = DatabaseIteratorItem<K::Record, S>>,
+        DatabaseError<S::StoreError>,
+    >
+    where
+        K::Record: Recordable<Key = K>,
     {
-        let start = wrap::<R>(&range.start).map_err(DatabaseError::Serialization)?;
-        let end = wrap::<R>(&range.end).map_err(DatabaseError::Serialization)?;
+        let start = wrap::<K::Record>(&range.start).map_err(DatabaseError::Serialization)?;
+        let end = wrap::<K::Record>(&range.end).map_err(DatabaseError::Serialization)?;
         let raw_iter = self
             .store
             .iter_keys(start..end)
@@ -100,7 +106,7 @@ impl<S: Storage> Database<S> {
                     Err(e) => return Err(DatabaseError::Io(e)),
                 };
 
-                let deserialized: Wrap<R::Key> = match bcs::from_bytes(&value) {
+                let deserialized: Wrap<K> = match bcs::from_bytes(&value) {
                     Ok(deserialized) => deserialized,
                     Err(e) => return Err(DatabaseError::Deserialization(e)),
                 };
@@ -145,17 +151,18 @@ impl<S: Storage> Database<S> {
         )
     }
 
-    pub fn last_id<R: Recordable>(&self) -> Result<R::Key, DatabaseError<S::StoreError>>
+    pub fn last_id<K: RecordKey>(&self) -> Result<K, DatabaseError<S::StoreError>>
     where
-        R::Key: Incrementable,
+        K: Incrementable,
+        K::Record: Recordable<Key = K>,
     {
-        let (start, end) = R::Key::bounds().ok_or(DatabaseError::ToAutoincrement)?;
+        let (start, end) = K::bounds().ok_or(DatabaseError::ToAutoincrement)?;
         let range = if start < end {
             start.clone()..end
         } else {
             end..start.clone()
         };
-        let mut first = self.iter_keys::<R>(range)?;
+        let mut first = self.iter_keys::<K>(range)?;
         Ok(first.next().transpose()?.unwrap_or(start))
     }
 }

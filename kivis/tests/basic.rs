@@ -36,7 +36,7 @@ fn test_iter() {
     let another_key = store.insert(another.clone()).unwrap();
 
     let iter = store
-        .iter_keys::<UserRecord>(UserRecordKey(0)..UserRecordKey(3))
+        .iter_keys(UserRecordKey(0)..UserRecordKey(3))
         .unwrap()
         .collect::<Result<Vec<_>, _>>()
         .unwrap();

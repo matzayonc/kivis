@@ -216,7 +216,7 @@ fn test_iter() {
     let pet_key = database.insert(pet.clone()).unwrap();
 
     let retrieved = database
-        .iter_keys::<Pet>(PetKey(1)..PetKey(u64::MAX))
+        .iter_keys(PetKey(1)..PetKey(u64::MAX))
         .unwrap()
         .next()
         .unwrap()
