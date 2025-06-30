@@ -7,9 +7,13 @@ use serde::{Serialize, de::DeserializeOwned};
 
 pub type SerializationError = bcs::Error;
 
+pub trait RecordKey: Serialize + DeserializeOwned + Ord + Clone + Eq {
+    type Record: Recordable;
+}
+
 pub trait Recordable: Serialize + DeserializeOwned + Debug {
     const SCOPE: u8;
-    type Key: Serialize + DeserializeOwned + Ord + Clone + Eq + Debug;
+    type Key: RecordKey + Debug;
 
     fn key(&self) -> Option<Self::Key> {
         None

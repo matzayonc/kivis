@@ -1,3 +1,4 @@
+use crate::RecordKey;
 use crate::errors::DatabaseError;
 use crate::traits::{Incrementable, Index, Recordable, Storage};
 use crate::wrap::{Wrap, decode_value, encode_value, wrap, wrap_just_index};
@@ -48,11 +49,14 @@ impl<S: Storage> Database<S> {
         Ok(original_key)
     }
 
-    pub fn get<R: Recordable>(
+    pub fn get<K: RecordKey>(
         &self,
-        key: &R::Key,
-    ) -> Result<Option<R>, DatabaseError<S::StoreError>> {
-        let key = wrap::<R>(key).map_err(DatabaseError::Serialization)?;
+        key: &K,
+    ) -> Result<Option<K::Record>, DatabaseError<S::StoreError>>
+    where
+        K::Record: Recordable<Key = K>,
+    {
+        let key = wrap::<K::Record>(key).map_err(DatabaseError::Serialization)?;
         let Some(value) = self.store.get(key).map_err(DatabaseError::Io)? else {
             return Ok(None);
         };
@@ -61,11 +65,14 @@ impl<S: Storage> Database<S> {
         ))
     }
 
-    pub fn remove<R: Recordable>(
+    pub fn remove<K: RecordKey>(
         &mut self,
-        key: &R::Key,
-    ) -> Result<Option<R>, DatabaseError<S::StoreError>> {
-        let key = wrap::<R>(key).map_err(DatabaseError::Serialization)?;
+        key: &K,
+    ) -> Result<Option<K::Record>, DatabaseError<S::StoreError>>
+    where
+        K::Record: Recordable<Key = K>,
+    {
+        let key = wrap::<K::Record>(key).map_err(DatabaseError::Serialization)?;
         let Some(value) = self.store.remove(key).map_err(DatabaseError::Io)? else {
             return Ok(None);
         };

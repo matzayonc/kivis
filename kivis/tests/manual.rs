@@ -5,6 +5,9 @@ use kivis::{Incrementable, Index, Recordable, SerializationError, wrap_index};
 // Define a record type for an User.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct UserKey(pub u64);
+impl kivis::RecordKey for UserKey {
+    type Record = User;
+}
 impl kivis::Recordable for User {
     const SCOPE: u8 = 1;
     type Key = UserKey;
@@ -48,7 +51,10 @@ pub struct User {
 
 // Define a record type for a Pet.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
-pub struct PetKey(pub u64);
+struct PetKey(pub u64);
+impl kivis::RecordKey for PetKey {
+    type Record = Pet;
+}
 impl kivis::Recordable for Pet {
     const SCOPE: u8 = 2;
     type Key = PetKey;

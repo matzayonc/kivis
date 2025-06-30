@@ -17,8 +17,8 @@ fn test_lifecycle() {
 
     let user_key = store.insert(user.clone()).unwrap();
     assert_eq!(store.get(&user_key).unwrap(), Some(user.clone()));
-    store.remove::<UserRecord>(&user_key).unwrap();
-    assert_eq!(store.get::<UserRecord>(&user_key).unwrap(), None);
+    store.remove(&user_key).unwrap();
+    assert_eq!(store.get(&user_key).unwrap(), None);
 }
 
 #[test]
