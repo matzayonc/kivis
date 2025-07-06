@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-use crate::{Index, Recordable, SerializationError};
+use crate::{Index, Recordable, SerializationError, errors::InternalDatabaseError};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) enum Subtable {
@@ -35,6 +35,26 @@ pub fn wrap_index<R: Recordable, T: Index + Serialize>(
         key: (index_key, key),
     };
     bcs::to_bytes(&wrapped)
+}
+
+pub fn unwrap_index<R: Recordable, I: Index + DeserializeOwned>(
+    data: &[u8],
+) -> Result<R::Key, InternalDatabaseError> {
+    let wrapped: Wrap<(I, R::Key)> =
+        bcs::from_bytes(data).map_err(InternalDatabaseError::Deserialization)?;
+
+    if wrapped.scope != R::SCOPE {
+        return Err(InternalDatabaseError::InvalidScope);
+    }
+
+    if matches!(
+        wrapped.subtable,
+        Subtable::Main | Subtable::MetadataSingleton
+    ) {
+        return Err(InternalDatabaseError::InvalidScope);
+    }
+
+    Ok(wrapped.key.1)
 }
 
 pub(crate) fn wrap_just_index<R: Recordable, I: Index + Serialize>(

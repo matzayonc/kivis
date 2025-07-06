@@ -1,7 +1,7 @@
 use crate::RecordKey;
 use crate::errors::DatabaseError;
 use crate::traits::{Incrementable, Index, Recordable, Storage};
-use crate::wrap::{Wrap, decode_value, encode_value, wrap, wrap_just_index};
+use crate::wrap::{Wrap, decode_value, encode_value, unwrap_index, wrap, wrap_just_index};
 use std::ops::Range;
 
 type DatabaseIteratorItem<R, S> =
@@ -127,7 +127,6 @@ impl<S: Storage> Database<S> {
             wrap_just_index::<I::Record, I>(range.start).map_err(DatabaseError::Serialization)?;
         let end =
             wrap_just_index::<I::Record, I>(range.end).map_err(DatabaseError::Serialization)?;
-
         let raw_iter = self
             .store
             .iter_keys(start..end)
@@ -140,13 +139,9 @@ impl<S: Storage> Database<S> {
                     Err(e) => return Err(DatabaseError::Io(e)),
                 };
 
-                let deserialized: Wrap<(Vec<u8>, <I::Record as Recordable>::Key)> =
-                    match bcs::from_bytes(&value) {
-                        Ok(deserialized) => deserialized,
-                        Err(e) => return Err(DatabaseError::Deserialization(e)),
-                    };
+                let entry = unwrap_index::<I::Record, I>(&value)?;
 
-                Ok(deserialized.key.1)
+                Ok(entry)
             }),
         )
     }

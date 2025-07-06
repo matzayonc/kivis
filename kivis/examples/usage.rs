@@ -26,7 +26,7 @@ struct Pet {
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
-#[table(2)]
+#[table(3)]
 struct Toy {
     #[key]
     kind: ToyKind,
@@ -77,16 +77,17 @@ fn main() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
     assert_eq!(users_named_bob, vec![bob_key]);
 
     // Pets by their favourite type of toy.
-    // let pet = store
-    //     .iter_by_index(
-    //         PetFavouriteToyIndex(ToyKey(ToyKind::Ball, 7))
-    //             ..PetFavouriteToyIndex(ToyKey(ToyKind::Ball, 8)),
-    //     )?
-    //     .next()
-    //     .unwrap()?;
-    // let pet = store.get::<Pet>(&pet)?.unwrap(); // TODO: Shouldn't have to specify type
-    // let owner = store.get::<User>(&pet.owner)?.unwrap();
-    // assert_eq!(owner.name, "Alice");
+    let pet = store
+        .iter_by_index(
+            PetFavouriteToyIndex(ToyKey(ToyKind::Ball, 7))
+                ..PetFavouriteToyIndex(ToyKey(ToyKind::Ball, 8)),
+        )?
+        .next()
+        .unwrap()?;
+    let pet = store.get(&pet)?.unwrap();
+    let owner = store.get(&pet.owner)?.unwrap();
+
+    assert_eq!(owner.name, "Alice");
 
     Ok(())
 }
