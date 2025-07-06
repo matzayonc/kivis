@@ -11,3 +11,4 @@ bcs = { version = "0.1.6" }
 
 [dev-dependencies]
 hex = "0.4.3"
+trybuild = "1.0"
