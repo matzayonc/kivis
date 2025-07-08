@@ -4,7 +4,7 @@ use kivis::{Database, DatabaseError, MemoryStorage, Record, Recordable};
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
-#[table(1)]
+#[table(11)]
 pub struct User {
     #[index]
     name: String,
@@ -15,7 +15,7 @@ pub struct User {
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
-#[table(2)]
+#[table(12)]
 struct Pet {
     name: String,
     owner: UserKey,
@@ -26,7 +26,7 @@ struct Pet {
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
-#[table(3)]
+#[table(13)]
 struct Toy {
     #[key]
     kind: ToyKind,
