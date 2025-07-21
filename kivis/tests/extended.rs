@@ -1,4 +1,4 @@
-use kivis::{Database, KeyedRecordable, MemoryStorage, Record};
+use kivis::{Database, HasKey, MemoryStorage, Record};
 use serde::{Deserialize, Serialize};
 
 // Test 1: Default behavior (first field as key) - existing test
@@ -40,7 +40,7 @@ fn test_default_key() {
 
     let mut store = Database::new(MemoryStorage::new());
 
-    let user_key = store.insert(user.clone()).unwrap();
+    let user_key = store.put(user.clone()).unwrap();
     assert_eq!(user_key, UserRecordKey(1));
 
     assert_eq!(store.get(&user_key).unwrap(), Some(user.clone()));
@@ -62,8 +62,8 @@ fn test_specified_key() {
         price: 1099,
     };
 
-    let key1 = product1.key();
-    let key2 = product2.key();
+    let key1 = ProductRecord::key(&product1);
+    let key2 = ProductRecord::key(&product2);
 
     // Keys should be equal because SKU is the same
     assert_eq!(key1, key2);
@@ -102,9 +102,9 @@ fn test_composite_key() {
         total: 3000,
     };
 
-    let key1 = order1.key();
-    let key2 = order2.key();
-    let key3 = order3.key();
+    let key1 = OrderRecord::key(&order1);
+    let key2 = OrderRecord::key(&order2);
+    let key3 = OrderRecord::key(&order3);
 
     assert_eq!(key1, OrderRecordKey(123, "2024-01-01".to_string()));
 

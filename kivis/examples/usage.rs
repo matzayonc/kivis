@@ -1,4 +1,4 @@
-use kivis::{Database, DatabaseError, MemoryStorage, Record, Recordable};
+use kivis::{Database, DatabaseError, HasKey, MemoryStorage, Record};
 
 /// A user record with an indexed name field
 #[derive(
@@ -55,8 +55,8 @@ fn main() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
         name: "Bob".to_string(),
         email: "bob@example.com".to_string(),
     };
-    let alice_key = store.insert(alice)?;
-    let bob_key = store.insert(bob)?;
+    let alice_key = store.put(alice)?;
+    let bob_key = store.put(bob)?;
 
     let toy = Toy {
         kind: ToyKind::Ball,
@@ -65,9 +65,9 @@ fn main() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
     let alex = Pet {
         name: "Alex".to_string(),
         owner: alice_key,
-        favourite_toy: toy.maybe_key().unwrap(), // TODO: Shouldn't have to unwrap.
+        favourite_toy: Toy::key(&toy),
     };
-    store.insert(alex)?;
+    store.put(alex)?;
     store.insert(toy)?;
 
     // Records can be retrieved by indexed name

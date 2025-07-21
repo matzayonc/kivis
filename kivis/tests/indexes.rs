@@ -1,6 +1,6 @@
 use std::u64;
 
-use kivis::{Database, MemoryStorage, Record, Recordable, wrap_index};
+use kivis::{Database, Index, KeyBytes, MemoryStorage, Record, Recordable};
 
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
@@ -30,7 +30,7 @@ fn test_user_record() {
         name: "Alice".to_string(),
         email: "alice@example.com".to_string(),
     };
-    let user_key = store.insert(user.clone()).unwrap();
+    let user_key = store.put(user.clone()).unwrap();
 
     let retrieved: User = store.get(&user_key).unwrap().unwrap();
     assert_eq!(retrieved, user);
@@ -45,7 +45,7 @@ fn test_pet_record() {
         owner: UserKey(1),
     };
 
-    let pet_key = store.insert(pet.clone()).unwrap();
+    let pet_key = store.put(pet.clone()).unwrap();
 
     let retrieved: Pet = store.get(&pet_key).unwrap().unwrap();
     assert_eq!(retrieved, pet);
@@ -59,12 +59,12 @@ fn test_get_owner_of_pet() {
         name: "Alice".to_string(),
         email: "alice@example.com".to_string(),
     };
-    let user_key = store.insert(user.clone()).unwrap();
+    let user_key = store.put(user.clone()).unwrap();
     let pet = Pet {
         name: "Fido".to_string(),
         owner: user_key.clone(),
     };
-    let pet_key = store.insert(pet.clone()).unwrap();
+    let pet_key = store.put(pet.clone()).unwrap();
 
     let userr: User = store.get(&user_key).unwrap().unwrap();
     assert_eq!(user, userr);
@@ -85,15 +85,12 @@ fn test_index() {
         email: "alice@example.com".to_string(),
     };
 
-    let user_key = store.insert(user.clone()).unwrap();
+    let user_key = store.put(user.clone()).unwrap();
 
-    let index_keys = user.index_keys(user_key.clone()).unwrap();
+    let index_keys = user.index_keys();
     assert_eq!(index_keys.len(), 1);
-    assert_eq!(
-        index_keys[0],
-        wrap_index::<User, UserNameIndex>(user_key.clone(), UserNameIndex(user.name.clone()))
-            .unwrap()
-    );
+    assert_eq!(index_keys[0].0, UserNameIndex::INDEX);
+    assert_eq!(index_keys[0].1.to_bytes(), user.name.to_bytes());
 
     let retrieved: User = store.get(&user_key).unwrap().unwrap();
     assert_eq!(retrieved, user);
@@ -110,7 +107,7 @@ fn test_iter() {
         owner: UserKey(1),
     };
 
-    store.insert(pet.clone()).unwrap();
+    store.put(pet.clone()).unwrap();
 
     let retrieved = store
         .iter_keys(PetKey(0)..PetKey(u64::MAX))
@@ -131,9 +128,9 @@ fn test_iter_index() {
         email: "alice@example.com".to_string(),
     };
 
-    store.insert(user.clone()).unwrap();
+    store.put(user.clone()).unwrap();
 
-    let retrieved: UserKey = store
+    let retrieved = store
         .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))
         .unwrap()
         .next()

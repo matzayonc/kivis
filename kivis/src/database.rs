@@ -1,56 +1,96 @@
-use crate::RecordKey;
 use crate::errors::DatabaseError;
-use crate::traits::{Incrementable, Index, Recordable, Storage};
-use crate::wrap::{Wrap, decode_value, encode_value, unwrap_index, wrap, wrap_just_index};
+use crate::traits::{Index, Recordable, Storage};
+use crate::wrap::{Subtable, Wrap, WrapPrelude, decode_value, encode_value, wrap};
+use crate::{DefineRecord, HasKey, Incrementable, KeyBytes};
 use std::ops::Range;
 
 type DatabaseIteratorItem<R, S> =
     Result<<R as Recordable>::Key, DatabaseError<<S as Storage>::StoreError>>;
 
+/// The `kivis` database type. All interactions with the database are done through this type.
 pub struct Database<S: Storage> {
     store: S,
 }
 
 impl<S: Storage> Database<S> {
+    /// Creates a new [`Database`] instance over any storage backend.
+    /// One of the key features of `kivis` is that it can work with any storage backend that implements the [`Storage`] trait.
     pub fn new(store: S) -> Self {
         Database { store }
     }
 
-    pub fn dissolve(self) -> S {
-        self.store
-    }
-
-    pub fn insert<R: Recordable>(
+    /// Add a record with autoincremented key into the database, together with all related index entries.
+    ///
+    /// The record must implement the [`Recordable`] trait, with the key type implementing the [`DefineRecord`] trait pointing back to it.
+    /// The record's key must implement the [`Incrementable`] trait.
+    /// For records that do not have an autoincremented key, use [`insert`] instead.
+    pub fn put<R: Recordable>(
         &mut self,
         record: R,
     ) -> Result<R::Key, DatabaseError<<S as Storage>::StoreError>>
     where
-        R::Key: Incrementable + RecordKey,
-        <R::Key as RecordKey>::Record: Recordable<Key = R::Key>,
+        R::Key: DefineRecord<Record = R> + Incrementable,
     {
-        let original_key = if let Some(key) = record.maybe_key() {
-            key
-        } else {
-            R::Key::next_id(&self.last_id::<R::Key>()?).ok_or(DatabaseError::FailedToIncrement)?
-        };
+        let original_key = self
+            .last_id::<R::Key>(R::Key::bounds())?
+            .next_id()
+            .ok_or(DatabaseError::FailedToIncrement)?;
 
         let key = wrap::<R>(&original_key).map_err(DatabaseError::Serialization)?;
 
-        for index_value in record
-            .index_keys(original_key.clone())
-            .map_err(DatabaseError::Serialization)?
-        {
-            self.store
-                .insert(index_value, Vec::new())
-                .map_err(DatabaseError::Io)?
-        }
+        self.add_index_entries(&record, &original_key)?;
 
         let value = encode_value(&record).map_err(DatabaseError::Serialization)?;
         self.store.insert(key, value).map_err(DatabaseError::Io)?;
         Ok(original_key)
     }
 
-    pub fn get<K: RecordKey>(
+    /// Inserts a record with a derived key into the database, together with all related index entries.
+    ///
+    /// The record must implement the [`Recordable`] trait, with the key type implementing the [`DefineRecord`] trait pointing back to it.
+    /// The record's key must implement the [`HasKey`] trait, returning the key type.
+    /// For records that don't store keys internally, use [`put`] instead.
+    pub fn insert<K: DefineRecord<Record = R>, R: Recordable<Key = K>>(
+        &mut self,
+        record: R,
+    ) -> Result<K, DatabaseError<<S as Storage>::StoreError>>
+    where
+        R: HasKey<Key = K>,
+    {
+        let original_key = R::key(&record);
+        let key = wrap::<R>(&original_key).map_err(DatabaseError::Serialization)?;
+
+        self.add_index_entries(&record, &original_key)?;
+
+        let value = encode_value(&record).map_err(DatabaseError::Serialization)?;
+        self.store.insert(key, value).map_err(DatabaseError::Io)?;
+        Ok(original_key)
+    }
+
+    fn add_index_entries<R: Recordable>(
+        &mut self,
+        record: &R,
+        key: &R::Key,
+    ) -> Result<(), DatabaseError<<S as Storage>::StoreError>>
+    where
+        R::Key: DefineRecord<Record = R>,
+    {
+        for (descriminator, index_key) in record.index_keys() {
+            let mut entry = WrapPrelude::new::<R>(Subtable::Index(descriminator)).to_bytes();
+            entry.extend_from_slice(&index_key.to_bytes());
+
+            self.store
+                .insert(entry, key.to_bytes())
+                .map_err(DatabaseError::Io)?;
+        }
+        Ok(())
+    }
+
+    /// Retrieves a record from the database by its key.
+    ///
+    /// The record must implement the [`Recordable`] trait, with the key type implementing the [`RecordKey`] trait pointing back to it.
+    /// If the record is not found, `None` is returned.
+    pub fn get<K: DefineRecord>(
         &self,
         key: &K,
     ) -> Result<Option<K::Record>, DatabaseError<S::StoreError>>
@@ -66,7 +106,13 @@ impl<S: Storage> Database<S> {
         ))
     }
 
-    pub fn remove<K: RecordKey>(
+    /// Removes a record from the database by its key and returns it.
+    ///
+    /// The record must implement the [`Recordable`] trait, with the key type implementing the [`RecordKey`] trait pointing back to it.
+    /// If the record is not found, `None` is returned.
+    /// The record's index entries are also removed.
+    // TODO: Remove the index entries.
+    pub fn remove<K: DefineRecord>(
         &mut self,
         key: &K,
     ) -> Result<Option<K::Record>, DatabaseError<S::StoreError>>
@@ -82,7 +128,11 @@ impl<S: Storage> Database<S> {
         ))
     }
 
-    pub fn iter_keys<K: RecordKey>(
+    /// Iterates over all keys in the database within the specified range.
+    ///
+    /// The range is inclusive of the start and exclusive of the end.
+    /// The keys must implement the [`RecordKey`] trait, and the related [`Recordable`] must point back to it.
+    pub fn iter_keys<K: DefineRecord>(
         &self,
         range: Range<K>,
     ) -> Result<
@@ -116,6 +166,11 @@ impl<S: Storage> Database<S> {
         )
     }
 
+    /// Iterates over all index entries in the database within the specified range and returns their primary keys.
+    ///
+    /// The range is inclusive of the start and exclusive of the end.
+    /// The index must implement the [`Index`] trait.
+    /// The returned iterator yields items of type `Result<Index::Record, DatabaseError<S::StoreError>>`.
     pub fn iter_by_index<I: Index>(
         &mut self,
         range: Range<I>,
@@ -123,10 +178,12 @@ impl<S: Storage> Database<S> {
         impl Iterator<Item = DatabaseIteratorItem<I::Record, S>>,
         DatabaseError<S::StoreError>,
     > {
-        let start =
-            wrap_just_index::<I::Record, I>(range.start).map_err(DatabaseError::Serialization)?;
-        let end =
-            wrap_just_index::<I::Record, I>(range.end).map_err(DatabaseError::Serialization)?;
+        let index_prelude = WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX));
+        let mut start = index_prelude.to_bytes();
+        let mut end = start.clone();
+        start.extend(range.start.to_bytes());
+        end.extend(range.end.to_bytes());
+
         let raw_iter = self
             .store
             .iter_keys(start..end)
@@ -139,19 +196,31 @@ impl<S: Storage> Database<S> {
                     Err(e) => return Err(DatabaseError::Io(e)),
                 };
 
-                let entry = unwrap_index::<I::Record, I>(&value)?;
+                let value = match self.store.get(value) {
+                    Ok(Some(data)) => data,
+                    Ok(None) => {
+                        return Err(DatabaseError::Internal(
+                            crate::InternalDatabaseError::MissingIndexEntry,
+                        ));
+                    }
+                    Err(e) => return Err(DatabaseError::Io(e)),
+                };
 
-                Ok(entry)
+                bcs::from_bytes(&value).map_err(DatabaseError::Deserialization)
             }),
         )
     }
 
-    pub fn last_id<K: RecordKey>(&self) -> Result<K, DatabaseError<S::StoreError>>
+    /// Consumes the database and returns the underlying storage.
+    pub fn dissolve(self) -> S {
+        self.store
+    }
+
+    fn last_id<K: DefineRecord>(&self, bounds: (K, K)) -> Result<K, DatabaseError<S::StoreError>>
     where
-        K: Incrementable,
         K::Record: Recordable<Key = K>,
     {
-        let (start, end) = K::bounds().ok_or(DatabaseError::ToAutoincrement)?;
+        let (start, end) = bounds;
         let range = if start < end {
             start.clone()..end
         } else {

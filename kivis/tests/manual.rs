@@ -1,37 +1,27 @@
 use std::{collections::BTreeMap, fmt::Display, ops::Range};
 
-use kivis::{Incrementable, Index, Recordable, SerializationError, wrap_index};
+use kivis::{DefineRecord, HasKey, Incrementable, Index, KeyBytes, Recordable};
 
 // Define a record type for an User.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct UserKey(pub u64);
-impl kivis::RecordKey for UserKey {
+
+impl DefineRecord for UserKey {
     type Record = User;
 }
+impl HasKey for User {
+    type Key = UserKey;
+    fn key(c: &<Self::Key as DefineRecord>::Record) -> Self::Key {
+        UserKey(c.id)
+    }
+}
+
 impl kivis::Recordable for User {
     const SCOPE: u8 = 1;
     type Key = UserKey;
 
-    fn maybe_key(&self) -> Option<Self::Key> {
-        Some(UserKey(self.id))
-    }
-
-    fn index_keys(&self, key: Self::Key) -> Result<Vec<Vec<u8>>, SerializationError> {
-        Ok([wrap_index::<Self, UserNameIndex>(
-            key,
-            UserNameIndex(self.name.clone()),
-        )?]
-        .to_vec())
-    }
-}
-
-// Keys are always user defined, so we don't need to implement bounds or next_id.
-impl Incrementable for UserKey {
-    fn bounds() -> Option<(Self, Self)> {
-        None
-    }
-    fn next_id(&self) -> Option<Self> {
-        None
+    fn index_keys(&self) -> Vec<(u8, &dyn KeyBytes)> {
+        vec![(UserNameIndex::INDEX, &self.name)]
     }
 }
 
@@ -52,26 +42,23 @@ pub struct User {
 // Define a record type for a Pet.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 struct PetKey(pub u64);
-impl kivis::RecordKey for PetKey {
+impl DefineRecord for PetKey {
     type Record = Pet;
 }
 impl kivis::Recordable for Pet {
     const SCOPE: u8 = 2;
     type Key = PetKey;
-
-    fn maybe_key(&self) -> Option<Self::Key> {
-        None
-    }
 }
 impl Incrementable for PetKey {
-    fn bounds() -> Option<(Self, Self)> {
+    fn bounds() -> (Self, Self) {
         // Order is reversed here, as we want to be able to get the latest entries first for the auto-increment.
-        Some((PetKey(u64::MAX), PetKey(0)))
+        (PetKey(u64::MAX), PetKey(0))
     }
     fn next_id(&self) -> Option<Self> {
         self.0.checked_sub(1).map(PetKey)
     }
 }
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 struct Pet {
     name: String,
@@ -128,7 +115,7 @@ fn test_user_record() {
 
     database.insert(user.clone()).unwrap();
 
-    let retrieved: User = database.get(&user.maybe_key().unwrap()).unwrap().unwrap();
+    let retrieved: User = database.get(&UserKey(user.id)).unwrap().unwrap();
     assert_eq!(retrieved, user);
 }
 
@@ -142,7 +129,7 @@ fn test_pet_record() {
         owner: UserKey(1),
     };
 
-    let pet_key = database.insert(pet.clone()).unwrap();
+    let pet_key = database.put(pet.clone()).unwrap();
 
     let retrieved: Pet = database.get(&pet_key).unwrap().unwrap();
     assert_eq!(retrieved, pet);
@@ -160,11 +147,11 @@ fn test_get_owner_of_pet() {
     };
     let pet = Pet {
         name: "Fido".to_string(),
-        owner: user.maybe_key().unwrap(),
+        owner: UserKey(user.id),
     };
 
     user.id = database.insert(user.clone()).unwrap().0;
-    let pet_key = database.insert(pet.clone()).unwrap();
+    let pet_key = database.put(pet.clone()).unwrap();
 
     let retrieved: Pet = database.get(&pet_key).unwrap().unwrap();
     assert_eq!(retrieved, pet);
@@ -184,20 +171,14 @@ fn test_index() {
         email: "alice@example.com".to_string(),
     };
 
-    let user_key = database.insert(user.clone()).unwrap();
+    let _user_key = database.insert(user.clone()).unwrap();
 
-    let index_keys = user.index_keys(user_key).unwrap();
+    let index_keys = user.index_keys();
     assert_eq!(index_keys.len(), 1);
-    assert_eq!(
-        index_keys[0],
-        wrap_index::<User, UserNameIndex>(
-            user.maybe_key().unwrap(),
-            UserNameIndex(user.name.clone())
-        )
-        .unwrap()
-    );
+    assert_eq!(index_keys[0].0, 1);
+    assert_eq!(index_keys[0].1.to_bytes(), user.name.to_bytes());
 
-    let retrieved: User = database.get(&user.maybe_key().unwrap()).unwrap().unwrap();
+    let retrieved: User = database.get(&UserKey(user.id)).unwrap().unwrap();
     assert_eq!(retrieved, user);
 
     assert_eq!(database.dissolve().data.len(), 2)
@@ -213,7 +194,7 @@ fn test_iter() {
         owner: UserKey(1),
     };
 
-    let pet_key = database.insert(pet.clone()).unwrap();
+    let pet_key = database.put(pet.clone()).unwrap();
 
     let retrieved = database
         .iter_keys(PetKey(1)..PetKey(u64::MAX))

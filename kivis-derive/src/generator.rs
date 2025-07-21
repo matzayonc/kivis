@@ -30,11 +30,11 @@ pub fn generate_record_impl(schema: &Schema, visibility: syn::Visibility) -> Tok
     let field_types: Vec<_> = keys.iter().map(|k| &k.ty).collect();
     let field_names: Vec<_> = keys.iter().map(|k| &k.name).collect();
 
-    let incrementable = if only_id_type {
+    let key_trait = if only_id_type {
         quote! {
             impl kivis::Incrementable for #key_type {
-                fn bounds() -> Option<(Self, Self)> {
-                    Some((#key_type(0), #key_type(u64::MAX)))
+                fn bounds() -> (Self, Self) {
+                    (#key_type(0), #key_type(u64::MAX))
                 }
                 fn next_id(&self) -> Option<Self> {
                     self.0.checked_add(1).map(|id| #key_type(id))
@@ -43,12 +43,10 @@ pub fn generate_record_impl(schema: &Schema, visibility: syn::Visibility) -> Tok
         }
     } else {
         quote! {
-            impl kivis::Incrementable for #key_type {
-                fn bounds() -> Option<(Self, Self)> {
-                    None
-                }
-                fn next_id(&self) -> Option<Self> {
-                    None
+            impl #impl_generics kivis::HasKey for #name #ty_generics #where_clause {
+                type Key = #key_type;
+                fn key(c: &<Self::Key as kivis::DefineRecord>::Record) -> Self::Key {
+                    #key_type(#(c.#field_names.clone()),*)
                 }
             }
         }
@@ -59,7 +57,7 @@ pub fn generate_record_impl(schema: &Schema, visibility: syn::Visibility) -> Tok
         #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
         #visibility struct #key_type(#(pub #field_types),*);
 
-        #incrementable
+        #key_trait
     };
 
     let mut index_values = Vec::new();
@@ -83,36 +81,14 @@ pub fn generate_record_impl(schema: &Schema, visibility: syn::Visibility) -> Tok
         key_impl.extend(index_impl);
 
         index_values.push(quote! {
-            kivis::wrap_index::<#name, #index_name>(key, #index_name(self.#field_name.clone()))?
+            (#i as u8, &self.#field_name)
         });
     }
-
-    let autoincrement = if only_id_type {
-        quote! {
-            None
-        }
-    } else {
-        quote! {
-            Some(#key_type(#(self.#field_names.clone()),*))
-        }
-    };
-
-    let keyed_recordable = if only_id_type {
-        quote! {}
-    } else {
-        quote! {
-            impl #impl_generics kivis::KeyedRecordable for #name #ty_generics #where_clause {
-                fn key(&self) -> Self::Key {
-                    #key_type(#(self.#field_names.clone()),*)
-                }
-            }
-        }
-    };
 
     let main_impl = quote! {
         #key_impl
 
-        impl #impl_generics kivis::RecordKey for #key_type #ty_generics #where_clause {
+        impl #impl_generics kivis::DefineRecord for #key_type #ty_generics #where_clause {
             type Record = #name;
         }
 
@@ -120,16 +96,10 @@ pub fn generate_record_impl(schema: &Schema, visibility: syn::Visibility) -> Tok
             const SCOPE: u8 = #table_value;
             type Key = #key_type;
 
-            fn maybe_key(&self) -> Option<Self::Key> {
-                #autoincrement
-            }
-
-            fn index_keys(&self, key: Self::Key) -> Result<Vec<Vec<u8>>, kivis::SerializationError> {
-                Ok(vec![#(#index_values,)*])
-            }
+    fn index_keys(&self) -> Vec<(u8, &dyn kivis::KeyBytes)> {
+        vec![#(#index_values,)*]
+    }
         }
-
-        #keyed_recordable
     };
 
     TokenStream::from(main_impl)

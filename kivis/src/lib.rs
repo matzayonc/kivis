@@ -10,4 +10,4 @@ pub use kivis_derive::Record;
 pub use traits::*;
 pub use wrap::{wrap, wrap_index};
 
-pub use crate::errors::DatabaseError;
+pub use crate::errors::{DatabaseError, InternalDatabaseError};
