@@ -1,3 +1,5 @@
+use serde::de::DeserializeOwned;
+
 use crate::errors::DatabaseError;
 use crate::traits::{Index, Recordable, Storage};
 use crate::wrap::{Subtable, Wrap, WrapPrelude, decode_value, encode_value, wrap};
@@ -50,12 +52,12 @@ impl<S: Storage> Database<S> {
     /// The record must implement the [`Recordable`] trait, with the key type implementing the [`DefineRecord`] trait pointing back to it.
     /// The record's key must implement the [`HasKey`] trait, returning the key type.
     /// For records that don't store keys internally, use [`put`] instead.
-    pub fn insert<K: DefineRecord<Record = R>, R: Recordable<Key = K>>(
+    pub fn insert<K: DefineRecord<Record = R>, R>(
         &mut self,
         record: R,
     ) -> Result<K, DatabaseError<<S as Storage>::StoreError>>
     where
-        R: HasKey<Key = K>,
+        R: HasKey<Key = K> + Recordable<Key = K>,
     {
         let original_key = R::key(&record);
         let key = wrap::<R>(&original_key).map_err(DatabaseError::Serialization)?;
@@ -79,8 +81,13 @@ impl<S: Storage> Database<S> {
             let mut entry = WrapPrelude::new::<R>(Subtable::Index(descriminator)).to_bytes();
             entry.extend_from_slice(&index_key.to_bytes());
 
+            // Indexes might be repeated, so we need to ensure that the key is unique.
+            // TODO: Add a way to declare as unique and deduplicate by provided hash.
+            let key_bytes = key.to_bytes();
+            entry.extend_from_slice(&key_bytes);
+
             self.store
-                .insert(entry, key.to_bytes())
+                .insert(entry, key_bytes)
                 .map_err(DatabaseError::Io)?;
         }
         Ok(())
@@ -189,26 +196,7 @@ impl<S: Storage> Database<S> {
             .iter_keys(start..end)
             .map_err(DatabaseError::Io)?;
 
-        Ok(
-            raw_iter.map(|elem: Result<Vec<u8>, <S as Storage>::StoreError>| {
-                let value = match elem {
-                    Ok(value) => value,
-                    Err(e) => return Err(DatabaseError::Io(e)),
-                };
-
-                let value = match self.store.get(value) {
-                    Ok(Some(data)) => data,
-                    Ok(None) => {
-                        return Err(DatabaseError::Internal(
-                            crate::InternalDatabaseError::MissingIndexEntry,
-                        ));
-                    }
-                    Err(e) => return Err(DatabaseError::Io(e)),
-                };
-
-                bcs::from_bytes(&value).map_err(DatabaseError::Deserialization)
-            }),
-        )
+        Ok(raw_iter.map(|elem| self.process_iter_result(elem)))
     }
 
     /// Consumes the database and returns the underlying storage.
@@ -228,5 +216,24 @@ impl<S: Storage> Database<S> {
         };
         let mut first = self.iter_keys::<K>(range)?;
         Ok(first.next().transpose()?.unwrap_or(start))
+    }
+
+    /// Helper function to process iterator results and get deserialized values
+    fn process_iter_result<T: DeserializeOwned>(
+        &self,
+        result: Result<Vec<u8>, S::StoreError>,
+    ) -> Result<T, DatabaseError<S::StoreError>> {
+        let key = result.map_err(DatabaseError::Io)?;
+        let value: Vec<u8> = match self.store.get(key) {
+            Ok(Some(data)) => data,
+            Ok(None) => {
+                return Err(DatabaseError::Internal(
+                    crate::InternalDatabaseError::MissingIndexEntry,
+                ));
+            }
+            Err(e) => return Err(DatabaseError::Io(e)),
+        };
+
+        bcs::from_bytes(&value).map_err(DatabaseError::Deserialization)
     }
 }

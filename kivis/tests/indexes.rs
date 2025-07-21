@@ -1,5 +1,3 @@
-use std::u64;
-
 use kivis::{Database, Index, KeyBytes, MemoryStorage, Record, Recordable};
 
 #[derive(

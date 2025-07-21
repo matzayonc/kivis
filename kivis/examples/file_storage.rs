@@ -38,7 +38,7 @@ impl FileStore {
 
     fn key_to_filename(&self, key: &[u8]) -> PathBuf {
         let hex_key = hex::encode(key);
-        self.data_dir.join(format!("{}.dat", hex_key))
+        self.data_dir.join(format!("{hex_key}.dat"))
     }
 }
 
@@ -82,8 +82,7 @@ impl Storage for FileStore {
         for entry in entries {
             if let Ok(entry) = entry {
                 if let Some(filename) = entry.file_name().to_str() {
-                    if filename.ends_with(".dat") {
-                        let hex_key = &filename[..filename.len() - 4];
+                    if let Some(hex_key) = filename.strip_suffix(".dat") {
                         if let Ok(key) = hex::decode(hex_key) {
                             if key >= range.start && key < range.end {
                                 keys.push(key);
@@ -157,10 +156,7 @@ fn main() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
     let data_dir = std::path::Path::new("./data/example");
     if let Ok(entries) = std::fs::read_dir(data_dir) {
         let file_count = entries.count();
-        println!(
-            "✓ File-based storage working - {} files persisted",
-            file_count
-        );
+        println!("✓ File-based storage working - {file_count} files persisted");
     }
 
     Ok(())

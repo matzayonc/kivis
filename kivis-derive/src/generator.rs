@@ -1,7 +1,6 @@
 use convert_case::{Case, Casing};
 use proc_macro::TokenStream;
 use quote::quote;
-use syn;
 
 use crate::schema::{Schema, SchemaKey};
 
@@ -14,7 +13,7 @@ pub fn generate_record_impl(schema: &Schema, visibility: syn::Visibility) -> Tok
     // Split generics for use in impl
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    let key_type = syn::Ident::new(&format!("{}Key", name), name.span());
+    let key_type = syn::Ident::new(&format!("{name}Key"), name.span());
 
     let only_id_type = schema.keys.is_empty();
     let keys = if only_id_type {
@@ -65,8 +64,7 @@ pub fn generate_record_impl(schema: &Schema, visibility: syn::Visibility) -> Tok
     for (i, index) in schema.indexes.iter().enumerate() {
         let field_name = &index.name;
         let field_type_pascal = field_name.to_string().to_case(Case::Pascal);
-        let index_name =
-            syn::Ident::new(&format!("{}{}Index", name, field_type_pascal), name.span());
+        let index_name = syn::Ident::new(&format!("{name}{field_type_pascal}Index"), name.span());
         let index_type = &index.ty;
         let index_impl = quote! {
             #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]

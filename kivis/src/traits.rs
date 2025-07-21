@@ -41,7 +41,7 @@ impl<T: Serialize + DeserializeOwned> KeyBytes for T {
     where
         Self: Sized,
     {
-        bcs::from_bytes(bytes).map_err(SerializationError::from)
+        bcs::from_bytes(bytes)
     }
 }
 

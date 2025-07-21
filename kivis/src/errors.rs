@@ -48,12 +48,12 @@ impl<S: Debug + Display + Eq + PartialEq> From<InternalDatabaseError> for Databa
 impl<S: Debug + Display + Eq + PartialEq> fmt::Display for DatabaseError<S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Self::Serialization(ref e) => write!(f, "Serialization error: {}", e),
-            Self::Deserialization(ref e) => write!(f, "Deserialization error: {}", e),
-            Self::Io(ref s) => write!(f, "IO error: {}", s),
+            Self::Serialization(ref e) => write!(f, "Serialization error: {e}"),
+            Self::Deserialization(ref e) => write!(f, "Deserialization error: {e}"),
+            Self::Io(ref s) => write!(f, "IO error: {s}"),
             Self::FailedToIncrement => write!(f, "Autoincrement error"),
             Self::ToAutoincrement => write!(f, "Failed to convert to autoincrement key"),
-            Self::Internal(ref e) => write!(f, "Internal database error: {}", e),
+            Self::Internal(ref e) => write!(f, "Internal database error: {e}"),
         }
     }
 }
@@ -64,8 +64,8 @@ impl fmt::Display for InternalDatabaseError {
             Self::InvalidScope => write!(f, "Invalid scope"),
             Self::UnexpectedScopeInIndex => write!(f, "Unexpected scope in index"),
             Self::MissingIndexEntry => write!(f, "Missing index entry"),
-            Self::Serialization(ref e) => write!(f, "Serialization error: {}", e),
-            Self::Deserialization(ref e) => write!(f, "Deserialization error: {}", e),
+            Self::Serialization(ref e) => write!(f, "Serialization error: {e}"),
+            Self::Deserialization(ref e) => write!(f, "Deserialization error: {e}"),
         }
     }
 }

@@ -128,6 +128,6 @@ fn test_composite_key() {
     // Remove one and verify others remain
     store.remove(&key1).unwrap();
     assert_eq!(store.get(&key1).unwrap(), None);
-    assert_eq!(store.get(&key2).unwrap().is_some(), true);
-    assert_eq!(store.get(&key3).unwrap().is_some(), true);
+    assert!(store.get(&key2).unwrap().is_some());
+    assert!(store.get(&key3).unwrap().is_some());
 }
