@@ -1,6 +1,6 @@
 ## `Kivis`: Type-Safe Database Schema Generation for Rust
 
-`Kivis` is a Rust crate that provides a powerful procedural macro to automatically generate database schemas directly from your Rust struct definitions. Designed to operate seamlessly over any ordered key-value store, such as `BTreeMap` or `Sled`, `Kivis` simplifies data persistence by offering robust support for complex data structures, keys, indexes, and foreign key relationships, all while maintaining type safety.
+`Kivis` is a Rust crate that provides a powerful procedural macro to automatically generate database schemas directly from your Rust struct definitions. Designed to operate seamlessly over any ordered key-value store, such as `BTreeMap` or `Sled`. `Kivis` simplifies data persistence by offering robust support for complex data structures, keys, indexes, and foreign key relationships, all while maintaining type safety.
 
 ## Schemas
 
@@ -12,6 +12,7 @@ The entire database schema is declaratively defined through intuitive derive mac
 
 1. Auto-incremented IDs: Records can be assigned unique, automatically incremented identifiers upon insertion, ideal for simple primary keys.
 2. Composite and Simple Keys: For more explicit keying, one or more fields within a struct can be designated as key components using the #[key] attribute. This allows for the creation of simple or composite keys that uniquely identify records.
+3. Custom behaviour: For advanced uses-cases like content addresability and uuids.
 
 Both key types are exposed through zero-cost abstraction wrappers, such as StructNameKey, which encapsulate the key's type and table correlation, providing compile-time safety and clarity.
 
