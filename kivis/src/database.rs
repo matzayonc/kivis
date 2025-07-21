@@ -12,13 +12,21 @@ type DatabaseIteratorItem<R, S> =
 /// The `kivis` database type. All interactions with the database are done through this type.
 pub struct Database<S: Storage> {
     store: S,
+    fallback: Option<Box<dyn Storage<StoreError = S::StoreError>>>,
 }
 
 impl<S: Storage> Database<S> {
     /// Creates a new [`Database`] instance over any storage backend.
     /// One of the key features of `kivis` is that it can work with any storage backend that implements the [`Storage`] trait.
     pub fn new(store: S) -> Self {
-        Database { store }
+        Database {
+            store,
+            fallback: None,
+        }
+    }
+
+    pub fn set_fallback(&mut self, fallback: Box<dyn Storage<StoreError = S::StoreError>>) {
+        self.fallback = Some(fallback);
     }
 
     /// Add a record with autoincremented key into the database, together with all related index entries.
@@ -65,6 +73,11 @@ impl<S: Storage> Database<S> {
         self.add_index_entries(&record, &original_key)?;
 
         let value = encode_value(&record).map_err(DatabaseError::Serialization)?;
+        if let Some(fallback) = &mut self.fallback {
+            fallback
+                .insert(key.clone(), value.clone())
+                .map_err(DatabaseError::Io)?;
+        }
         self.store.insert(key, value).map_err(DatabaseError::Io)?;
         Ok(original_key)
     }
@@ -86,6 +99,11 @@ impl<S: Storage> Database<S> {
             let key_bytes = key.to_bytes();
             entry.extend_from_slice(&key_bytes);
 
+            if let Some(fallback) = &mut self.fallback {
+                fallback
+                    .insert(entry.clone(), key_bytes.clone())
+                    .map_err(DatabaseError::Io)?;
+            }
             self.store
                 .insert(entry, key_bytes)
                 .map_err(DatabaseError::Io)?;
@@ -104,10 +122,20 @@ impl<S: Storage> Database<S> {
     where
         K::Record: Recordable<Key = K>,
     {
-        let key = wrap::<K::Record>(key).map_err(DatabaseError::Serialization)?;
-        let Some(value) = self.store.get(key).map_err(DatabaseError::Io)? else {
-            return Ok(None);
-        };
+        let serialized_key = wrap::<K::Record>(key).map_err(DatabaseError::Serialization)?;
+        let value =
+            if let Some(value) = self.store.get(serialized_key).map_err(DatabaseError::Io)? {
+                value
+            } else {
+                let Some(fallback) = &self.fallback else {
+                    return Ok(None);
+                };
+                let key = wrap::<K::Record>(key).map_err(DatabaseError::Serialization)?;
+                let Some(value) = fallback.get(key).map_err(DatabaseError::Io)? else {
+                    return Ok(None);
+                };
+                value
+            };
         Ok(Some(
             decode_value(&value).map_err(DatabaseError::Deserialization)?,
         ))
@@ -127,12 +155,20 @@ impl<S: Storage> Database<S> {
         K::Record: Recordable<Key = K>,
     {
         let key = wrap::<K::Record>(key).map_err(DatabaseError::Serialization)?;
-        let Some(value) = self.store.remove(key).map_err(DatabaseError::Io)? else {
-            return Ok(None);
+
+        let value = if let Some(fallback) = &mut self.fallback {
+            let fallback_value = fallback.remove(key.clone()).map_err(DatabaseError::Io)?;
+            self.store.remove(key).map_err(DatabaseError::Io)?;
+            fallback_value
+        } else {
+            self.store.remove(key).map_err(DatabaseError::Io)?
         };
-        Ok(Some(
-            decode_value(&value).map_err(DatabaseError::Deserialization)?,
-        ))
+
+        Ok(if let Some(ref value) = value {
+            Some(decode_value(value).map_err(DatabaseError::Deserialization)?)
+        } else {
+            None
+        })
     }
 
     /// Iterates over all keys in the database within the specified range.

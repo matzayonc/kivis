@@ -68,7 +68,7 @@ pub trait Index: KeyBytes + Debug {
 /// The storage backend is responsible for storing and retrieving records and their associated indexes.
 /// It defines methods for inserting, getting, removing, and iterating over keys in the storage.
 /// All storage operations are defined over `Vec<u8>` keys and values.
-pub trait Storage: Sized {
+pub trait Storage {
     type StoreError: Debug + Display + Eq + PartialEq;
 
     /// Should insert the given key-value pair into the storage.
@@ -81,7 +81,9 @@ pub trait Storage: Sized {
     fn iter_keys(
         &self,
         range: Range<Vec<u8>>,
-    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError>;
+    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError>
+    where
+        Self: Sized;
 }
 
 impl Incrementable for u128 {
