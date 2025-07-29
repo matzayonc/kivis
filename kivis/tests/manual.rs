@@ -50,10 +50,9 @@ impl kivis::DatabaseEntry for Pet {
     type Key = PetKey;
 }
 impl Incrementable for PetKey {
-    fn bounds() -> (Self, Self) {
-        // Order is reversed here, as we want to be able to get the latest entries first for the auto-increment.
-        (PetKey(u64::MAX), PetKey(0))
-    }
+    // Order is reversed here, as we want to be able to get the latest entries first for the auto-increment.
+    const BOUNDS: (Self, Self) = (PetKey(u64::MAX), PetKey(0));
+
     fn next_id(&self) -> Option<Self> {
         self.0.checked_sub(1).map(PetKey)
     }

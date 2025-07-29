@@ -44,7 +44,7 @@ impl<S: Storage> Database<S> {
         R::Key: RecordKey<Record = R> + Incrementable,
     {
         let original_key = self
-            .last_id::<R::Key>(R::Key::bounds())?
+            .last_id::<R::Key>(R::Key::BOUNDS)?
             .next_id()
             .ok_or(DatabaseError::FailedToIncrement)?;
 

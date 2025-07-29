@@ -32,9 +32,7 @@ pub fn generate_record_impl(schema: &Schema, visibility: syn::Visibility) -> Tok
     let key_trait = if only_id_type {
         quote! {
             impl kivis::Incrementable for #key_type {
-                fn bounds() -> (Self, Self) {
-                    (#key_type(0), #key_type(u64::MAX))
-                }
+                const BOUNDS: (Self, Self) = (#key_type(0), #key_type(u64::MAX));
                 fn next_id(&self) -> Option<Self> {
                     self.0.checked_add(1).map(|id| #key_type(id))
                 }
