@@ -35,7 +35,7 @@ impl<S: Storage> Database<S> {
     ///
     /// The record must implement the [`DatabaseEntry`] trait, with the key type implementing the [`RecordKey`] trait pointing back to it.
     /// The record's key must implement the [`Incrementable`] trait.
-    /// For records that do not have an autoincremented key, use [`insert`] instead.
+    /// For records that do not have an autoincremented key, use [`Self::insert`] instead.
     pub fn put<R: DatabaseEntry>(
         &mut self,
         record: R,
@@ -61,7 +61,7 @@ impl<S: Storage> Database<S> {
     ///
     /// The record must implement the [`DatabaseEntry`] trait, with the key type implementing the [`RecordKey`] trait pointing back to it.
     /// The record's key must implement the [`DeriveKey`] trait, returning the key type.
-    /// For records that don't store keys internally, use [`put`] instead.
+    /// For records that don't store keys internally, use [`Self::put`] instead.
     pub fn insert<K: RecordKey<Record = R>, R>(
         &mut self,
         record: R,
@@ -92,8 +92,8 @@ impl<S: Storage> Database<S> {
     where
         R::Key: RecordKey<Record = R>,
     {
-        for (descriminator, index_key) in record.index_keys() {
-            let mut entry = WrapPrelude::new::<R>(Subtable::Index(descriminator)).to_bytes();
+        for (discriminator, index_key) in record.index_keys() {
+            let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator)).to_bytes();
             entry.extend_from_slice(&index_key.to_bytes());
 
             // Indexes might be repeated, so we need to ensure that the key is unique.

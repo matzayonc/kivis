@@ -2,6 +2,13 @@
 name = "kivis-derive"
 version = "0.1.0"
 edition = "2024"
+description = "Procedural macros for kivis database schema generation"
+license = "MIT"
+repository = "https://github.com/matzayonc/kivis"
+homepage = "https://github.com/matzayonc/kivis"
+documentation = "https://docs.rs/kivis-derive"
+keywords = ["database", "schema", "proc-macro", "derive"]
+categories = ["database", "development-tools::procedural-macro-helpers"]
 
 [lib]
 proc-macro = true

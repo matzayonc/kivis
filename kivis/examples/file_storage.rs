@@ -6,7 +6,7 @@ use std::path::PathBuf;
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
-#[table(1)]
+#[table(21)]
 pub struct User {
     #[index]
     name: String,
@@ -17,7 +17,7 @@ pub struct User {
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
-#[table(2)]
+#[table(22)]
 struct Pet {
     name: String,
     owner: UserKey,
@@ -79,14 +79,12 @@ impl Storage for FileStore {
         let entries = fs::read_dir(&self.data_dir).map_err(|_| kivis::MemoryStorageError)?;
 
         let mut keys: Vec<Vec<u8>> = Vec::new();
-        for entry in entries {
-            if let Ok(entry) = entry {
-                if let Some(filename) = entry.file_name().to_str() {
-                    if let Some(hex_key) = filename.strip_suffix(".dat") {
-                        if let Ok(key) = hex::decode(hex_key) {
-                            if key >= range.start && key < range.end {
-                                keys.push(key);
-                            }
+        for entry in entries.flatten() {
+            if let Some(filename) = entry.file_name().to_str() {
+                if let Some(hex_key) = filename.strip_suffix(".dat") {
+                    if let Ok(key) = hex::decode(hex_key) {
+                        if key >= range.start && key < range.end {
+                            keys.push(key);
                         }
                     }
                 }

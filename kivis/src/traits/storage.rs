@@ -8,6 +8,7 @@ use super::*;
 /// It defines methods for inserting, getting, removing, and iterating over keys in the storage.
 /// All storage operations are defined over `Vec<u8>` keys and values.
 pub trait Storage {
+    /// Error type returned by storage operations.
     type StoreError: Debug + Display + Eq + PartialEq;
 
     /// Should insert the given key-value pair into the storage.
