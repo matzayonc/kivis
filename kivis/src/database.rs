@@ -1,13 +1,13 @@
 use serde::de::DeserializeOwned;
 
 use crate::errors::DatabaseError;
-use crate::traits::{Index, Recordable, Storage};
+use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::wrap::{Subtable, Wrap, WrapPrelude, decode_value, encode_value, wrap};
-use crate::{DefineRecord, HasKey, Incrementable, KeyBytes};
+use crate::{DeriveKey, Incrementable, KeyBytes, RecordKey};
 use std::ops::Range;
 
 type DatabaseIteratorItem<R, S> =
-    Result<<R as Recordable>::Key, DatabaseError<<S as Storage>::StoreError>>;
+    Result<<R as DatabaseEntry>::Key, DatabaseError<<S as Storage>::StoreError>>;
 
 /// The `kivis` database type. All interactions with the database are done through this type.
 pub struct Database<S: Storage> {
@@ -25,21 +25,23 @@ impl<S: Storage> Database<S> {
         }
     }
 
+    /// Sets a fallback storage that will be used if the main storage does not contain the requested record.
+    /// The current storage then becomes the cache for the fallback storage.
     pub fn set_fallback(&mut self, fallback: Box<dyn Storage<StoreError = S::StoreError>>) {
         self.fallback = Some(fallback);
     }
 
     /// Add a record with autoincremented key into the database, together with all related index entries.
     ///
-    /// The record must implement the [`Recordable`] trait, with the key type implementing the [`DefineRecord`] trait pointing back to it.
+    /// The record must implement the [`DatabaseEntry`] trait, with the key type implementing the [`RecordKey`] trait pointing back to it.
     /// The record's key must implement the [`Incrementable`] trait.
     /// For records that do not have an autoincremented key, use [`insert`] instead.
-    pub fn put<R: Recordable>(
+    pub fn put<R: DatabaseEntry>(
         &mut self,
         record: R,
     ) -> Result<R::Key, DatabaseError<<S as Storage>::StoreError>>
     where
-        R::Key: DefineRecord<Record = R> + Incrementable,
+        R::Key: RecordKey<Record = R> + Incrementable,
     {
         let original_key = self
             .last_id::<R::Key>(R::Key::bounds())?
@@ -57,15 +59,15 @@ impl<S: Storage> Database<S> {
 
     /// Inserts a record with a derived key into the database, together with all related index entries.
     ///
-    /// The record must implement the [`Recordable`] trait, with the key type implementing the [`DefineRecord`] trait pointing back to it.
-    /// The record's key must implement the [`HasKey`] trait, returning the key type.
+    /// The record must implement the [`DatabaseEntry`] trait, with the key type implementing the [`RecordKey`] trait pointing back to it.
+    /// The record's key must implement the [`DeriveKey`] trait, returning the key type.
     /// For records that don't store keys internally, use [`put`] instead.
-    pub fn insert<K: DefineRecord<Record = R>, R>(
+    pub fn insert<K: RecordKey<Record = R>, R>(
         &mut self,
         record: R,
     ) -> Result<K, DatabaseError<<S as Storage>::StoreError>>
     where
-        R: HasKey<Key = K> + Recordable<Key = K>,
+        R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
     {
         let original_key = R::key(&record);
         let key = wrap::<R>(&original_key).map_err(DatabaseError::Serialization)?;
@@ -82,13 +84,13 @@ impl<S: Storage> Database<S> {
         Ok(original_key)
     }
 
-    fn add_index_entries<R: Recordable>(
+    fn add_index_entries<R: DatabaseEntry>(
         &mut self,
         record: &R,
         key: &R::Key,
     ) -> Result<(), DatabaseError<<S as Storage>::StoreError>>
     where
-        R::Key: DefineRecord<Record = R>,
+        R::Key: RecordKey<Record = R>,
     {
         for (descriminator, index_key) in record.index_keys() {
             let mut entry = WrapPrelude::new::<R>(Subtable::Index(descriminator)).to_bytes();
@@ -113,14 +115,14 @@ impl<S: Storage> Database<S> {
 
     /// Retrieves a record from the database by its key.
     ///
-    /// The record must implement the [`Recordable`] trait, with the key type implementing the [`RecordKey`] trait pointing back to it.
+    /// The record must implement the [`DatabaseEntry`] trait, with the key type implementing the [`RecordKey`] trait pointing back to it.
     /// If the record is not found, `None` is returned.
-    pub fn get<K: DefineRecord>(
+    pub fn get<K: RecordKey>(
         &self,
         key: &K,
     ) -> Result<Option<K::Record>, DatabaseError<S::StoreError>>
     where
-        K::Record: Recordable<Key = K>,
+        K::Record: DatabaseEntry<Key = K>,
     {
         let serialized_key = wrap::<K::Record>(key).map_err(DatabaseError::Serialization)?;
         let value =
@@ -143,16 +145,16 @@ impl<S: Storage> Database<S> {
 
     /// Removes a record from the database by its key and returns it.
     ///
-    /// The record must implement the [`Recordable`] trait, with the key type implementing the [`RecordKey`] trait pointing back to it.
+    /// The record must implement the [`DatabaseEntry`] trait, with the key type implementing the [`RecordKey`] trait pointing back to it.
     /// If the record is not found, `None` is returned.
     /// The record's index entries are also removed.
     // TODO: Remove the index entries.
-    pub fn remove<K: DefineRecord>(
+    pub fn remove<K: RecordKey>(
         &mut self,
         key: &K,
     ) -> Result<Option<K::Record>, DatabaseError<S::StoreError>>
     where
-        K::Record: Recordable<Key = K>,
+        K::Record: DatabaseEntry<Key = K>,
     {
         let key = wrap::<K::Record>(key).map_err(DatabaseError::Serialization)?;
 
@@ -174,8 +176,8 @@ impl<S: Storage> Database<S> {
     /// Iterates over all keys in the database within the specified range.
     ///
     /// The range is inclusive of the start and exclusive of the end.
-    /// The keys must implement the [`RecordKey`] trait, and the related [`Recordable`] must point back to it.
-    pub fn iter_keys<K: DefineRecord>(
+    /// The keys must implement the [`RecordKey`] trait, and the related [`DatabaseEntry`] must point back to it.
+    pub fn iter_keys<K: RecordKey>(
         &self,
         range: Range<K>,
     ) -> Result<
@@ -183,7 +185,7 @@ impl<S: Storage> Database<S> {
         DatabaseError<S::StoreError>,
     >
     where
-        K::Record: Recordable<Key = K>,
+        K::Record: DatabaseEntry<Key = K>,
     {
         let start = wrap::<K::Record>(&range.start).map_err(DatabaseError::Serialization)?;
         let end = wrap::<K::Record>(&range.end).map_err(DatabaseError::Serialization)?;
@@ -240,9 +242,10 @@ impl<S: Storage> Database<S> {
         self.store
     }
 
-    fn last_id<K: DefineRecord>(&self, bounds: (K, K)) -> Result<K, DatabaseError<S::StoreError>>
+    /// Helper function to get the last ID in a given range, used for autoincrementing keys.
+    fn last_id<K: RecordKey>(&self, bounds: (K, K)) -> Result<K, DatabaseError<S::StoreError>>
     where
-        K::Record: Recordable<Key = K>,
+        K::Record: DatabaseEntry<Key = K>,
     {
         let (start, end) = bounds;
         let range = if start < end {

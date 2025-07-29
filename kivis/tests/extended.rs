@@ -1,4 +1,4 @@
-use kivis::{Database, HasKey, MemoryStorage, Record};
+use kivis::{Database, DeriveKey, MemoryStorage, Record};
 use serde::{Deserialize, Serialize};
 
 // Test 1: Default behavior (first field as key) - existing test

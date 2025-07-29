@@ -42,9 +42,9 @@ pub fn generate_record_impl(schema: &Schema, visibility: syn::Visibility) -> Tok
         }
     } else {
         quote! {
-            impl #impl_generics kivis::HasKey for #name #ty_generics #where_clause {
+            impl #impl_generics kivis::DeriveKey for #name #ty_generics #where_clause {
                 type Key = #key_type;
-                fn key(c: &<Self::Key as kivis::DefineRecord>::Record) -> Self::Key {
+                fn key(c: &<Self::Key as kivis::RecordKey>::Record) -> Self::Key {
                     #key_type(#(c.#field_names.clone()),*)
                 }
             }
@@ -86,11 +86,11 @@ pub fn generate_record_impl(schema: &Schema, visibility: syn::Visibility) -> Tok
     let main_impl = quote! {
         #key_impl
 
-        impl #impl_generics kivis::DefineRecord for #key_type #ty_generics #where_clause {
+        impl #impl_generics kivis::RecordKey for #key_type #ty_generics #where_clause {
             type Record = #name;
         }
 
-        impl #impl_generics kivis::Recordable for #name #ty_generics #where_clause {
+        impl #impl_generics kivis::DatabaseEntry for #name #ty_generics #where_clause {
             const SCOPE: u8 = #table_value;
             type Key = #key_type;
 

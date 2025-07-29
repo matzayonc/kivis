@@ -15,9 +15,6 @@ pub enum DatabaseError<S: Debug + Display> {
     Io(S),
     /// Errors that occur when trying to increment a key.
     FailedToIncrement,
-    /// Errors that occur when an auto-increment key does not implement the required traits correctly.
-    // TODO: This should be removed once the requirement for auto-increment keys is removed.
-    ToAutoincrement,
     /// Internal errors that should never occur during normal operation of the database.
     Internal(InternalDatabaseError),
 }
@@ -52,7 +49,6 @@ impl<S: Debug + Display + Eq + PartialEq> fmt::Display for DatabaseError<S> {
             Self::Deserialization(ref e) => write!(f, "Deserialization error: {e}"),
             Self::Io(ref s) => write!(f, "IO error: {s}"),
             Self::FailedToIncrement => write!(f, "Autoincrement error"),
-            Self::ToAutoincrement => write!(f, "Failed to convert to autoincrement key"),
             Self::Internal(ref e) => write!(f, "Internal database error: {e}"),
         }
     }

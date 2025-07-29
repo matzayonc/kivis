@@ -1,22 +1,22 @@
 use std::{collections::BTreeMap, fmt::Display, ops::Range};
 
-use kivis::{DefineRecord, HasKey, Incrementable, Index, KeyBytes, Recordable};
+use kivis::{DatabaseEntry, DeriveKey, Incrementable, Index, KeyBytes, RecordKey};
 
 // Define a record type for an User.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct UserKey(pub u64);
 
-impl DefineRecord for UserKey {
+impl RecordKey for UserKey {
     type Record = User;
 }
-impl HasKey for User {
+impl DeriveKey for User {
     type Key = UserKey;
-    fn key(c: &<Self::Key as DefineRecord>::Record) -> Self::Key {
+    fn key(c: &<Self::Key as RecordKey>::Record) -> Self::Key {
         UserKey(c.id)
     }
 }
 
-impl kivis::Recordable for User {
+impl kivis::DatabaseEntry for User {
     const SCOPE: u8 = 1;
     type Key = UserKey;
 
@@ -42,10 +42,10 @@ pub struct User {
 // Define a record type for a Pet.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 struct PetKey(pub u64);
-impl DefineRecord for PetKey {
+impl RecordKey for PetKey {
     type Record = Pet;
 }
-impl kivis::Recordable for Pet {
+impl kivis::DatabaseEntry for Pet {
     const SCOPE: u8 = 2;
     type Key = PetKey;
 }

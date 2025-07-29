@@ -1,8 +1,5 @@
 use kivis::{Database, MemoryStorage, Record};
 use serde::{Deserialize, Serialize};
-use std::cell::RefCell;
-use std::collections::BTreeMap;
-use std::ops::Range;
 
 #[derive(Record, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[table(1)]

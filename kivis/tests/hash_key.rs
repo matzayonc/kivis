@@ -10,11 +10,11 @@
  *
  * The implementation uses:
  * - Custom key type (ContentHashKey) that wraps a hash value
- * - HasKey trait implementation that computes the hash
+ * - DeriveKey trait implementation that computes the hash
  * - Database.insert() method for records with derived keys
  */
 
-use kivis::{Database, DefineRecord, HasKey, KeyBytes, MemoryStorage, Recordable};
+use kivis::{Database, DeriveKey, KeyBytes, MemoryStorage, RecordKey, DatabaseEntry};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -23,7 +23,7 @@ use std::hash::{Hash, Hasher};
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ContentHashKey(pub u64);
 
-impl DefineRecord for ContentHashKey {
+impl RecordKey for ContentHashKey {
     type Record = ContentRecord;
 }
 
@@ -36,17 +36,17 @@ pub struct ContentRecord {
     value: u32,
 }
 
-impl HasKey for ContentRecord {
+impl DeriveKey for ContentRecord {
     type Key = ContentHashKey;
 
-    fn key(record: &<Self::Key as DefineRecord>::Record) -> Self::Key {
+    fn key(record: &<Self::Key as RecordKey>::Record) -> Self::Key {
         let mut hasher = DefaultHasher::new();
         record.hash(&mut hasher);
         ContentHashKey(hasher.finish())
     }
 }
 
-impl Recordable for ContentRecord {
+impl DatabaseEntry for ContentRecord {
     const SCOPE: u8 = 100;
     type Key = ContentHashKey;
 

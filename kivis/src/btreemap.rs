@@ -2,8 +2,15 @@ use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
 use crate::traits::Storage;
 
+/// A memory-based storage implementation using a BTreeMap.
+///
+/// This storage backend keeps all data in memory and uses reverse-ordered keys
+/// for efficient range queries.
 pub type MemoryStorage = BTreeMap<Reverse<Vec<u8>>, Vec<u8>>;
 
+/// Error type for MemoryStorage operations.
+///
+/// [MemoryStorage] operations don't actually fail, so this is an empty error type.
 #[derive(Debug, PartialEq, Eq)]
 pub struct MemoryStorageError;
 impl Display for MemoryStorageError {

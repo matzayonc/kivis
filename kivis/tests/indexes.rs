@@ -1,4 +1,4 @@
-use kivis::{Database, Index, KeyBytes, MemoryStorage, Record, Recordable};
+use kivis::{Database, DatabaseEntry, Index, KeyBytes, MemoryStorage, Record};
 
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{Index, Recordable, SerializationError};
+use crate::{DatabaseEntry, SerializationError};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) enum Subtable {
@@ -16,7 +16,7 @@ pub(crate) struct WrapPrelude {
 }
 
 impl WrapPrelude {
-    pub fn new<R: Recordable>(subtable: Subtable) -> Self {
+    pub fn new<R: DatabaseEntry>(subtable: Subtable) -> Self {
         WrapPrelude {
             scope: R::SCOPE,
             subtable,
@@ -30,7 +30,7 @@ pub(crate) struct Wrap<R> {
     pub key: R,
 }
 
-pub fn wrap<R: Recordable>(item_key: &R::Key) -> Result<Vec<u8>, SerializationError> {
+pub(crate) fn wrap<R: DatabaseEntry>(item_key: &R::Key) -> Result<Vec<u8>, SerializationError> {
     let wrapped = Wrap {
         prelude: WrapPrelude {
             scope: R::SCOPE,
@@ -41,23 +41,9 @@ pub fn wrap<R: Recordable>(item_key: &R::Key) -> Result<Vec<u8>, SerializationEr
     bcs::to_bytes(&wrapped)
 }
 
-pub fn wrap_index<R: Recordable, T: Index + Serialize>(
-    key: R::Key,
-    index_key: T,
-) -> Result<Vec<u8>, SerializationError> {
-    let wrapped = Wrap {
-        prelude: WrapPrelude {
-            scope: R::SCOPE,
-            subtable: Subtable::Index(T::INDEX),
-        },
-        key: (index_key, key),
-    };
-    bcs::to_bytes(&wrapped)
-}
-
-pub(crate) fn encode_value<R: Recordable>(record: &R) -> Result<Vec<u8>, SerializationError> {
+pub(crate) fn encode_value<R: DatabaseEntry>(record: &R) -> Result<Vec<u8>, SerializationError> {
     bcs::to_bytes(record)
 }
-pub(crate) fn decode_value<R: Recordable>(data: &[u8]) -> Result<R, SerializationError> {
+pub(crate) fn decode_value<R: DatabaseEntry>(data: &[u8]) -> Result<R, SerializationError> {
     bcs::from_bytes(data)
 }
