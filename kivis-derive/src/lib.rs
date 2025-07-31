@@ -6,7 +6,7 @@
 use proc_macro::TokenStream;
 use std::collections::HashSet;
 use std::sync::{LazyLock, Mutex};
-use syn::{DeriveInput, parse_macro_input};
+use syn::{parse_macro_input, DeriveInput};
 
 mod generator;
 mod schema;
@@ -18,22 +18,22 @@ use crate::schema::Schema;
 static TABLE_REGISTRY: LazyLock<Mutex<HashSet<u8>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
 
 /// Derive macro for generating database record implementations.
-/// 
+///
 /// This macro generates the necessary traits and types for a struct to be used as a database record in Kivis.
 /// It creates key types, index types, and implements the required traits for database operations.
-/// 
+///
 /// # Attributes
-/// 
+///
 /// - `#[table(N)]`: Required. Specifies the table ID (must be unique across all records)
 /// - `#[key]`: Marks fields as part of the primary key
 /// - `#[index]`: Marks fields for secondary indexing
-/// 
+///
 /// # Examples
-/// 
+///
 /// ```ignore
 /// use kivis::Record;
-/// 
-/// #[derive(Record)]
+///
+/// #[derive(Record, serde::Serialize, serde::Deserialize)]
 /// #[table(1)]
 /// struct User {
 ///     #[index]

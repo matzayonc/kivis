@@ -2,7 +2,7 @@ use serde::de::DeserializeOwned;
 
 use crate::errors::DatabaseError;
 use crate::traits::{DatabaseEntry, Index, Storage};
-use crate::wrap::{Subtable, Wrap, WrapPrelude, decode_value, encode_value, wrap};
+use crate::wrap::{decode_value, encode_value, wrap, Subtable, Wrap, WrapPrelude};
 use crate::{DeriveKey, Incrementable, KeyBytes, RecordKey};
 use std::ops::Range;
 
@@ -181,7 +181,7 @@ impl<S: Storage> Database<S> {
         &self,
         range: Range<K>,
     ) -> Result<
-        impl Iterator<Item = DatabaseIteratorItem<K::Record, S>>,
+        impl Iterator<Item = DatabaseIteratorItem<K::Record, S>> + use<'_, K, S>,
         DatabaseError<S::StoreError>,
     >
     where
@@ -220,7 +220,7 @@ impl<S: Storage> Database<S> {
         &mut self,
         range: Range<I>,
     ) -> Result<
-        impl Iterator<Item = DatabaseIteratorItem<I::Record, S>>,
+        impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S>,
         DatabaseError<S::StoreError>,
     > {
         let index_prelude = WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX));

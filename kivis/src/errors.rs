@@ -48,7 +48,7 @@ impl<S: Debug + Display + Eq + PartialEq> fmt::Display for DatabaseError<S> {
             Self::Serialization(ref e) => write!(f, "Serialization error: {e}"),
             Self::Deserialization(ref e) => write!(f, "Deserialization error: {e}"),
             Self::Io(ref s) => write!(f, "IO error: {s}"),
-            Self::FailedToIncrement => write!(f, "Autoincrement error"),
+            Self::FailedToIncrement => write!(f, "Failed to increment key value"),
             Self::Internal(ref e) => write!(f, "Internal database error: {e}"),
         }
     }

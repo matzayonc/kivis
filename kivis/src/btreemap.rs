@@ -5,7 +5,7 @@ use crate::traits::Storage;
 /// A memory-based storage implementation using a BTreeMap.
 ///
 /// This storage backend keeps all data in memory and uses reverse-ordered keys
-/// for efficient range queries.
+/// for efficient range queries. Implements the [`Storage`] trait to be used as a storage backend.
 pub type MemoryStorage = BTreeMap<Reverse<Vec<u8>>, Vec<u8>>;
 
 /// Error type for MemoryStorage operations.
@@ -14,8 +14,8 @@ pub type MemoryStorage = BTreeMap<Reverse<Vec<u8>>, Vec<u8>>;
 #[derive(Debug, PartialEq, Eq)]
 pub struct MemoryStorageError;
 impl Display for MemoryStorageError {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(())
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Memory storage operations do not fail")
     }
 }
 
