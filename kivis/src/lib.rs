@@ -37,6 +37,7 @@
 mod btreemap;
 mod database;
 mod errors;
+mod manifest;
 mod traits;
 mod wrap;
 

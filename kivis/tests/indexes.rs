@@ -98,7 +98,7 @@ fn test_index() {
 
 #[test]
 fn test_iter() {
-    let mut store = Database::new(MemoryStorage::new());
+    let mut store = Database::new(MemoryStorage::new()).expect("Failed to create database");
 
     let pet = Pet {
         name: "Fido".to_string(),

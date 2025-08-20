@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{DatabaseEntry, SerializationError};
+use crate::{manifest::UniquePrefix, DatabaseEntry, SerializationError};
 
 /// Internal enum representing different subtables within a database scope.
 #[derive(Serialize, Deserialize, Debug)]
@@ -14,17 +14,14 @@ pub(crate) enum Subtable {
 /// Internal structure for key prefixing to separate different scopes and subtables.
 #[derive(Serialize, Deserialize, Debug)]
 pub(crate) struct WrapPrelude {
-    scope: u8,
+    scope: UniquePrefix,
     subtable: Subtable,
 }
 
 impl WrapPrelude {
     /// Creates a new wrap prelude for the given database entry type and subtable.
-    pub fn new<R: DatabaseEntry>(subtable: Subtable) -> Self {
-        WrapPrelude {
-            scope: R::SCOPE,
-            subtable,
-        }
+    pub fn new<R: DatabaseEntry>(subtable: Subtable, scope: UniquePrefix) -> Self {
+        WrapPrelude { scope, subtable }
     }
 
     /// Converts the wrap prelude to bytes for storage key prefixing.
@@ -42,10 +39,13 @@ pub(crate) struct Wrap<R> {
 }
 
 /// Wraps a database entry key with scope and subtable information for storage.
-pub(crate) fn wrap<R: DatabaseEntry>(item_key: &R::Key) -> Result<Vec<u8>, SerializationError> {
+pub(crate) fn wrap<R: DatabaseEntry>(
+    item_key: &R::Key,
+    scope: UniquePrefix,
+) -> Result<Vec<u8>, SerializationError> {
     let wrapped = Wrap {
         prelude: WrapPrelude {
-            scope: R::SCOPE,
+            scope,
             subtable: Subtable::Main,
         },
         key: item_key.clone(),

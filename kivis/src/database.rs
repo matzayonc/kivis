@@ -1,9 +1,11 @@
 use serde::de::DeserializeOwned;
 
 use crate::errors::DatabaseError;
+use crate::manifest::{self, ManifestManager};
 use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::wrap::{decode_value, encode_value, wrap, Subtable, Wrap, WrapPrelude};
-use crate::{DeriveKey, Incrementable, KeyBytes, RecordKey};
+use crate::{DeriveKey, Incrementable, InternalDatabaseError, KeyBytes, RecordKey};
+use core::prelude;
 use std::ops::Range;
 
 type DatabaseIteratorItem<R, S> =
@@ -13,16 +15,19 @@ type DatabaseIteratorItem<R, S> =
 pub struct Database<S: Storage> {
     store: S,
     fallback: Option<Box<dyn Storage<StoreError = S::StoreError>>>,
+    manifest: ManifestManager<S>,
 }
 
 impl<S: Storage> Database<S> {
     /// Creates a new [`Database`] instance over any storage backend.
     /// One of the key features of `kivis` is that it can work with any storage backend that implements the [`Storage`] trait.
-    pub fn new(store: S) -> Self {
-        Database {
+    pub fn new(store: S) -> Result<Self, DatabaseError<S::StoreError>> {
+        let manifest = ManifestManager::new(&store)?;
+        Ok(Database {
             store,
             fallback: None,
-        }
+            manifest,
+        })
     }
 
     /// Sets a fallback storage that will be used if the main storage does not contain the requested record.
@@ -48,7 +53,8 @@ impl<S: Storage> Database<S> {
             .next_id()
             .ok_or(DatabaseError::FailedToIncrement)?;
 
-        let key = wrap::<R>(&original_key).map_err(DatabaseError::Serialization)?;
+        let prefix = self.manifest.get_prefix::<R>(&mut self.store)?;
+        let key = wrap::<R>(&original_key, prefix).map_err(DatabaseError::Serialization)?;
 
         self.add_index_entries(&record, &original_key)?;
 
@@ -70,7 +76,8 @@ impl<S: Storage> Database<S> {
         R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
     {
         let original_key = R::key(&record);
-        let key = wrap::<R>(&original_key).map_err(DatabaseError::Serialization)?;
+        let prefix = self.manifest.get_prefix::<R>(&mut self.store)?;
+        let key = wrap::<R>(&original_key, prefix).map_err(DatabaseError::Serialization)?;
 
         self.add_index_entries(&record, &original_key)?;
 
@@ -93,7 +100,9 @@ impl<S: Storage> Database<S> {
         R::Key: RecordKey<Record = R>,
     {
         for (discriminator, index_key) in record.index_keys() {
-            let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator)).to_bytes();
+            let prefix = self.manifest.get_prefix::<R>(&mut self.store)?;
+            let mut entry =
+                WrapPrelude::new::<R>(Subtable::Index(discriminator), prefix).to_bytes();
             entry.extend_from_slice(&index_key.to_bytes());
 
             // Indexes might be repeated, so we need to ensure that the key is unique.
@@ -118,13 +127,15 @@ impl<S: Storage> Database<S> {
     /// The record must implement the [`DatabaseEntry`] trait, with the key type implementing the [`RecordKey`] trait pointing back to it.
     /// If the record is not found, `None` is returned.
     pub fn get<K: RecordKey>(
-        &self,
+        &mut self,
         key: &K,
     ) -> Result<Option<K::Record>, DatabaseError<S::StoreError>>
     where
         K::Record: DatabaseEntry<Key = K>,
     {
-        let serialized_key = wrap::<K::Record>(key).map_err(DatabaseError::Serialization)?;
+        let prefix = self.manifest.get_prefix::<K::Record>(&mut self.store)?;
+        let serialized_key =
+            wrap::<K::Record>(key, prefix).map_err(DatabaseError::Serialization)?;
         let value =
             if let Some(value) = self.store.get(serialized_key).map_err(DatabaseError::Io)? {
                 value
@@ -132,7 +143,8 @@ impl<S: Storage> Database<S> {
                 let Some(fallback) = &self.fallback else {
                     return Ok(None);
                 };
-                let key = wrap::<K::Record>(key).map_err(DatabaseError::Serialization)?;
+                let prefix = self.manifest.get_prefix::<K::Record>(&mut self.store)?;
+                let key = wrap::<K::Record>(key, prefix).map_err(DatabaseError::Serialization)?;
                 let Some(value) = fallback.get(key).map_err(DatabaseError::Io)? else {
                     return Ok(None);
                 };
@@ -156,7 +168,8 @@ impl<S: Storage> Database<S> {
     where
         K::Record: DatabaseEntry<Key = K>,
     {
-        let key = wrap::<K::Record>(key).map_err(DatabaseError::Serialization)?;
+        let prefix = self.manifest.get_prefix::<K::Record>(&mut self.store)?;
+        let key = wrap::<K::Record>(key, prefix).map_err(DatabaseError::Serialization)?;
 
         let value = if let Some(fallback) = &mut self.fallback {
             let fallback_value = fallback.remove(key.clone()).map_err(DatabaseError::Io)?;
@@ -178,7 +191,7 @@ impl<S: Storage> Database<S> {
     /// The range is inclusive of the start and exclusive of the end.
     /// The keys must implement the [`RecordKey`] trait, and the related [`DatabaseEntry`] must point back to it.
     pub fn iter_keys<K: RecordKey>(
-        &self,
+        &mut self,
         range: Range<K>,
     ) -> Result<
         impl Iterator<Item = DatabaseIteratorItem<K::Record, S>> + use<'_, K, S>,
@@ -187,8 +200,10 @@ impl<S: Storage> Database<S> {
     where
         K::Record: DatabaseEntry<Key = K>,
     {
-        let start = wrap::<K::Record>(&range.start).map_err(DatabaseError::Serialization)?;
-        let end = wrap::<K::Record>(&range.end).map_err(DatabaseError::Serialization)?;
+        let prefix = self.manifest.get_prefix::<K::Record>(&mut self.store)?;
+        let start = wrap::<K::Record>(&range.start, prefix.clone())
+            .map_err(DatabaseError::Serialization)?;
+        let end = wrap::<K::Record>(&range.end, prefix).map_err(DatabaseError::Serialization)?;
         let raw_iter = self
             .store
             .iter_keys(start..end)
@@ -223,7 +238,8 @@ impl<S: Storage> Database<S> {
         impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S>,
         DatabaseError<S::StoreError>,
     > {
-        let index_prelude = WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX));
+        let prefix = self.manifest.get_prefix::<I::Record>(&mut self.store)?;
+        let index_prelude = WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX), prefix);
         let mut start = index_prelude.to_bytes();
         let mut end = start.clone();
         start.extend(range.start.to_bytes());
@@ -243,7 +259,7 @@ impl<S: Storage> Database<S> {
     }
 
     /// Helper function to get the last ID in a given range, used for autoincrementing keys.
-    fn last_id<K: RecordKey>(&self, bounds: (K, K)) -> Result<K, DatabaseError<S::StoreError>>
+    fn last_id<K: RecordKey>(&mut self, bounds: (K, K)) -> Result<K, DatabaseError<S::StoreError>>
     where
         K::Record: DatabaseEntry<Key = K>,
     {
