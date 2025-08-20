@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fmt::Display, ops::Range};
 
-use kivis::{DatabaseEntry, DeriveKey, Incrementable, Index, KeyBytes, RecordKey, Scope};
+use kivis::{Database, DatabaseEntry, DeriveKey, Incrementable, Index, KeyBytes, RecordKey, Scope};
 
 // Define a record type for an User.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
@@ -70,6 +70,11 @@ struct Pet {
     owner: UserKey,
 }
 
+struct Manifest;
+impl kivis::Manifestt for Manifest {}
+impl kivis::Manifests<User> for Manifest {}
+impl kivis::Manifests<Pet> for Manifest {}
+
 // Define storage for the database.
 #[derive(Default)]
 struct Storage {
@@ -110,7 +115,7 @@ impl kivis::Storage for Storage {
 #[test]
 fn test_user_record() {
     let db = Storage::default();
-    let mut database = kivis::Database::new(db);
+    let mut database: Database<_, Manifest> = Database::new(db);
 
     let user = User {
         id: 1,
@@ -127,7 +132,7 @@ fn test_user_record() {
 #[test]
 fn test_pet_record() {
     let db = Storage::default();
-    let mut database = kivis::Database::new(db);
+    let mut database: Database<_, Manifest> = Database::new(db);
 
     let pet = Pet {
         name: "Fido".to_string(),
@@ -143,7 +148,7 @@ fn test_pet_record() {
 #[test]
 fn test_get_owner_of_pet() {
     let db = Storage::default();
-    let mut database = kivis::Database::new(db);
+    let mut database: Database<_, Manifest> = Database::new(db);
 
     let mut user = User {
         id: 1,
@@ -168,7 +173,7 @@ fn test_get_owner_of_pet() {
 #[test]
 fn test_index() {
     let db = Storage::default();
-    let mut database = kivis::Database::new(db);
+    let mut database: Database<_, Manifest> = Database::new(db);
 
     let user = User {
         id: 1,
@@ -192,7 +197,7 @@ fn test_index() {
 #[test]
 fn test_iter() {
     let db = Storage::default();
-    let mut database = kivis::Database::new(db);
+    let mut database: Database<_, Manifest> = Database::new(db);
 
     let pet = Pet {
         name: "Fido".to_string(),
@@ -214,7 +219,7 @@ fn test_iter() {
 #[test]
 fn test_iter_index() {
     let db = Storage::default();
-    let mut database = kivis::Database::new(db);
+    let mut database: Database<_, Manifest> = kivis::Database::new(db);
 
     let user = User {
         id: 42,

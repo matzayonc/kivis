@@ -8,11 +8,11 @@ struct UserRecord {
     data: Vec<u8>,
 }
 
-manifest![UserRecordManifest: UserRecord];
+manifest![Manifest: UserRecord];
 
 #[test]
 fn test_lifecycle() {
-    let mut store = Database::new(MemoryStorage::new());
+    let mut store = Database::<MemoryStorage, Manifest>::default();
 
     let user = UserRecord {
         id: 1,
@@ -27,7 +27,7 @@ fn test_lifecycle() {
 
 #[test]
 fn test_iter() {
-    let mut store = Database::new(MemoryStorage::new());
+    let mut store = Database::<MemoryStorage, Manifest>::default();
 
     let user = UserRecord {
         id: 1,

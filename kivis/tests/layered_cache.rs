@@ -19,11 +19,11 @@ fn test_layered_cache_architecture() {
         data: vec![1, 2, 3, 4, 5],
     };
 
-    let mut fallback_database = Database::new(fallback_storage.clone());
+    let mut fallback_database = Database::<_, Manifest>::new(fallback_storage.clone());
     let key = fallback_database.put(record.clone()).unwrap();
     let fallback_storage = fallback_database.dissolve();
 
-    let mut database = Database::new(MemoryStorage::new());
+    let mut database = Database::<_, Manifest>::new(MemoryStorage::new());
     database.set_fallback(Box::new(fallback_storage));
 
     // Verify record can be retrieved

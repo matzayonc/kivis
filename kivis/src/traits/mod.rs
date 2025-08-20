@@ -26,6 +26,10 @@ pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {
     }
 }
 
+pub trait Manifests<T: Scope> {}
+
+pub trait Manifestt {}
+
 pub trait Scope {
     /// Unique table identifier for this database entry type.
     /// Must be unique across all tables in a database instance.
@@ -89,19 +93,11 @@ macro_rules! manifest {
         pub struct $manifest_name;
     };
 
-    // Single item case (first item, index 0) with manifest name
-    ($manifest_name:ident: $first:ty) => {
-        pub struct $manifest_name;
-
-        impl $crate::Scope for $first {
-            const SCOPE: u8 = 0;
-            type Manifest = $manifest_name;
-        }
-    };
-
     // Multiple items case with manifest name - generate implementations with incrementing indices
     ($manifest_name:ident: $($ty:ty),+ $(,)?) => {
         pub struct $manifest_name;
+
+        impl $crate::Manifestt for $manifest_name {}
 
         $crate::scope_impl_with_index!($manifest_name, 0; $($ty),+);
     };
@@ -129,6 +125,7 @@ macro_rules! scope_impl_with_index {
             const SCOPE: u8 = $index;
             type Manifest = $manifest_name;
         }
+        impl $crate::Manifests<$ty> for $manifest_name {}
     };
 
     // Multiple types remaining - implement for first and recurse
@@ -137,6 +134,7 @@ macro_rules! scope_impl_with_index {
             const SCOPE: u8 = $index;
             type Manifest = $manifest_name;
         }
+        impl $crate::Manifests<$ty> for $manifest_name {}
         $crate::scope_impl_with_index!($manifest_name, $index + 1; $($rest),+);
     };
 }

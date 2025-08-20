@@ -18,11 +18,11 @@ struct Pet {
     owner: UserKey,
 }
 
-manifest![UsersPets: User, Pet];
+manifest![Manifest: User, Pet];
 
 #[test]
 fn test_user_record() {
-    let mut store = Database::new(MemoryStorage::new());
+    let mut store = Database::<MemoryStorage, Manifest>::default();
 
     let user = User {
         name: "Alice".to_string(),
@@ -36,7 +36,7 @@ fn test_user_record() {
 
 #[test]
 fn test_pet_record() {
-    let mut store = Database::new(MemoryStorage::new());
+    let mut store = Database::<MemoryStorage, Manifest>::default();
 
     let pet = Pet {
         name: "Fido".to_string(),
@@ -51,7 +51,7 @@ fn test_pet_record() {
 
 #[test]
 fn test_get_owner_of_pet() {
-    let mut store = Database::new(MemoryStorage::new());
+    let mut store = Database::<MemoryStorage, Manifest>::default();
 
     let user = User {
         name: "Alice".to_string(),
@@ -76,7 +76,7 @@ fn test_get_owner_of_pet() {
 
 #[test]
 fn test_index() {
-    let mut store = Database::new(MemoryStorage::new());
+    let mut store = Database::<MemoryStorage, Manifest>::default();
 
     let user = User {
         name: "Alice".to_string(),
@@ -98,7 +98,7 @@ fn test_index() {
 
 #[test]
 fn test_iter() {
-    let mut store = Database::new(MemoryStorage::new());
+    let mut store = Database::<MemoryStorage, Manifest>::default();
 
     let pet = Pet {
         name: "Fido".to_string(),
@@ -119,7 +119,7 @@ fn test_iter() {
 
 #[test]
 fn test_iter_index() {
-    let mut store = Database::new(MemoryStorage::new());
+    let mut store = Database::<MemoryStorage, Manifest>::default();
 
     let user = User {
         name: "Al".to_string(),

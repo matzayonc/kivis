@@ -10,7 +10,7 @@ manifest![Manifest: UserRecord];
 
 #[test]
 fn test_lifecycle() {
-    let mut store = Database::new(MemoryStorage::new());
+    let mut store = Database::<MemoryStorage, Manifest>::default();
 
     let user = UserRecord {
         data: vec![1, 2, 3, 4],
@@ -24,7 +24,7 @@ fn test_lifecycle() {
 
 #[test]
 fn test_iter() {
-    let mut store = Database::new(MemoryStorage::new());
+    let mut store = Database::<MemoryStorage, Manifest>::default();
 
     let user = UserRecord {
         data: vec![1, 2, 3, 4],

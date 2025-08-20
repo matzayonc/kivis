@@ -3,25 +3,38 @@ use serde::de::DeserializeOwned;
 use crate::errors::DatabaseError;
 use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::wrap::{decode_value, encode_value, wrap, Subtable, Wrap, WrapPrelude};
-use crate::{DeriveKey, Incrementable, KeyBytes, RecordKey};
+use crate::{DeriveKey, Incrementable, KeyBytes, Manifests, Manifestt, RecordKey};
+use std::marker::PhantomData;
 use std::ops::Range;
 
 type DatabaseIteratorItem<R, S> =
     Result<<R as DatabaseEntry>::Key, DatabaseError<<S as Storage>::StoreError>>;
 
 /// The `kivis` database type. All interactions with the database are done through this type.
-pub struct Database<S: Storage> {
+pub struct Database<S: Storage, M: Manifestt> {
     store: S,
     fallback: Option<Box<dyn Storage<StoreError = S::StoreError>>>,
+    manifest: PhantomData<M>,
 }
 
-impl<S: Storage> Database<S> {
+impl<S: Default + Storage, M: Manifestt> Default for Database<S, M> {
+    fn default() -> Self {
+        Database {
+            store: S::default(),
+            fallback: None,
+            manifest: PhantomData,
+        }
+    }
+}
+
+impl<S: Storage, M: Manifestt> Database<S, M> {
     /// Creates a new [`Database`] instance over any storage backend.
     /// One of the key features of `kivis` is that it can work with any storage backend that implements the [`Storage`] trait.
     pub fn new(store: S) -> Self {
         Database {
             store,
             fallback: None,
+            manifest: PhantomData,
         }
     }
 
@@ -42,6 +55,7 @@ impl<S: Storage> Database<S> {
     ) -> Result<R::Key, DatabaseError<<S as Storage>::StoreError>>
     where
         R::Key: RecordKey<Record = R> + Incrementable,
+        M: Manifests<R>,
     {
         let original_key = self
             .last_id::<R::Key>(R::Key::BOUNDS)?
@@ -68,6 +82,7 @@ impl<S: Storage> Database<S> {
     ) -> Result<K, DatabaseError<<S as Storage>::StoreError>>
     where
         R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
+        M: Manifests<R>,
     {
         let original_key = R::key(&record);
         let key = wrap::<R>(&original_key).map_err(DatabaseError::Serialization)?;
@@ -91,6 +106,7 @@ impl<S: Storage> Database<S> {
     ) -> Result<(), DatabaseError<<S as Storage>::StoreError>>
     where
         R::Key: RecordKey<Record = R>,
+        M: Manifests<R>,
     {
         for (discriminator, index_key) in record.index_keys() {
             let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator)).to_bytes();
@@ -123,6 +139,7 @@ impl<S: Storage> Database<S> {
     ) -> Result<Option<K::Record>, DatabaseError<S::StoreError>>
     where
         K::Record: DatabaseEntry<Key = K>,
+        M: Manifests<K::Record>,
     {
         let serialized_key = wrap::<K::Record>(key).map_err(DatabaseError::Serialization)?;
         let value =
@@ -155,6 +172,7 @@ impl<S: Storage> Database<S> {
     ) -> Result<Option<K::Record>, DatabaseError<S::StoreError>>
     where
         K::Record: DatabaseEntry<Key = K>,
+        M: Manifests<K::Record>,
     {
         let key = wrap::<K::Record>(key).map_err(DatabaseError::Serialization)?;
 
@@ -181,11 +199,12 @@ impl<S: Storage> Database<S> {
         &self,
         range: Range<K>,
     ) -> Result<
-        impl Iterator<Item = DatabaseIteratorItem<K::Record, S>> + use<'_, K, S>,
+        impl Iterator<Item = DatabaseIteratorItem<K::Record, S>> + use<'_, K, S, M>,
         DatabaseError<S::StoreError>,
     >
     where
         K::Record: DatabaseEntry<Key = K>,
+        M: Manifests<K::Record>,
     {
         let start = wrap::<K::Record>(&range.start).map_err(DatabaseError::Serialization)?;
         let end = wrap::<K::Record>(&range.end).map_err(DatabaseError::Serialization)?;
@@ -220,7 +239,7 @@ impl<S: Storage> Database<S> {
         &mut self,
         range: Range<I>,
     ) -> Result<
-        impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S>,
+        impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S, M>,
         DatabaseError<S::StoreError>,
     > {
         let index_prelude = WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX));
@@ -246,6 +265,7 @@ impl<S: Storage> Database<S> {
     fn last_id<K: RecordKey>(&self, bounds: (K, K)) -> Result<K, DatabaseError<S::StoreError>>
     where
         K::Record: DatabaseEntry<Key = K>,
+        M: Manifests<K::Record>,
     {
         let (start, end) = bounds;
         let range = if start < end {

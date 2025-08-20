@@ -26,7 +26,7 @@
 //! manifest![MyDatabase: User];
 //!
 //! # fn main() -> Result<(), kivis::DatabaseError<kivis::MemoryStorageError>> {
-//! let mut db = Database::new(MemoryStorage::new());
+//! let mut db = Database::<MemoryStorage, MyDatabase>::new(MemoryStorage::new());
 //! let user = User {
 //!     name: "Alice".to_string(),
 //!     email: "alice@example.com".to_string(),

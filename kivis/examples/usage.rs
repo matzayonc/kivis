@@ -43,7 +43,7 @@ manifest![Pets: User, Pet, Toy];
 
 fn main() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
     // Create a new in-memory database instance
-    let mut store = Database::new(MemoryStorage::new());
+    let mut store: Database<_, Pets> = Database::new(MemoryStorage::new());
 
     // Users can be added to a store.
     let alice = User {

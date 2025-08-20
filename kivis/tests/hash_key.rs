@@ -14,7 +14,9 @@
  * - Database.insert() method for records with derived keys
  */
 
-use kivis::{Database, DatabaseEntry, DeriveKey, KeyBytes, MemoryStorage, RecordKey, Scope};
+use kivis::{
+    manifest, Database, DatabaseEntry, DeriveKey, KeyBytes, MemoryStorage, RecordKey, Scope,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -45,10 +47,6 @@ impl DeriveKey for ContentRecord {
         ContentHashKey(hasher.finish())
     }
 }
-impl Scope for ContentRecord {
-    const SCOPE: u8 = 3;
-    type Manifest = ();
-}
 impl DatabaseEntry for ContentRecord {
     type Key = ContentHashKey;
 
@@ -57,9 +55,11 @@ impl DatabaseEntry for ContentRecord {
     }
 }
 
+manifest![Manifest: ContentRecord];
+
 #[test]
 fn test_hash_key_storage_and_retrieval() {
-    let mut store = Database::new(MemoryStorage::new());
+    let mut store = Database::<MemoryStorage, Manifest>::default();
 
     // Create a record
     let record = ContentRecord {
@@ -91,7 +91,7 @@ fn test_hash_key_storage_and_retrieval() {
 
 #[test]
 fn test_hash_key_uniqueness() {
-    let mut store = Database::new(MemoryStorage::new());
+    let mut store = Database::<MemoryStorage, Manifest>::default();
 
     // Create two different records
     let record1 = ContentRecord {
@@ -118,7 +118,7 @@ fn test_hash_key_uniqueness() {
 
 #[test]
 fn test_hash_key_removal() {
-    let mut store = Database::new(MemoryStorage::new());
+    let mut store = Database::<MemoryStorage, Manifest>::default();
 
     let record = ContentRecord {
         data: "test removal".to_string(),

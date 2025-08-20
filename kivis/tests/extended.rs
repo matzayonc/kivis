@@ -28,7 +28,7 @@ struct OrderRecord {
     total: u64,
 }
 
-manifest![UserRecordManifest: UserRecord, OrderRecord, ProductRecord];
+manifest![Manifest: UserRecord, OrderRecord, ProductRecord];
 
 #[test]
 fn test_default_key() {
@@ -37,7 +37,7 @@ fn test_default_key() {
         data: vec![1, 2, 3, 4],
     };
 
-    let mut store = Database::new(MemoryStorage::new());
+    let mut store: Database<_, Manifest> = Database::new(MemoryStorage::new());
 
     let user_key = store.put(user.clone()).unwrap();
     assert_eq!(user_key, UserRecordKey(1));
@@ -68,7 +68,7 @@ fn test_specified_key() {
     assert_eq!(key1, key2);
     assert_eq!(key1, ProductRecordKey("WID-001".to_string()));
 
-    let mut store = Database::new(MemoryStorage::new());
+    let mut store: Database<_, Manifest> = Database::new(MemoryStorage::new());
 
     store.insert(product1.clone()).unwrap();
     assert_eq!(store.get(&key1).unwrap(), Some(product1.clone()));
@@ -112,7 +112,7 @@ fn test_composite_key() {
     assert_ne!(key1, key3);
     assert_ne!(key2, key3);
 
-    let mut store = Database::new(MemoryStorage::new());
+    let mut store: Database<_, Manifest> = Database::new(MemoryStorage::new());
 
     // Insert all orders
     store.insert(order1.clone()).unwrap();
