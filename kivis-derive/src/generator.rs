@@ -85,6 +85,7 @@ pub fn generate_record_impl(schema: &Schema, visibility: syn::Visibility) -> Tok
         quote! {
             impl #impl_generics kivis::Scope for #name #ty_generics #where_clause {
                 const SCOPE: u8 = #scope;
+                type Manifest = ();
             }
         }
     } else {

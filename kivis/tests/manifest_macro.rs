@@ -28,7 +28,7 @@ struct Tag {
 }
 
 // Use the macro to implement Scope for all these types
-manifest![User, Post, Comment, Tag];
+manifest![Test: User, Post, Comment, Tag];
 
 #[test]
 fn test_manifest_macro_multiple_types() {
@@ -42,7 +42,7 @@ fn test_manifest_macro_multiple_types() {
 #[test]
 fn test_manifest_macro_single_type() {
     struct SingleType;
-    manifest![SingleType];
+    manifest![SingleManifest: SingleType];
     assert_eq!(SingleType::SCOPE, 0);
 }
 
@@ -50,7 +50,7 @@ fn test_manifest_macro_single_type() {
 fn test_manifest_macro_with_trailing_comma() {
     struct A;
     struct B;
-    manifest![A, B,];
+    manifest![TestManifest: A, B,];
     assert_eq!(A::SCOPE, 0);
     assert_eq!(B::SCOPE, 1);
 }
@@ -58,17 +58,25 @@ fn test_manifest_macro_with_trailing_comma() {
 #[test]
 fn test_manifest_macro_empty_struct() {
     struct EmptyStruct;
-    manifest![EmptyStruct];
+    manifest![EmptyManifest: EmptyStruct];
     assert_eq!(EmptyStruct::SCOPE, 0);
 }
 
 #[test]
 fn test_manifest_macro_large_list() {
-    struct T0; struct T1; struct T2; struct T3; struct T4;
-    struct T5; struct T6; struct T7; struct T8; struct T9;
-    
-    manifest![T0, T1, T2, T3, T4, T5, T6, T7, T8, T9];
-    
+    struct T0;
+    struct T1;
+    struct T2;
+    struct T3;
+    struct T4;
+    struct T5;
+    struct T6;
+    struct T7;
+    struct T8;
+    struct T9;
+
+    manifest![Test: T0, T1, T2, T3, T4, T5, T6, T7, T8, T9];
+
     assert_eq!(T0::SCOPE, 0);
     assert_eq!(T1::SCOPE, 1);
     assert_eq!(T2::SCOPE, 2);

@@ -14,14 +14,16 @@
 //! ## Quick Start
 //!
 //! ```rust
-//! use kivis::{Database, MemoryStorage, Record};
+//! use kivis::{Database, MemoryStorage, Record, manifest};
 //!
 //! #[derive(Record, serde::Serialize, serde::Deserialize, Debug)]
-//! #[external(1)]
 //! struct User {
 //!     name: String,
 //!     email: String,
 //! }
+//!
+//! // Define the manifest for the database
+//! manifest![MyDatabase: User];
 //!
 //! # fn main() -> Result<(), kivis::DatabaseError<kivis::MemoryStorageError>> {
 //! let mut db = Database::new(MemoryStorage::new());

@@ -30,59 +30,113 @@ pub trait Scope {
     /// Unique table identifier for this database entry type.
     /// Must be unique across all tables in a database instance.
     const SCOPE: u8;
+    type Manifest;
 }
 
-/// Declarative macro to implement the Scope trait for multiple structs.
+/// Declarative macro to implement the Scope trait for multiple structs with a named manifest.
 /// Each struct gets its position in the array as its SCOPE value.
+/// Also generates an empty manifest struct and assigns it as the Manifest type.
 ///
 /// # Example
 ///
 /// ```rust
-/// use kivis::scope_impl;
+/// use kivis::{manifest, Scope};
 ///
-/// scope_impl![User, Post, Comment, Tag];
-/// // This generates:
-/// // impl Scope for User { const SCOPE: u8 = 0; }
-/// // impl Scope for Post { const SCOPE: u8 = 1; }
-/// // impl Scope for Comment { const SCOPE: u8 = 2; }
-/// // impl Scope for Tag { const SCOPE: u8 = 3; }
+/// struct User;
+/// struct Post;
+/// struct Comment;
+/// struct Tag;
+///
+/// manifest![MyDatabase: User, Post, Comment, Tag];
+///
+/// // Verify the generated implementations
+/// assert_eq!(User::SCOPE, 0);
+/// assert_eq!(Post::SCOPE, 1);
+/// assert_eq!(Comment::SCOPE, 2);
+/// assert_eq!(Tag::SCOPE, 3);
+/// ```
+///
+/// # Compilation Errors
+///
+/// The macro requires a manifest name followed by a colon. Using the old syntax will fail:
+///
+/// ```compile_fail
+/// use kivis::manifest;
+///
+/// struct User;
+/// struct Post;
+///
+/// // This will fail to compile with the error:
+/// // "manifest! macro requires a manifest name followed by a colon. Use: manifest![ManifestName: Type1, Type2, ...]"
+/// manifest![User, Post];
+/// ```
+///
+/// Single type without colon also fails:
+///
+/// ```compile_fail
+/// use kivis::manifest;
+///
+/// struct User;
+///
+/// // This will fail to compile with the same error:
+/// // "manifest! macro requires a manifest name followed by a colon. Use: manifest![ManifestName: Type1, Type2, ...]"
+/// manifest![User];
 /// ```
 #[macro_export]
 macro_rules! manifest {
-    // Base case: empty list
-    () => {};
+    // Base case: empty list with manifest name
+    ($manifest_name:ident:) => {
+        pub struct $manifest_name;
+    };
 
-    // Single item case (first item, index 0)
-    ($first:ty) => {
+    // Single item case (first item, index 0) with manifest name
+    ($manifest_name:ident: $first:ty) => {
+        pub struct $manifest_name;
+
         impl $crate::Scope for $first {
             const SCOPE: u8 = 0;
+            type Manifest = $manifest_name;
         }
     };
 
-    // Multiple items case - generate implementations with incrementing indices
+    // Multiple items case with manifest name - generate implementations with incrementing indices
+    ($manifest_name:ident: $($ty:ty),+ $(,)?) => {
+        pub struct $manifest_name;
+
+        $crate::scope_impl_with_index!($manifest_name, 0; $($ty),+);
+    };
+
+    // Error case: catch patterns without the required colon delimiter
     ($($ty:ty),+ $(,)?) => {
-        $crate::scope_impl_with_index!(0; $($ty),+);
+        compile_error!("manifest! macro requires a manifest name followed by a colon. Use: manifest![ManifestName: Type1, Type2, ...]");
+    };
+
+    // Error case: single type without colon
+    ($ty:ty) => {
+        compile_error!("manifest! macro requires a manifest name followed by a colon. Use: manifest![ManifestName: Type1, Type2, ...]");
     };
 }
 
-/// Helper macro for scope_impl that tracks the current index
+/// Helper macro for scope_impl that tracks the current index and manifest name
 #[macro_export]
 macro_rules! scope_impl_with_index {
     // Base case: no more types
-    ($index:expr;) => {};
+    ($manifest_name:ident, $index:expr;) => {};
 
     // Single type remaining
-    ($index:expr; $ty:ty) => {
+    ($manifest_name:ident, $index:expr; $ty:ty) => {
         impl $crate::Scope for $ty {
             const SCOPE: u8 = $index;
+            type Manifest = $manifest_name;
         }
     };
 
     // Multiple types remaining - implement for first and recurse
-    ($index:expr; $ty:ty, $($rest:ty),+) => {
+    ($manifest_name:ident, $index:expr; $ty:ty, $($rest:ty),+) => {
         impl $crate::Scope for $ty {
             const SCOPE: u8 = $index;
+            type Manifest = $manifest_name;
         }
-        $crate::scope_impl_with_index!($index + 1; $($rest),+);
+        $crate::scope_impl_with_index!($manifest_name, $index + 1; $($rest),+);
     };
 }

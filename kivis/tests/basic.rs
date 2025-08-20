@@ -1,11 +1,12 @@
-use kivis::{Database, MemoryStorage, Record};
+use kivis::{manifest, Database, MemoryStorage, Record};
 use serde::{Deserialize, Serialize};
 
 #[derive(Record, Default, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[external(1)]
 struct UserRecord {
     data: Vec<u8>,
 }
+
+manifest![Manifest: UserRecord];
 
 #[test]
 fn test_lifecycle() {

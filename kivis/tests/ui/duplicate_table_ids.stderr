@@ -1,5 +1,0 @@
-error: Duplicate table ID 1. Each table must have a unique integer identifier.
-  --> tests/ui/duplicate_table_ids.rs:13:8
-   |
-13 | struct SecondTable {
-   |        ^^^^^^^^^^^

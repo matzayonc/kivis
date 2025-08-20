@@ -47,6 +47,7 @@ impl DeriveKey for ContentRecord {
 }
 impl Scope for ContentRecord {
     const SCOPE: u8 = 3;
+    type Manifest = ();
 }
 impl DatabaseEntry for ContentRecord {
     type Key = ContentHashKey;

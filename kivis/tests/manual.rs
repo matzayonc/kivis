@@ -18,6 +18,7 @@ impl DeriveKey for User {
 
 impl Scope for User {
     const SCOPE: u8 = 1;
+    type Manifest = ();
 }
 impl kivis::DatabaseEntry for User {
     type Key = UserKey;
@@ -49,6 +50,7 @@ impl RecordKey for PetKey {
 }
 impl Scope for Pet {
     const SCOPE: u8 = 2;
+    type Manifest = ();
 }
 impl kivis::DatabaseEntry for Pet {
     type Key = PetKey;

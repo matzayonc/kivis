@@ -1,4 +1,4 @@
-use kivis::{Database, DatabaseError, Record, Storage};
+use kivis::{manifest, Database, DatabaseError, Record, Storage};
 use std::fs;
 use std::path::PathBuf;
 
@@ -6,7 +6,6 @@ use std::path::PathBuf;
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
-#[external(21)]
 pub struct User {
     #[index]
     name: String,
@@ -17,13 +16,14 @@ pub struct User {
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
-#[external(22)]
 struct Pet {
     name: String,
     owner: UserKey,
     #[index]
     cat: bool,
 }
+
+manifest![Manifest: User, Pet];
 
 struct FileStore {
     data_dir: PathBuf,

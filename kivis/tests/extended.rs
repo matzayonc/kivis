@@ -1,9 +1,8 @@
-use kivis::{Database, DeriveKey, MemoryStorage, Record};
+use kivis::{manifest, Database, DeriveKey, MemoryStorage, Record};
 use serde::{Deserialize, Serialize};
 
 // Test 1: Default behavior (first field as key) - existing test
 #[derive(Record, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[external(1)]
 struct UserRecord {
     id: u64,
     data: Vec<u8>,
@@ -11,7 +10,6 @@ struct UserRecord {
 
 // Test 2: Specified field as key
 #[derive(Record, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[external(2)]
 struct ProductRecord {
     name: String,
     #[key]
@@ -21,7 +19,6 @@ struct ProductRecord {
 
 // Test 3: Composite key (multiple fields)
 #[derive(Record, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[external(3)]
 struct OrderRecord {
     #[key]
     user_id: u64,
@@ -30,6 +27,8 @@ struct OrderRecord {
     items: Vec<String>,
     total: u64,
 }
+
+manifest![UserRecordManifest: UserRecord, OrderRecord, ProductRecord];
 
 #[test]
 fn test_default_key() {

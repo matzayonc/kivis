@@ -41,7 +41,8 @@ static TABLE_REGISTRY: LazyLock<Mutex<HashSet<u8>>> = LazyLock::new(|| Mutex::ne
 ///     email: String,
 /// }
 /// ```
-#[proc_macro_derive(Record, attributes(external, key, index))]
+// #[proc_macro_derive(Record, attributes(external, key, index))]
+#[proc_macro_derive(Record, attributes(key, index))]
 pub fn derive_record(input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree
     let input = parse_macro_input!(input as DeriveInput);

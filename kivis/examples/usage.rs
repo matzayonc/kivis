@@ -1,10 +1,9 @@
-use kivis::{Database, DatabaseError, DeriveKey, MemoryStorage, Record};
+use kivis::{manifest, Database, DatabaseError, DeriveKey, MemoryStorage, Record};
 
 /// A user record with an indexed name field
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
-#[external(11)]
 pub struct User {
     #[index]
     name: String,
@@ -15,7 +14,6 @@ pub struct User {
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
-#[external(12)]
 struct Pet {
     name: String,
     owner: UserKey,
@@ -26,7 +24,6 @@ struct Pet {
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
-#[external(13)]
 struct Toy {
     #[key]
     kind: ToyKind,
@@ -41,6 +38,8 @@ enum ToyKind {
     Ball,
     Mouse,
 }
+
+manifest![Pets: User, Pet, Toy];
 
 fn main() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
     // Create a new in-memory database instance

@@ -1,0 +1,15 @@
+error: manifest! macro requires a manifest name followed by a colon. Use: manifest![ManifestName: Type1, Type2, ...]
+ --> tests/ui/invalid_manifest_definition.rs:7:1
+  |
+7 | manifest![User, Post];
+  | ^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: this error originates in the macro `manifest` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+warning: unused import: `Scope`
+ --> tests/ui/invalid_manifest_definition.rs:1:23
+  |
+1 | use kivis::{manifest, Scope};
+  |                       ^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default

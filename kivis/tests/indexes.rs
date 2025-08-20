@@ -18,7 +18,7 @@ struct Pet {
     owner: UserKey,
 }
 
-manifest![User, Pet];
+manifest![UsersPets: User, Pet];
 
 #[test]
 fn test_user_record() {
