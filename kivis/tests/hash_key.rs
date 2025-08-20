@@ -14,7 +14,7 @@
  * - Database.insert() method for records with derived keys
  */
 
-use kivis::{Database, DatabaseEntry, DeriveKey, KeyBytes, MemoryStorage, RecordKey};
+use kivis::{Database, DatabaseEntry, DeriveKey, KeyBytes, MemoryStorage, RecordKey, Scope};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -45,9 +45,10 @@ impl DeriveKey for ContentRecord {
         ContentHashKey(hasher.finish())
     }
 }
-
+impl Scope for ContentRecord {
+    const SCOPE: u8 = 3;
+}
 impl DatabaseEntry for ContentRecord {
-    const SCOPE: u8 = 100;
     type Key = ContentHashKey;
 
     fn index_keys(&self) -> Vec<(u8, &dyn KeyBytes)> {

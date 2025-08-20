@@ -6,7 +6,7 @@ use std::path::PathBuf;
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
-#[table(21)]
+#[external(21)]
 pub struct User {
     #[index]
     name: String,
@@ -17,7 +17,7 @@ pub struct User {
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
-#[table(22)]
+#[external(22)]
 struct Pet {
     name: String,
     owner: UserKey,

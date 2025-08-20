@@ -81,6 +81,16 @@ pub fn generate_record_impl(schema: &Schema, visibility: syn::Visibility) -> Tok
         });
     }
 
+    let scope_impl = if let Some(scope) = table_value {
+        quote! {
+            impl #impl_generics kivis::Scope for #name #ty_generics #where_clause {
+                const SCOPE: u8 = #scope;
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     let main_impl = quote! {
         #key_impl
 
@@ -89,13 +99,14 @@ pub fn generate_record_impl(schema: &Schema, visibility: syn::Visibility) -> Tok
         }
 
         impl #impl_generics kivis::DatabaseEntry for #name #ty_generics #where_clause {
-            const SCOPE: u8 = #table_value;
             type Key = #key_type;
 
-    fn index_keys(&self) -> Vec<(u8, &dyn kivis::KeyBytes)> {
-        vec![#(#index_values,)*]
-    }
+            fn index_keys(&self) -> Vec<(u8, &dyn kivis::KeyBytes)> {
+                vec![#(#index_values,)*]
+            }
         }
+
+        #scope_impl
     };
 
     TokenStream::from(main_impl)

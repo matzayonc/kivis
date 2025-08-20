@@ -11,7 +11,7 @@ pub struct Schema {
     pub name: Ident,
     pub generics: syn::Generics,
     pub attrs: Vec<syn::Attribute>,
-    pub table_value: u8,
+    pub table_value: Option<u8>,
     pub keys: Vec<SchemaKey>,
     pub indexes: Vec<SchemaKey>,
 }
@@ -23,42 +23,37 @@ impl Schema {
         let attrs = input
             .attrs
             .iter()
-            .filter(|a| !a.path().is_ident("table"))
+            .filter(|a| !a.path().is_ident("external"))
             .cloned()
             .collect::<Vec<_>>();
 
         // Look for the table attribute to get the record type
-        let Some(table_value) = input
+        let table_value = if let Some(table_value) = input
             .attrs
             .iter()
-            .find(|attr| attr.path().is_ident("table"))
-        else {
-            return Err({
-                Error::new_spanned(
+            .find(|attr| attr.path().is_ident("external"))
+        {
+            let Some(table_value) = table_value.parse_args::<syn::LitInt>().ok() else {
+                return Err(Error::new_spanned(
                     &name,
-                    "Missing #[table(value)] attribute. Please specify a table identifier.",
+                    "Invalid #[external(value)] attribute. Expected an integer literal.",
                 )
                 .to_compile_error()
-                .into()
-            });
-        };
+                .into());
+            };
 
-        let Some(table_value) = table_value.parse_args::<syn::LitInt>().ok() else {
-            return Err(Error::new_spanned(
+            let Ok(table_value) = table_value.base10_parse::<u8>() else {
+                return Err(Error::new_spanned(
                 &name,
-                "Invalid #[table(value)] attribute. Expected an integer literal.",
+                "Invalid #[external(value)] attribute could not be parsed. Expected an integer literal.",
             )
             .to_compile_error()
             .into());
-        };
+            };
 
-        let Ok(table_value) = table_value.base10_parse::<u8>() else {
-            return Err(Error::new_spanned(
-                &name,
-                "Invalid #[table(value)] attribute could not be parsed. Expected an integer literal.",
-            )
-            .to_compile_error()
-            .into());
+            Some(table_value)
+        } else {
+            None
         };
 
         // Ensure it's a struct

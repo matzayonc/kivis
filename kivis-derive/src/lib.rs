@@ -24,7 +24,7 @@ static TABLE_REGISTRY: LazyLock<Mutex<HashSet<u8>>> = LazyLock::new(|| Mutex::ne
 ///
 /// # Attributes
 ///
-/// - `#[table(N)]`: Required. Specifies the table ID (must be unique across all records)
+/// - `#[external(N)]`: Required. Specifies the table ID (must be unique across all records)
 /// - `#[key]`: Marks fields as part of the primary key
 /// - `#[index]`: Marks fields for secondary indexing
 ///
@@ -34,14 +34,14 @@ static TABLE_REGISTRY: LazyLock<Mutex<HashSet<u8>>> = LazyLock::new(|| Mutex::ne
 /// use kivis::Record;
 ///
 /// #[derive(Record, serde::Serialize, serde::Deserialize)]
-/// #[table(1)]
+/// #[external(1)]
 /// struct User {
 ///     #[index]
 ///     name: String,
 ///     email: String,
 /// }
 /// ```
-#[proc_macro_derive(Record, attributes(table, key, index))]
+#[proc_macro_derive(Record, attributes(external, key, index))]
 pub fn derive_record(input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree
     let input = parse_macro_input!(input as DeriveInput);
@@ -57,18 +57,20 @@ pub fn derive_record(input: TokenStream) -> TokenStream {
     // Check for duplicate table IDs
     {
         let mut registry = TABLE_REGISTRY.lock().unwrap();
-        if registry.contains(&schema.table_value) {
-            return syn::Error::new_spanned(
-                &schema.name,
-                format!(
-                    "Duplicate table ID {}. Each table must have a unique integer identifier.",
-                    schema.table_value
-                ),
-            )
-            .to_compile_error()
-            .into();
+        if let Some(external_scope) = schema.table_value {
+            if registry.contains(&external_scope) {
+                return syn::Error::new_spanned(
+                    &schema.name,
+                    format!(
+                        "Duplicate table ID {}. Each table must have a unique integer identifier.",
+                        external_scope
+                    ),
+                )
+                .to_compile_error()
+                .into();
+            }
+            registry.insert(external_scope);
         }
-        registry.insert(schema.table_value);
     }
 
     // Generate the implementation

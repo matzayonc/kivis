@@ -1,9 +1,8 @@
-use kivis::{Database, DatabaseEntry, Index, KeyBytes, MemoryStorage, Record};
+use kivis::{manifest, Database, DatabaseEntry, Index, KeyBytes, MemoryStorage, Record};
 
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
-#[table(1)]
 pub struct User {
     #[index]
     name: String,
@@ -14,11 +13,12 @@ pub struct User {
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
-#[table(2)]
 struct Pet {
     name: String,
     owner: UserKey,
 }
+
+manifest![User, Pet];
 
 #[test]
 fn test_user_record() {

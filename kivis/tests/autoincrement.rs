@@ -2,7 +2,7 @@ use kivis::{Database, MemoryStorage, Record};
 use serde::{Deserialize, Serialize};
 
 #[derive(Record, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[table(1)]
+#[external(1)]
 struct UserRecord {
     #[key]
     id: u64,

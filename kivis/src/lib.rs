@@ -17,7 +17,7 @@
 //! use kivis::{Database, MemoryStorage, Record};
 //!
 //! #[derive(Record, serde::Serialize, serde::Deserialize, Debug)]
-//! #[table(1)]
+//! #[external(1)]
 //! struct User {
 //!     name: String,
 //!     email: String,
