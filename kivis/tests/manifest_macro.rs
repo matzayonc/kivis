@@ -3,28 +3,28 @@ use kivis::{manifest, Scope};
 // Define some test structs
 #[derive(Debug)]
 struct User {
-    id: u64,
-    name: String,
+    _id: u64,
+    _name: String,
 }
 
 #[derive(Debug)]
 struct Post {
-    id: u64,
-    title: String,
-    content: String,
+    _id: u64,
+    _title: String,
+    _content: String,
 }
 
 #[derive(Debug)]
 struct Comment {
-    id: u64,
-    post_id: u64,
-    content: String,
+    _id: u64,
+    _post_id: u64,
+    _content: String,
 }
 
 #[derive(Debug)]
 struct Tag {
-    id: u64,
-    name: String,
+    _id: u64,
+    _name: String,
 }
 
 // Use the macro to implement Scope for all these types

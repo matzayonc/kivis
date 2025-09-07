@@ -54,7 +54,7 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
         record: R,
     ) -> Result<R::Key, DatabaseError<<S as Storage>::StoreError>>
     where
-        R::Key: RecordKey<Record = R> + Incrementable,
+        R::Key: RecordKey<Record = R> + Incrementable + Ord,
         M: Manifests<R>,
     {
         let original_key = self
@@ -195,7 +195,7 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
     ///
     /// The range is inclusive of the start and exclusive of the end.
     /// The keys must implement the [`RecordKey`] trait, and the related [`DatabaseEntry`] must point back to it.
-    pub fn iter_keys<K: RecordKey>(
+    pub fn iter_keys<K: RecordKey + Ord>(
         &self,
         range: Range<K>,
     ) -> Result<
@@ -235,7 +235,7 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
     /// The range is inclusive of the start and exclusive of the end.
     /// The index must implement the [`Index`] trait.
     /// The returned iterator yields items of type `Result<Index::Record, DatabaseError<S::StoreError>>`.
-    pub fn iter_by_index<I: Index>(
+    pub fn iter_by_index<I: Index + Ord>(
         &mut self,
         range: Range<I>,
     ) -> Result<
@@ -262,7 +262,7 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
     }
 
     /// Helper function to get the last ID in a given range, used for autoincrementing keys.
-    fn last_id<K: RecordKey>(&self, bounds: (K, K)) -> Result<K, DatabaseError<S::StoreError>>
+    fn last_id<K: RecordKey + Ord>(&self, bounds: (K, K)) -> Result<K, DatabaseError<S::StoreError>>
     where
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,

@@ -2,7 +2,7 @@ pub use super::*;
 
 /// A trait defining that the implementing type is a key of some record.
 /// Each type can be a key of only one record type, which is defined by the [`DatabaseEntry`] trait.
-pub trait RecordKey: Serialize + DeserializeOwned + Ord + Clone + Eq {
+pub trait RecordKey: Serialize + DeserializeOwned + Clone + Eq {
     /// The record type that this key identifies.
     type Record: DatabaseEntry;
 }
@@ -31,7 +31,7 @@ pub trait Incrementable: Sized {
 /// It defines a table, primary key type, and an unique prefix for the index.
 pub trait Index: KeyBytes + Debug {
     /// The key type used by this index.
-    type Key: KeyBytes + DeserializeOwned + Ord + Clone + Eq + Debug;
+    type Key: KeyBytes + DeserializeOwned + Clone + Eq + Debug;
     /// The record type that this index applies to.
     type Record: DatabaseEntry;
     /// Unique identifier for this index within the record type.
