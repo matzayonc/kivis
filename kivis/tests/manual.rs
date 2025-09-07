@@ -71,7 +71,7 @@ struct Pet {
 }
 
 struct Manifest;
-impl kivis::Manifestt for Manifest {}
+impl kivis::Manifest for Manifest {}
 impl kivis::Manifests<User> for Manifest {}
 impl kivis::Manifests<Pet> for Manifest {}
 

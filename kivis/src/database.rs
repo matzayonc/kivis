@@ -5,9 +5,9 @@ use serde::de::DeserializeOwned;
 use crate::errors::DatabaseError;
 use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
-use crate::wrap::{decode_value, encode_value, wrap, Subtable, Wrap, WrapPrelude};
+use crate::wrap::{decode_value, wrap, Subtable, Wrap, WrapPrelude};
 use crate::{
-    DeriveKey, Incrementable, KeyBytes, Manifests, Manifestt, RecordKey, SerializationError,
+    DeriveKey, Incrementable, KeyBytes, Manifest, Manifests, RecordKey,
 };
 use std::marker::PhantomData;
 use std::ops::Range;
@@ -16,20 +16,20 @@ type DatabaseIteratorItem<R, S> =
     Result<<R as DatabaseEntry>::Key, DatabaseError<<S as Storage>::StoreError>>;
 
 /// The `kivis` database type. All interactions with the database are done through this type.
-pub struct Database<S: Storage, M: Manifestt> {
+pub struct Database<S: Storage, M: Manifest> {
     store: S,
     fallback: Option<Box<dyn Storage<StoreError = S::StoreError>>>,
     manifest: PhantomData<M>,
     serialization_config: Configuration,
 }
 
-impl<S: Default + Storage, M: Manifestt> Default for Database<S, M> {
+impl<S: Default + Storage, M: Manifest> Default for Database<S, M> {
     fn default() -> Self {
         Self::new(S::default())
     }
 }
 
-impl<S: Storage, M: Manifestt> Database<S, M> {
+impl<S: Storage, M: Manifest> Database<S, M> {
     /// Creates a new [`Database`] instance over any storage backend.
     /// One of the key features of `kivis` is that it can work with any storage backend that implements the [`Storage`] trait.
     pub fn new(store: S) -> Self {
@@ -64,7 +64,7 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
         R::Key: RecordKey<Record = R> + Incrementable + Ord,
         M: Manifests<R>,
     {
-        let mut transaction = DatabaseTransaction::new();
+        let mut transaction = DatabaseTransaction::new(self);
         let inserted_key = transaction.put(record, self)?;
         self.commit(transaction)?;
         Ok(inserted_key)
@@ -83,10 +83,14 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
         R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
         M: Manifests<R>,
     {
-        let mut transaction = DatabaseTransaction::new();
+        let mut transaction = DatabaseTransaction::new(self);
         let inserted_key = transaction.insert::<K, R>(record)?;
         self.commit(transaction)?;
         Ok(inserted_key)
+    }
+
+    pub fn create_transaction(&self) -> DatabaseTransaction<M> {
+        DatabaseTransaction::new(self)
     }
 
     pub fn commit(
@@ -252,6 +256,11 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
     /// Consumes the database and returns the underlying storage.
     pub fn dissolve(self) -> S {
         self.store
+    }
+
+    /// Returns the current [`Configuration`] used by the database.
+    pub fn serialization_config(&self) -> Configuration {
+        self.serialization_config
     }
 
     /// Helper function to get the last ID in a given range, used for autoincrementing keys.

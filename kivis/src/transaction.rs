@@ -1,9 +1,12 @@
+
+use bincode::config::Configuration;
+
 #[cfg(feature = "atomic")]
 use crate::traits::AtomicStorage;
 use crate::{
     wrap::{encode_value, wrap, Subtable, WrapPrelude},
-    Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, KeyBytes, Manifests,
-    Manifestt, RecordKey, SerializationError, Storage,
+    Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, KeyBytes, Manifest,
+    Manifests, RecordKey, SerializationError, Storage,
 };
 
 /// A database transaction that accumulates low-level byte operations (writes and deletes)
@@ -15,16 +18,18 @@ pub struct DatabaseTransaction<Manifest> {
     pending_writes: Vec<(Vec<u8>, Vec<u8>)>,
     /// Pending delete operations: keys to delete
     pending_deletes: Vec<Vec<u8>>,
-
+    /// Serialization configuration
+    serialization_config: Configuration,
     _marker: std::marker::PhantomData<Manifest>,
 }
 
-impl<M: Manifestt> DatabaseTransaction<M> {
-    /// Creates a new empty transaction.
-    pub fn new() -> Self {
+impl<M: Manifest> DatabaseTransaction<M> {
+    /// Creates a new empty transaction. Should be used by [`Database::create_transaction`].
+    pub(crate) fn new<S: Storage>(database: &Database<S, M>) -> Self {
         Self {
             pending_writes: Vec::new(),
             pending_deletes: Vec::new(),
+            serialization_config: database.serialization_config(),
             _marker: std::marker::PhantomData,
         }
     }
@@ -38,12 +43,12 @@ impl<M: Manifestt> DatabaseTransaction<M> {
         M: Manifests<R>,
     {
         let original_key = R::key(&record);
-        let writes = prepare_writes::<R>(&record, &original_key)?;
+        let writes = self.prepare_writes::<R>(&record, &original_key)?;
         self.pending_writes.extend(writes);
         Ok(original_key)
     }
 
-    pub fn put<R: DatabaseEntry, S: Storage>(
+    pub fn put<S: Storage, R: DatabaseEntry>(
         &mut self,
         record: R,
         database: &mut Database<S, M>,
@@ -56,7 +61,7 @@ impl<M: Manifestt> DatabaseTransaction<M> {
             .last_id::<R::Key>(R::Key::BOUNDS)?
             .next_id()
             .ok_or(DatabaseError::FailedToIncrement)?;
-        let writes = prepare_writes::<R>(&record, &original_key)?;
+        let writes = self.prepare_writes::<R>(&record, &original_key)?;
         self.pending_writes.extend(writes);
         Ok(original_key)
     }
@@ -92,6 +97,10 @@ impl<M: Manifestt> DatabaseTransaction<M> {
     /// Returns the number of pending delete operations.
     pub fn delete_count(&self) -> usize {
         self.pending_deletes.len()
+    }
+
+    fn serialization_config(&self) -> Configuration {
+        self.serialization_config
     }
 
     /// Commits all pending operations to the storage atomically.
@@ -136,35 +145,37 @@ impl<M: Manifestt> DatabaseTransaction<M> {
             self.pending_deletes.into_iter(),
         )
     }
-}
 
-fn prepare_writes<R: DatabaseEntry>(
-    record: &R,
-    key: &R::Key,
-) -> Result<Vec<(Vec<u8>, Vec<u8>)>, SerializationError>
-where
-    R::Key: RecordKey<Record = R>,
-{
-    let index_keys = record.index_keys();
-    let mut writes = Vec::with_capacity(1 + index_keys.len());
+    fn prepare_writes<R: DatabaseEntry>(
+        &self,
+        record: &R,
+        key: &R::Key,
+    ) -> Result<Vec<(Vec<u8>, Vec<u8>)>, SerializationError>
+    where
+        R::Key: RecordKey<Record = R>,
+    {
+        let index_keys = record.index_keys();
+        let mut writes = Vec::with_capacity(1 + index_keys.len());
 
-    for (discriminator, index_key) in record.index_keys() {
-        let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator)).to_bytes();
-        entry.extend_from_slice(&index_key.to_bytes());
+        for (discriminator, index_key) in record.index_keys() {
+            let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator))
+                .to_bytes(self.serialization_config());
+            entry.extend_from_slice(&index_key.to_bytes(self.serialization_config()));
 
-        // Indexes might be repeated, so we need to ensure that the key is unique.
-        // TODO: Add a way to declare as unique and deduplicate by provided hash.
-        let key_bytes = key.to_bytes();
-        entry.extend_from_slice(&key_bytes);
+            // Indexes might be repeated, so we need to ensure that the key is unique.
+            // TODO: Add a way to declare as unique and deduplicate by provided hash.
+            let key_bytes = key.to_bytes(self.serialization_config());
+            entry.extend_from_slice(&key_bytes);
 
-        writes.push((entry.clone(), key_bytes.clone()));
+            writes.push((entry.clone(), key_bytes.clone()));
+        }
+
+        let key = wrap::<R>(key, self.serialization_config())?;
+        let value = encode_value(record, self.serialization_config())?;
+        writes.push((key, value));
+
+        Ok(writes)
     }
-
-    let key = wrap::<R>(key)?;
-    let value = encode_value(record)?;
-    writes.push((key, value));
-
-    Ok(writes)
 }
 
 #[cfg(feature = "atomic")]

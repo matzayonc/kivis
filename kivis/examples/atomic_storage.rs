@@ -4,7 +4,7 @@
 #[cfg(feature = "atomic")]
 fn atomic_storage_example() {
     use kivis::{AtomicStorage, Storage};
-    use std::{collections::BTreeMap, cmp::Reverse, fmt::Display, ops::Range};
+    use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
     // Define a custom error type
     #[derive(Debug, PartialEq, Eq)]
@@ -49,7 +49,8 @@ fn atomic_storage_example() {
         fn iter_keys(
             &self,
             range: Range<Vec<u8>>,
-        ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError> {
+        ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError>
+        {
             let reverse_range = Reverse(range.end)..Reverse(range.start);
             let iter = self.data.range(reverse_range);
             Ok(iter.map(|(k, _v)| Ok(k.0.clone())))
@@ -58,7 +59,10 @@ fn atomic_storage_example() {
 
     // Then implement the AtomicStorage trait
     impl AtomicStorage for MyAtomicStorage {
-        fn batch_insert(&mut self, operations: Vec<(Vec<u8>, Vec<u8>)>) -> Result<(), Self::StoreError> {
+        fn batch_insert(
+            &mut self,
+            operations: Vec<(Vec<u8>, Vec<u8>)>,
+        ) -> Result<(), Self::StoreError> {
             // In a real implementation, this would be atomic
             // For example, using database transactions or write-ahead logging
             for (key, value) in operations {
@@ -67,7 +71,10 @@ fn atomic_storage_example() {
             Ok(())
         }
 
-        fn batch_remove(&mut self, keys: Vec<Vec<u8>>) -> Result<Vec<Option<Vec<u8>>>, Self::StoreError> {
+        fn batch_remove(
+            &mut self,
+            keys: Vec<Vec<u8>>,
+        ) -> Result<Vec<Option<Vec<u8>>>, Self::StoreError> {
             // In a real implementation, this would be atomic
             let mut removed = Vec::new();
             for key in keys {
@@ -103,7 +110,7 @@ fn atomic_storage_example() {
 fn main() {
     #[cfg(feature = "atomic")]
     atomic_storage_example();
-    
+
     #[cfg(not(feature = "atomic"))]
     println!("This example requires the 'atomic' feature to be enabled. Run with: cargo run --example atomic_storage --features atomic");
 }

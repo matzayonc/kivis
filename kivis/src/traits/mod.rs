@@ -35,7 +35,7 @@ pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {
 
 pub trait Manifests<T: Scope> {}
 
-pub trait Manifestt {}
+pub trait Manifest {}
 
 pub trait Scope {
     /// Unique table identifier for this database entry type.
@@ -104,7 +104,7 @@ macro_rules! manifest {
     ($manifest_name:ident: $($ty:ty),+ $(,)?) => {
         pub struct $manifest_name;
 
-        impl $crate::Manifestt for $manifest_name {}
+        impl $crate::Manifest for $manifest_name {}
 
         $crate::scope_impl_with_index!($manifest_name, 0; $($ty),+);
     };
