@@ -3,6 +3,9 @@ mod schema;
 mod serialization;
 mod storage;
 
+#[cfg(feature = "atomic")]
+mod atomic;
+
 use std::fmt::Debug;
 
 use serde::{de::DeserializeOwned, Serialize};
@@ -14,6 +17,9 @@ pub use storage::*;
 /// Error type for serialization operations, re-exported from the [`bincode`] crate.
 pub type SerializationError = bincode::error::EncodeError;
 pub type DeserializationError = bincode::error::DecodeError;
+
+#[cfg(feature = "atomic")]
+pub use atomic::*;
 
 /// The main trait of the crate, defines a database entry that can be stored with its indexes.
 pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {

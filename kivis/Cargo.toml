@@ -12,6 +12,9 @@ categories = ["database", "data-structures"]
 authors = ["Mateusz Zając <matzayonc@gmail.com>"]
 readme = "../readme.md"
 
+[features]
+atomic = []
+
 [dependencies]
 kivis-derive = { version = "0.1.0", path = "../kivis-derive" }
 serde = { workspace = true }

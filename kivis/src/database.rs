@@ -4,6 +4,7 @@ use serde::de::DeserializeOwned;
 
 use crate::errors::DatabaseError;
 use crate::traits::{DatabaseEntry, Index, Storage};
+use crate::transaction::DatabaseTransaction;
 use crate::wrap::{decode_value, encode_value, wrap, Subtable, Wrap, WrapPrelude};
 use crate::{DeriveKey, Incrementable, KeyBytes, Manifests, Manifestt, RecordKey};
 use std::marker::PhantomData;
@@ -66,14 +67,7 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
             .next_id()
             .ok_or(DatabaseError::FailedToIncrement)?;
 
-        let key = wrap::<R>(&original_key, self.serialization_config)
-            .map_err(DatabaseError::Serialization)?;
-
-        self.add_index_entries(&record, &original_key)?;
-
-        let value = encode_value(&record, self.serialization_config)
-            .map_err(DatabaseError::Serialization)?;
-        self.store.insert(key, value).map_err(DatabaseError::Io)?;
+        self.write(&record, &original_key)?;
         Ok(original_key)
     }
 
@@ -91,23 +85,11 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
         M: Manifests<R>,
     {
         let original_key = R::key(&record);
-        let key = wrap::<R>(&original_key, self.serialization_config)
-            .map_err(DatabaseError::Serialization)?;
-
-        self.add_index_entries(&record, &original_key)?;
-
-        let value = encode_value(&record, self.serialization_config)
-            .map_err(DatabaseError::Serialization)?;
-        if let Some(fallback) = &mut self.fallback {
-            fallback
-                .insert(key.clone(), value.clone())
-                .map_err(DatabaseError::Io)?;
-        }
-        self.store.insert(key, value).map_err(DatabaseError::Io)?;
+        self.write(&record, &original_key)?;
         Ok(original_key)
     }
 
-    fn add_index_entries<R: DatabaseEntry>(
+    fn write<R: DatabaseEntry>(
         &mut self,
         record: &R,
         key: &R::Key,
@@ -116,6 +98,9 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
         R::Key: RecordKey<Record = R>,
         M: Manifests<R>,
     {
+        let index_keys = record.index_keys();
+        let mut writes = Vec::with_capacity(1 + index_keys.len());
+
         for (discriminator, index_key) in record.index_keys() {
             let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator))
                 .to_bytes(self.serialization_config);
@@ -126,15 +111,24 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
             let key_bytes = key.to_bytes(self.serialization_config);
             entry.extend_from_slice(&key_bytes);
 
+            writes.push((entry.clone(), key_bytes.clone()));
+        }
+
+        let key =
+            wrap::<R>(&key, self.serialization_config).map_err(DatabaseError::Serialization)?;
+        let value = encode_value(record, self.serialization_config)
+            .map_err(DatabaseError::Serialization)?;
+        writes.push((key, value));
+
+        for (key, value) in writes {
             if let Some(fallback) = &mut self.fallback {
                 fallback
-                    .insert(entry.clone(), key_bytes.clone())
+                    .insert(key.clone(), value.clone())
                     .map_err(DatabaseError::Io)?;
             }
-            self.store
-                .insert(entry, key_bytes)
-                .map_err(DatabaseError::Io)?;
+            self.store.insert(key, value).map_err(DatabaseError::Io)?;
         }
+
         Ok(())
     }
 
