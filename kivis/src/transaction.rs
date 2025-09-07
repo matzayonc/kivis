@@ -1,26 +1,64 @@
-use crate::errors::DatabaseError;
-
 #[cfg(feature = "atomic")]
 use crate::traits::AtomicStorage;
+use crate::{
+    wrap::{encode_value, wrap, Subtable, WrapPrelude},
+    Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, KeyBytes, Manifests,
+    Manifestt, RecordKey, SerializationError, Storage,
+};
 
 /// A database transaction that accumulates low-level byte operations (writes and deletes)
 /// without immediately applying them to storage.
 ///
 /// This struct is always available, but the `commit` method is only available when the "atomic" feature is enabled.
-pub struct DatabaseTransaction {
+pub struct DatabaseTransaction<Manifest> {
     /// Pending write operations: (key, value) pairs
     pending_writes: Vec<(Vec<u8>, Vec<u8>)>,
     /// Pending delete operations: keys to delete
     pending_deletes: Vec<Vec<u8>>,
+
+    _marker: std::marker::PhantomData<Manifest>,
 }
 
-impl DatabaseTransaction {
+impl<M: Manifestt> DatabaseTransaction<M> {
     /// Creates a new empty transaction.
     pub fn new() -> Self {
         Self {
             pending_writes: Vec::new(),
             pending_deletes: Vec::new(),
+            _marker: std::marker::PhantomData,
         }
+    }
+
+    pub fn insert<K: RecordKey<Record = R>, R>(
+        &mut self,
+        record: R,
+    ) -> Result<K, SerializationError>
+    where
+        R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
+        M: Manifests<R>,
+    {
+        let original_key = R::key(&record);
+        let writes = prepare_writes::<R>(&record, &original_key)?;
+        self.pending_writes.extend(writes);
+        Ok(original_key)
+    }
+
+    pub fn put<R: DatabaseEntry, S: Storage>(
+        &mut self,
+        record: R,
+        database: &mut Database<S, M>,
+    ) -> Result<R::Key, DatabaseError<S::StoreError>>
+    where
+        R::Key: RecordKey<Record = R> + Incrementable + Ord,
+        M: Manifests<R>,
+    {
+        let original_key = database
+            .last_id::<R::Key>(R::Key::BOUNDS)?
+            .next_id()
+            .ok_or(DatabaseError::FailedToIncrement)?;
+        let writes = prepare_writes::<R>(&record, &original_key)?;
+        self.pending_writes.extend(writes);
+        Ok(original_key)
     }
 
     /// Adds a write operation to the transaction.
@@ -100,10 +138,33 @@ impl DatabaseTransaction {
     }
 }
 
-impl Default for DatabaseTransaction {
-    fn default() -> Self {
-        Self::new()
+fn prepare_writes<R: DatabaseEntry>(
+    record: &R,
+    key: &R::Key,
+) -> Result<Vec<(Vec<u8>, Vec<u8>)>, SerializationError>
+where
+    R::Key: RecordKey<Record = R>,
+{
+    let index_keys = record.index_keys();
+    let mut writes = Vec::with_capacity(1 + index_keys.len());
+
+    for (discriminator, index_key) in record.index_keys() {
+        let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator)).to_bytes();
+        entry.extend_from_slice(&index_key.to_bytes());
+
+        // Indexes might be repeated, so we need to ensure that the key is unique.
+        // TODO: Add a way to declare as unique and deduplicate by provided hash.
+        let key_bytes = key.to_bytes();
+        entry.extend_from_slice(&key_bytes);
+
+        writes.push((entry.clone(), key_bytes.clone()));
     }
+
+    let key = wrap::<R>(key)?;
+    let value = encode_value(record)?;
+    writes.push((key, value));
+
+    Ok(writes)
 }
 
 #[cfg(feature = "atomic")]

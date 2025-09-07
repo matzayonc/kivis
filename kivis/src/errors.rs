@@ -68,3 +68,9 @@ impl fmt::Display for InternalDatabaseError {
         }
     }
 }
+
+impl<S: Debug + Display + Eq + PartialEq> From<SerializationError> for DatabaseError<S> {
+    fn from(e: SerializationError) -> Self {
+        DatabaseError::Serialization(e)
+    }
+}

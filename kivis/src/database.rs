@@ -6,7 +6,9 @@ use crate::errors::DatabaseError;
 use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
 use crate::wrap::{decode_value, encode_value, wrap, Subtable, Wrap, WrapPrelude};
-use crate::{DeriveKey, Incrementable, KeyBytes, Manifests, Manifestt, RecordKey};
+use crate::{
+    DeriveKey, Incrementable, KeyBytes, Manifests, Manifestt, RecordKey, SerializationError,
+};
 use std::marker::PhantomData;
 use std::ops::Range;
 
@@ -62,13 +64,10 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
         R::Key: RecordKey<Record = R> + Incrementable + Ord,
         M: Manifests<R>,
     {
-        let original_key = self
-            .last_id::<R::Key>(R::Key::BOUNDS)?
-            .next_id()
-            .ok_or(DatabaseError::FailedToIncrement)?;
-
-        self.write(&record, &original_key)?;
-        Ok(original_key)
+        let mut transaction = DatabaseTransaction::new();
+        let inserted_key = transaction.put(record, self)?;
+        self.commit(transaction)?;
+        Ok(inserted_key)
     }
 
     /// Inserts a record with a derived key into the database, together with all related index entries.
@@ -84,42 +83,17 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
         R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
         M: Manifests<R>,
     {
-        let original_key = R::key(&record);
-        self.write(&record, &original_key)?;
-        Ok(original_key)
+        let mut transaction = DatabaseTransaction::new();
+        let inserted_key = transaction.insert::<K, R>(record)?;
+        self.commit(transaction)?;
+        Ok(inserted_key)
     }
 
-    fn write<R: DatabaseEntry>(
+    pub fn commit(
         &mut self,
-        record: &R,
-        key: &R::Key,
-    ) -> Result<(), DatabaseError<<S as Storage>::StoreError>>
-    where
-        R::Key: RecordKey<Record = R>,
-        M: Manifests<R>,
-    {
-        let index_keys = record.index_keys();
-        let mut writes = Vec::with_capacity(1 + index_keys.len());
-
-        for (discriminator, index_key) in record.index_keys() {
-            let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator))
-                .to_bytes(self.serialization_config);
-            entry.extend_from_slice(&index_key.to_bytes(self.serialization_config));
-
-            // Indexes might be repeated, so we need to ensure that the key is unique.
-            // TODO: Add a way to declare as unique and deduplicate by provided hash.
-            let key_bytes = key.to_bytes(self.serialization_config);
-            entry.extend_from_slice(&key_bytes);
-
-            writes.push((entry.clone(), key_bytes.clone()));
-        }
-
-        let key =
-            wrap::<R>(&key, self.serialization_config).map_err(DatabaseError::Serialization)?;
-        let value = encode_value(record, self.serialization_config)
-            .map_err(DatabaseError::Serialization)?;
-        writes.push((key, value));
-
+        transaction: DatabaseTransaction<M>,
+    ) -> Result<(), DatabaseError<S::StoreError>> {
+        let (writes, deletes) = transaction.consume();
         for (key, value) in writes {
             if let Some(fallback) = &mut self.fallback {
                 fallback
@@ -127,6 +101,13 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
                     .map_err(DatabaseError::Io)?;
             }
             self.store.insert(key, value).map_err(DatabaseError::Io)?;
+        }
+
+        for key in deletes {
+            if let Some(fallback) = &mut self.fallback {
+                fallback.remove(key.clone()).map_err(DatabaseError::Io)?;
+            }
+            self.store.remove(key).map_err(DatabaseError::Io)?;
         }
 
         Ok(())
@@ -274,7 +255,10 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
     }
 
     /// Helper function to get the last ID in a given range, used for autoincrementing keys.
-    fn last_id<K: RecordKey + Ord>(&self, bounds: (K, K)) -> Result<K, DatabaseError<S::StoreError>>
+    pub(crate) fn last_id<K: RecordKey + Ord>(
+        &self,
+        bounds: (K, K),
+    ) -> Result<K, DatabaseError<S::StoreError>>
     where
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
