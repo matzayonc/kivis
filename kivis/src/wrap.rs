@@ -1,6 +1,10 @@
+use bincode::{
+    config::{Config, Configuration},
+    serde::{decode_from_slice, encode_to_vec},
+};
 use serde::{Deserialize, Serialize};
 
-use crate::{DatabaseEntry, SerializationError};
+use crate::{DatabaseEntry, DeserializationError, SerializationError};
 
 /// Internal enum representing different subtables within a database scope.
 #[derive(Serialize, Deserialize, Debug)]
@@ -28,9 +32,9 @@ impl WrapPrelude {
     }
 
     /// Converts the wrap prelude to bytes for storage key prefixing.
-    pub fn to_bytes(&self) -> Vec<u8> {
+    pub fn to_bytes(&self, config: Configuration) -> Vec<u8> {
         // This should never fail as WrapPrelude is a simple, well-defined structure
-        bcs::to_bytes(self).expect("BCS serialization failed for WrapPrelude")
+        encode_to_vec(self, config).expect("BCS serialization failed for WrapPrelude")
     }
 }
 
@@ -42,7 +46,10 @@ pub(crate) struct Wrap<R> {
 }
 
 /// Wraps a database entry key with scope and subtable information for storage.
-pub(crate) fn wrap<R: DatabaseEntry>(item_key: &R::Key) -> Result<Vec<u8>, SerializationError> {
+pub(crate) fn wrap<R: DatabaseEntry>(
+    item_key: &R::Key,
+    config: Configuration,
+) -> Result<Vec<u8>, SerializationError> {
     let wrapped = Wrap {
         prelude: WrapPrelude {
             scope: R::SCOPE,
@@ -50,15 +57,21 @@ pub(crate) fn wrap<R: DatabaseEntry>(item_key: &R::Key) -> Result<Vec<u8>, Seria
         },
         key: item_key.clone(),
     };
-    bcs::to_bytes(&wrapped)
+    encode_to_vec(wrapped, config)
 }
 
 /// Encodes a database entry record to bytes for storage.
-pub(crate) fn encode_value<R: DatabaseEntry>(record: &R) -> Result<Vec<u8>, SerializationError> {
-    bcs::to_bytes(record)
+pub(crate) fn encode_value<R: DatabaseEntry>(
+    record: &R,
+    config: impl Config,
+) -> Result<Vec<u8>, SerializationError> {
+    encode_to_vec(record, config)
 }
 
 /// Decodes bytes back to a database entry record.
-pub(crate) fn decode_value<R: DatabaseEntry>(data: &[u8]) -> Result<R, SerializationError> {
-    bcs::from_bytes(data)
+pub(crate) fn decode_value<R: DatabaseEntry>(
+    data: &[u8],
+    config: impl Config,
+) -> Result<R, DeserializationError> {
+    decode_from_slice(data, config).map(|(record, _)| record)
 }

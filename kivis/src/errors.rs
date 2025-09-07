@@ -1,6 +1,6 @@
 use std::fmt::{self, Debug, Display};
 
-use crate::traits::SerializationError;
+use crate::traits::{DeserializationError, SerializationError};
 
 /// Errors that can occur while interacting with the database.
 ///
@@ -10,7 +10,7 @@ pub enum DatabaseError<S: Debug + Display> {
     /// Errors that occur during serialization of records.
     Serialization(SerializationError),
     /// Errors that occur during deserialization of records.
-    Deserialization(SerializationError),
+    Deserialization(DeserializationError),
     /// IO errors that occur while interacting with the storage backend.
     Io(S),
     /// Errors that occur when trying to increment a key.

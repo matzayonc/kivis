@@ -1,3 +1,5 @@
+use bincode::config::Configuration;
+use bincode::serde::decode_from_slice;
 use serde::de::DeserializeOwned;
 
 use crate::errors::DatabaseError;
@@ -15,15 +17,12 @@ pub struct Database<S: Storage, M: Manifestt> {
     store: S,
     fallback: Option<Box<dyn Storage<StoreError = S::StoreError>>>,
     manifest: PhantomData<M>,
+    serialization_config: Configuration,
 }
 
 impl<S: Default + Storage, M: Manifestt> Default for Database<S, M> {
     fn default() -> Self {
-        Database {
-            store: S::default(),
-            fallback: None,
-            manifest: PhantomData,
-        }
+        Self::new(S::default())
     }
 }
 
@@ -35,7 +34,12 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
             store,
             fallback: None,
             manifest: PhantomData,
+            serialization_config: Configuration::default(),
         }
+    }
+
+    pub fn with_serialization_config(&mut self, config: Configuration) {
+        self.serialization_config = config;
     }
 
     /// Sets a fallback storage that will be used if the main storage does not contain the requested record.
@@ -62,11 +66,13 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
             .next_id()
             .ok_or(DatabaseError::FailedToIncrement)?;
 
-        let key = wrap::<R>(&original_key).map_err(DatabaseError::Serialization)?;
+        let key = wrap::<R>(&original_key, self.serialization_config)
+            .map_err(DatabaseError::Serialization)?;
 
         self.add_index_entries(&record, &original_key)?;
 
-        let value = encode_value(&record).map_err(DatabaseError::Serialization)?;
+        let value = encode_value(&record, self.serialization_config)
+            .map_err(DatabaseError::Serialization)?;
         self.store.insert(key, value).map_err(DatabaseError::Io)?;
         Ok(original_key)
     }
@@ -85,11 +91,13 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
         M: Manifests<R>,
     {
         let original_key = R::key(&record);
-        let key = wrap::<R>(&original_key).map_err(DatabaseError::Serialization)?;
+        let key = wrap::<R>(&original_key, self.serialization_config)
+            .map_err(DatabaseError::Serialization)?;
 
         self.add_index_entries(&record, &original_key)?;
 
-        let value = encode_value(&record).map_err(DatabaseError::Serialization)?;
+        let value = encode_value(&record, self.serialization_config)
+            .map_err(DatabaseError::Serialization)?;
         if let Some(fallback) = &mut self.fallback {
             fallback
                 .insert(key.clone(), value.clone())
@@ -109,12 +117,13 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
         M: Manifests<R>,
     {
         for (discriminator, index_key) in record.index_keys() {
-            let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator)).to_bytes();
-            entry.extend_from_slice(&index_key.to_bytes());
+            let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator))
+                .to_bytes(self.serialization_config);
+            entry.extend_from_slice(&index_key.to_bytes(self.serialization_config));
 
             // Indexes might be repeated, so we need to ensure that the key is unique.
             // TODO: Add a way to declare as unique and deduplicate by provided hash.
-            let key_bytes = key.to_bytes();
+            let key_bytes = key.to_bytes(self.serialization_config);
             entry.extend_from_slice(&key_bytes);
 
             if let Some(fallback) = &mut self.fallback {
@@ -141,7 +150,8 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
     {
-        let serialized_key = wrap::<K::Record>(key).map_err(DatabaseError::Serialization)?;
+        let serialized_key = wrap::<K::Record>(key, self.serialization_config)
+            .map_err(DatabaseError::Serialization)?;
         let value =
             if let Some(value) = self.store.get(serialized_key).map_err(DatabaseError::Io)? {
                 value
@@ -149,14 +159,16 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
                 let Some(fallback) = &self.fallback else {
                     return Ok(None);
                 };
-                let key = wrap::<K::Record>(key).map_err(DatabaseError::Serialization)?;
+                let key = wrap::<K::Record>(key, self.serialization_config)
+                    .map_err(DatabaseError::Serialization)?;
                 let Some(value) = fallback.get(key).map_err(DatabaseError::Io)? else {
                     return Ok(None);
                 };
                 value
             };
         Ok(Some(
-            decode_value(&value).map_err(DatabaseError::Deserialization)?,
+            decode_value(&value, self.serialization_config)
+                .map_err(DatabaseError::Deserialization)?,
         ))
     }
 
@@ -174,7 +186,8 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
     {
-        let key = wrap::<K::Record>(key).map_err(DatabaseError::Serialization)?;
+        let key = wrap::<K::Record>(key, self.serialization_config)
+            .map_err(DatabaseError::Serialization)?;
 
         let value = if let Some(fallback) = &mut self.fallback {
             let fallback_value = fallback.remove(key.clone()).map_err(DatabaseError::Io)?;
@@ -185,7 +198,10 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
         };
 
         Ok(if let Some(ref value) = value {
-            Some(decode_value(value).map_err(DatabaseError::Deserialization)?)
+            Some(
+                decode_value(value, self.serialization_config)
+                    .map_err(DatabaseError::Deserialization)?,
+            )
         } else {
             None
         })
@@ -206,8 +222,10 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
     {
-        let start = wrap::<K::Record>(&range.start).map_err(DatabaseError::Serialization)?;
-        let end = wrap::<K::Record>(&range.end).map_err(DatabaseError::Serialization)?;
+        let start = wrap::<K::Record>(&range.start, self.serialization_config)
+            .map_err(DatabaseError::Serialization)?;
+        let end = wrap::<K::Record>(&range.end, self.serialization_config)
+            .map_err(DatabaseError::Serialization)?;
         let raw_iter = self
             .store
             .iter_keys(start..end)
@@ -220,10 +238,11 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
                     Err(e) => return Err(DatabaseError::Io(e)),
                 };
 
-                let deserialized: Wrap<K> = match bcs::from_bytes(&value) {
-                    Ok(deserialized) => deserialized,
-                    Err(e) => return Err(DatabaseError::Deserialization(e)),
-                };
+                let deserialized: Wrap<K> =
+                    match decode_from_slice(&value, self.serialization_config) {
+                        Ok((deserialized, _)) => deserialized,
+                        Err(e) => return Err(DatabaseError::Deserialization(e)),
+                    };
 
                 Ok(deserialized.key)
             }),
@@ -243,11 +262,10 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
         DatabaseError<S::StoreError>,
     > {
         let index_prelude = WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX));
-        let mut start = index_prelude.to_bytes();
+        let mut start = index_prelude.to_bytes(self.serialization_config);
         let mut end = start.clone();
-        start.extend(range.start.to_bytes());
-        end.extend(range.end.to_bytes());
-
+        start.extend(range.start.to_bytes(self.serialization_config));
+        end.extend(range.end.to_bytes(self.serialization_config));
         let raw_iter = self
             .store
             .iter_keys(start..end)
@@ -293,6 +311,8 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
             Err(e) => return Err(DatabaseError::Io(e)),
         };
 
-        bcs::from_bytes(&value).map_err(DatabaseError::Deserialization)
+        decode_from_slice(&value, self.serialization_config)
+            .map_err(DatabaseError::Deserialization)
+            .map(|(v, _)| v)
     }
 }

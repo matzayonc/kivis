@@ -11,8 +11,9 @@ pub use schema::*;
 pub use serialization::*;
 pub use storage::*;
 
-/// Error type for serialization operations, re-exported from the BCS crate.
-pub type SerializationError = bcs::Error;
+/// Error type for serialization operations, re-exported from the [`bincode`] crate.
+pub type SerializationError = bincode::error::EncodeError;
+pub type DeserializationError = bincode::error::DecodeError;
 
 /// The main trait of the crate, defines a database entry that can be stored with its indexes.
 pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {

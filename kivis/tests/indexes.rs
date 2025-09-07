@@ -88,7 +88,10 @@ fn test_index() {
     let index_keys = user.index_keys();
     assert_eq!(index_keys.len(), 1);
     assert_eq!(index_keys[0].0, UserNameIndex::INDEX);
-    assert_eq!(index_keys[0].1.to_bytes(), user.name.to_bytes());
+    assert_eq!(
+        index_keys[0].1.to_bytes(bincode::config::standard()),
+        user.name.to_bytes(bincode::config::standard())
+    );
 
     let retrieved: User = store.get(&user_key).unwrap().unwrap();
     assert_eq!(retrieved, user);

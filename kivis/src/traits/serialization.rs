@@ -1,3 +1,8 @@
+use bincode::{
+    config::Configuration,
+    serde::{decode_from_slice, encode_to_vec},
+};
+
 use super::*;
 
 /// A trait for converting keys to and from byte representations.
@@ -10,7 +15,7 @@ pub trait KeyBytes {
     ///
     /// This method serializes the key into a byte vector that can be stored
     /// in the underlying storage backend.
-    fn to_bytes(&self) -> Vec<u8>;
+    fn to_bytes(&self, serialization_config: Configuration) -> Vec<u8>;
 
     /// Reconstructs the key from bytes.
     ///
@@ -19,22 +24,29 @@ pub trait KeyBytes {
     ///
     /// # Errors
     ///
-    /// Returns a [`SerializationError`] if the bytes cannot be deserialized
+    /// Returns a [`DeserializationError`] if the bytes cannot be deserialized
     /// into the key type.
-    fn from_bytes(bytes: &[u8]) -> Result<Self, SerializationError>
+    fn from_bytes(
+        bytes: &[u8],
+        serialization_config: Configuration,
+    ) -> Result<Self, DeserializationError>
     where
         Self: Sized;
 }
+
 impl<T: Serialize + DeserializeOwned> KeyBytes for T {
-    fn to_bytes(&self) -> Vec<u8> {
+    fn to_bytes(&self, serialization_config: Configuration) -> Vec<u8> {
         // This should never fail for well-formed types that implement Serialize
-        bcs::to_bytes(self).expect("BCS serialization failed for key type")
+        encode_to_vec(self, serialization_config).expect("Serialization should not fail")
     }
 
-    fn from_bytes(bytes: &[u8]) -> Result<Self, SerializationError>
+    fn from_bytes(
+        bytes: &[u8],
+        serialization_config: Configuration,
+    ) -> Result<Self, DeserializationError>
     where
         Self: Sized,
     {
-        bcs::from_bytes(bytes)
+        decode_from_slice::<Self, Configuration>(bytes, serialization_config).map(|(key, _)| key)
     }
 }
