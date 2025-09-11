@@ -1,4 +1,4 @@
-use kivis::{manifest, Scope};
+use kivis::{manifest, Manifest, Scope};
 
 // Define some test structs
 #[derive(Debug)]
@@ -37,6 +37,7 @@ fn test_manifest_macro_multiple_types() {
     assert_eq!(Post::SCOPE, 1);
     assert_eq!(Comment::SCOPE, 2);
     assert_eq!(Tag::SCOPE, 3);
+    assert_eq!(Test::members(), vec![0, 1, 2, 3]);
 }
 
 #[test]
@@ -44,6 +45,7 @@ fn test_manifest_macro_single_type() {
     struct SingleType;
     manifest![SingleManifest: SingleType];
     assert_eq!(SingleType::SCOPE, 0);
+    assert_eq!(SingleManifest::members(), vec![0]);
 }
 
 #[test]
@@ -53,6 +55,7 @@ fn test_manifest_macro_with_trailing_comma() {
     manifest![TestManifest: A, B,];
     assert_eq!(A::SCOPE, 0);
     assert_eq!(B::SCOPE, 1);
+    assert_eq!(TestManifest::members(), vec![0, 1]);
 }
 
 #[test]
@@ -60,6 +63,7 @@ fn test_manifest_macro_empty_struct() {
     struct EmptyStruct;
     manifest![EmptyManifest: EmptyStruct];
     assert_eq!(EmptyStruct::SCOPE, 0);
+    assert_eq!(EmptyManifest::members(), vec![0]);
 }
 
 #[test]
@@ -87,4 +91,7 @@ fn test_manifest_macro_large_list() {
     assert_eq!(T7::SCOPE, 7);
     assert_eq!(T8::SCOPE, 8);
     assert_eq!(T9::SCOPE, 9);
+
+    // Verify the manifest type
+    assert_eq!(Test::members(), vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 }

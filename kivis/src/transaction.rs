@@ -1,4 +1,3 @@
-
 use bincode::config::Configuration;
 
 #[cfg(feature = "atomic")]

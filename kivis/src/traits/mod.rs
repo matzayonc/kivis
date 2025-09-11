@@ -35,7 +35,9 @@ pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {
 
 pub trait Manifests<T: Scope> {}
 
-pub trait Manifest {}
+pub trait Manifest {
+    fn members() -> Vec<u8>;
+}
 
 pub trait Scope {
     /// Unique table identifier for this database entry type.
@@ -104,9 +106,13 @@ macro_rules! manifest {
     ($manifest_name:ident: $($ty:ty),+ $(,)?) => {
         pub struct $manifest_name;
 
-        impl $crate::Manifest for $manifest_name {}
-
         $crate::scope_impl_with_index!($manifest_name, 0; $($ty),+);
+
+        impl $crate::Manifest for $manifest_name {
+            fn members() -> Vec<u8> {
+                $crate::generate_member_scopes!(0; $($ty),+)
+            }
+        }
     };
 
     // Error case: catch patterns without the required colon delimiter
@@ -117,6 +123,29 @@ macro_rules! manifest {
     // Error case: single type without colon
     ($ty:ty) => {
         compile_error!("manifest! macro requires a manifest name followed by a colon. Use: manifest![ManifestName: Type1, Type2, ...]");
+    };
+}
+
+/// Helper macro to generate member scope list
+#[macro_export]
+macro_rules! generate_member_scopes {
+    // Base case: no more types
+    ($index:expr;) => {
+        vec![]
+    };
+
+    // Single type remaining
+    ($index:expr; $ty:ty) => {
+        vec![$index]
+    };
+
+    // Multiple types remaining - add current index and recurse
+    ($index:expr; $ty:ty, $($rest:ty),+) => {
+        {
+            let mut scopes = vec![$index];
+            scopes.extend($crate::generate_member_scopes!($index + 1; $($rest),+));
+            scopes
+        }
     };
 }
 

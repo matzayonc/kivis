@@ -71,7 +71,11 @@ struct Pet {
 }
 
 struct Manifest;
-impl kivis::Manifest for Manifest {}
+impl kivis::Manifest for Manifest {
+    fn members() -> Vec<u8> {
+        vec![User::SCOPE, Pet::SCOPE]
+    }
+}
 impl kivis::Manifests<User> for Manifest {}
 impl kivis::Manifests<Pet> for Manifest {}
 

@@ -6,9 +6,7 @@ use crate::errors::DatabaseError;
 use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
 use crate::wrap::{decode_value, wrap, Subtable, Wrap, WrapPrelude};
-use crate::{
-    DeriveKey, Incrementable, KeyBytes, Manifest, Manifests, RecordKey,
-};
+use crate::{DeriveKey, Incrementable, Manifest, Manifests, RecordKey};
 use std::marker::PhantomData;
 use std::ops::Range;
 
