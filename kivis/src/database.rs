@@ -261,25 +261,6 @@ impl<S: Storage, M: Manifest> Database<S, M> {
         self.serialization_config
     }
 
-    /// Helper function to get the last ID in a given range, used for autoincrementing keys.
-    pub(crate) fn last_id<K: RecordKey + Ord>(
-        &self,
-        bounds: (K, K),
-    ) -> Result<K, DatabaseError<S::StoreError>>
-    where
-        K::Record: DatabaseEntry<Key = K>,
-        M: Manifests<K::Record>,
-    {
-        let (start, end) = bounds;
-        let range = if start < end {
-            start.clone()..end
-        } else {
-            end..start.clone()
-        };
-        let mut first = self.iter_keys::<K>(range)?;
-        Ok(first.next().transpose()?.unwrap_or(start))
-    }
-
     /// Helper function to process iterator results and get deserialized values
     fn process_iter_result<T: DeserializeOwned>(
         &self,
