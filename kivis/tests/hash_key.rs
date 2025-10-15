@@ -20,7 +20,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 /// A hash key that uses the hash of the record content as the key
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct ContentHashKey(pub u64);
 
 impl RecordKey for ContentHashKey {
@@ -30,7 +30,7 @@ impl RecordKey for ContentHashKey {
 // ContentHashKey automatically implements KeyBytes through the blanket implementation
 
 /// A record that uses its content hash as the key
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Hash)]
 pub struct ContentRecord {
     data: String,
     value: u32,

@@ -5,7 +5,7 @@ use serde::de::DeserializeOwned;
 use crate::errors::DatabaseError;
 use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
-use crate::wrap::{decode_value, wrap, Subtable, Wrap, WrapPrelude};
+use crate::wrap::{decode_value, empty_wrap, wrap, Subtable, Wrap, WrapPrelude};
 use crate::{DeriveKey, Incrementable, Manifest, Manifests, RecordKey};
 use std::marker::PhantomData;
 use std::ops::Range;
@@ -202,6 +202,41 @@ impl<S: Storage, M: Manifest> Database<S, M> {
         let start = wrap::<K::Record>(&range.start, self.serialization_config)
             .map_err(DatabaseError::Serialization)?;
         let end = wrap::<K::Record>(&range.end, self.serialization_config)
+            .map_err(DatabaseError::Serialization)?;
+        let raw_iter = self
+            .store
+            .iter_keys(start..end)
+            .map_err(DatabaseError::Io)?;
+
+        Ok(
+            raw_iter.map(|elem: Result<Vec<u8>, <S as Storage>::StoreError>| {
+                let value = match elem {
+                    Ok(value) => value,
+                    Err(e) => return Err(DatabaseError::Io(e)),
+                };
+
+                let deserialized: Wrap<K> =
+                    match decode_from_slice(&value, self.serialization_config) {
+                        Ok((deserialized, _)) => deserialized,
+                        Err(e) => return Err(DatabaseError::Deserialization(e)),
+                    };
+
+                Ok(deserialized.key)
+            }),
+        )
+    }
+
+    pub fn iter_all_keys<K: RecordKey + Ord>(
+        &self,
+    ) -> Result<
+        impl Iterator<Item = DatabaseIteratorItem<K::Record, S>> + use<'_, K, S, M>,
+        DatabaseError<S::StoreError>,
+    >
+    where
+        K::Record: DatabaseEntry<Key = K>,
+        M: Manifests<K::Record>,
+    {
+        let (start, end) = empty_wrap::<K::Record>(self.serialization_config)
             .map_err(DatabaseError::Serialization)?;
         let raw_iter = self
             .store

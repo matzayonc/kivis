@@ -41,7 +41,7 @@ impl<M: Manifest> TableHeads<M> {
         M: Manifests<R>,
         S: Storage,
     {
-        let last_id = Self::last_id::<R::Key, S>(database, R::Key::BOUNDS)?;
+        let last_id = Self::last_id::<R::Key, S>(database)?;
         let serialized_id = last_id.to_bytes(database.serialization_config());
 
         self.last_ids.insert(TypeId::of::<R>(), serialized_id);
@@ -115,22 +115,24 @@ impl<M: Manifest> TableHeads<M> {
     }
 
     /// Helper function to get the last ID in a given range, used for autoincrementing keys.
-    pub(crate) fn last_id<K: RecordKey + Ord, S: Storage>(
+    pub fn last_id<K: RecordKey + Ord + Default, S: Storage>(
         database: &Database<S, M>,
-        bounds: (K, K),
+        // bounds: (K, K),
     ) -> Result<K, DatabaseError<S::StoreError>>
     where
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
     {
-        let (start, end) = bounds;
-        let range = if start < end {
-            start.clone()..end
-        } else {
-            end..start.clone()
-        };
-        let mut first = database.iter_keys::<K>(range)?;
-        Ok(first.next().transpose()?.unwrap_or(start))
+        // let (start, end) = bounds;
+        // let range = if start < end {
+        //     start.clone()..end
+        // } else {
+        //     end..start.clone()
+        // };
+        // let mut first = database.iter_keys::<K>(range)?;
+        let mut first = database.iter_all_keys::<K>()?;
+
+        Ok(first.next().transpose()?.unwrap_or_default())
     }
 }
 

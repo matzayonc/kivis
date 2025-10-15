@@ -56,7 +56,7 @@ impl<M: Manifest> DatabaseTransaction<M> {
         R::Key: RecordKey<Record = R> + Incrementable + Ord,
         M: Manifests<R>,
     {
-        let original_key = TableHeads::last_id::<R::Key, S>(database, R::Key::BOUNDS)?
+        let original_key = TableHeads::last_id::<R::Key, S>(database)?
             .next_id()
             .ok_or(DatabaseError::FailedToIncrement)?;
         let writes = self.prepare_writes::<R>(&record, &original_key)?;

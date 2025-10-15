@@ -21,6 +21,8 @@ pub type DeserializationError = bincode::error::DecodeError;
 #[cfg(feature = "atomic")]
 pub use atomic::*;
 
+use crate::{Database, DatabaseError};
+
 /// The main trait of the crate, defines a database entry that can be stored with its indexes.
 pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {
     /// The primary key type for this database entry.
@@ -37,6 +39,13 @@ pub trait Manifests<T: Scope> {}
 
 pub trait Manifest {
     fn members() -> Vec<u8>;
+    fn load<S: Storage>(
+        &mut self,
+        db: &mut Database<S, Self>,
+    ) -> Result<(), DatabaseError<S::StoreError>>
+    where
+        Self: Sized;
+    // fn last<Scope>() -> Option<Vec<u8>>;
 }
 
 pub trait Scope {
@@ -104,13 +113,28 @@ macro_rules! manifest {
 
     // Multiple items case with manifest name - generate implementations with incrementing indices
     ($manifest_name:ident: $($ty:ty),+ $(,)?) => {
-        pub struct $manifest_name;
+        paste::paste! {
+            pub struct $manifest_name {
+                $(
+                    [<last_ $ty:snake>]: Option<<$ty as $crate::DatabaseEntry>::Key>,
+                )*
+            }
+        }
 
         $crate::scope_impl_with_index!($manifest_name, 0; $($ty),+);
 
         impl $crate::Manifest for $manifest_name {
             fn members() -> Vec<u8> {
                 $crate::generate_member_scopes!(0; $($ty),+)
+            }
+
+            fn load<S: $crate::Storage>(&mut self, db: &mut $crate::Database<S, Self>) -> Result<(), $crate::DatabaseError<S::StoreError>> {
+                paste::paste! {
+                    $(
+                        self.[<last_ $ty:snake>] = Some($crate::TableHeads::last_id(db)?);
+                    )*
+                }
+                Ok(())
             }
         }
     };
