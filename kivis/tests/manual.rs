@@ -2,7 +2,6 @@ use std::{collections::BTreeMap, fmt::Display, ops::Range};
 
 use kivis::{
     Database, DatabaseEntry, DeriveKey, Incrementable, Index, KeyBytes, RecordKey, Scope, Storage,
-    TableHeads,
 };
 
 // Define a record type for an User.
@@ -78,9 +77,10 @@ struct Pet {
     owner: UserKey,
 }
 
+#[derive(Default)]
 struct Manifest {
-    _last_user: Option<UserKey>,
-    _last_pet: Option<PetKey>,
+    last_user: Option<UserKey>,
+    last_pet: Option<PetKey>,
 }
 impl kivis::Manifest for Manifest {
     fn members() -> Vec<u8> {
@@ -92,14 +92,22 @@ impl kivis::Manifest for Manifest {
         db: &mut Database<S, Self>,
     ) -> Result<(), kivis::DatabaseError<S::StoreError>> {
         *self = Self {
-            _last_user: None,
-            _last_pet: Some(TableHeads::last_id::<PetKey, S>(db)?),
+            last_user: None,
+            last_pet: Some(db.last_id::<PetKey>()?),
         };
         Ok(())
     }
 }
-impl kivis::Manifests<User> for Manifest {}
-impl kivis::Manifests<Pet> for Manifest {}
+impl kivis::Manifests<User> for Manifest {
+    fn last(&mut self) -> &mut Option<<User as kivis::DatabaseEntry>::Key> {
+        &mut self.last_user
+    }
+}
+impl kivis::Manifests<Pet> for Manifest {
+    fn last(&mut self) -> &mut Option<<Pet as kivis::DatabaseEntry>::Key> {
+        &mut self.last_pet
+    }
+}
 
 // Define storage for the database.
 #[derive(Default)]

@@ -35,9 +35,11 @@ pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {
     }
 }
 
-pub trait Manifests<T: Scope> {}
+pub trait Manifests<T: Scope + DatabaseEntry> {
+    fn last(&mut self) -> &mut Option<T::Key>;
+}
 
-pub trait Manifest {
+pub trait Manifest: Default {
     fn members() -> Vec<u8>;
     fn load<S: Storage>(
         &mut self,
@@ -45,7 +47,6 @@ pub trait Manifest {
     ) -> Result<(), DatabaseError<S::StoreError>>
     where
         Self: Sized;
-    // fn last<Scope>() -> Option<Vec<u8>>;
 }
 
 pub trait Scope {
@@ -108,12 +109,14 @@ pub trait Scope {
 macro_rules! manifest {
     // Base case: empty list with manifest name
     ($manifest_name:ident:) => {
+        #[derive(Default)]
         pub struct $manifest_name;
     };
 
     // Multiple items case with manifest name - generate implementations with incrementing indices
     ($manifest_name:ident: $($ty:ty),+ $(,)?) => {
         paste::paste! {
+            #[derive(Default)]
             pub struct $manifest_name {
                 $(
                     [<last_ $ty:snake>]: Option<<$ty as $crate::DatabaseEntry>::Key>,
@@ -131,7 +134,7 @@ macro_rules! manifest {
             fn load<S: $crate::Storage>(&mut self, db: &mut $crate::Database<S, Self>) -> Result<(), $crate::DatabaseError<S::StoreError>> {
                 paste::paste! {
                     $(
-                        self.[<last_ $ty:snake>] = Some($crate::TableHeads::last_id(db)?);
+                        self.[<last_ $ty:snake>] = Some(db.last_id()?);
                     )*
                 }
                 Ok(())
@@ -185,7 +188,13 @@ macro_rules! scope_impl_with_index {
             const SCOPE: u8 = $index;
             type Manifest = $manifest_name;
         }
-        impl $crate::Manifests<$ty> for $manifest_name {}
+        impl $crate::Manifests<$ty> for $manifest_name {
+            fn last(&mut self) -> &mut Option<<$ty as $crate::DatabaseEntry>::Key> {
+                paste::paste! {
+                    &mut self.[<last_ $ty:snake>]
+                }
+            }
+        }
     };
 
     // Multiple types remaining - implement for first and recurse
@@ -194,7 +203,13 @@ macro_rules! scope_impl_with_index {
             const SCOPE: u8 = $index;
             type Manifest = $manifest_name;
         }
-        impl $crate::Manifests<$ty> for $manifest_name {}
+        impl $crate::Manifests<$ty> for $manifest_name {
+            fn last(&mut self) -> &mut Option<<$ty as $crate::DatabaseEntry>::Key> {
+                paste::paste! {
+                    &mut self.[<last_ $ty:snake>]
+                }
+            }
+        }
         $crate::scope_impl_with_index!($manifest_name, $index + 1; $($rest),+);
     };
 }

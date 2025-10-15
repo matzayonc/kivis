@@ -5,7 +5,7 @@ use crate::traits::AtomicStorage;
 use crate::{
     wrap::{encode_value, wrap, Subtable, WrapPrelude},
     Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, KeyBytes, Manifest,
-    Manifests, RecordKey, SerializationError, Storage, TableHeads,
+    Manifests, RecordKey, SerializationError, Storage,
 };
 
 /// A database transaction that accumulates low-level byte operations (writes and deletes)
@@ -56,12 +56,19 @@ impl<M: Manifest> DatabaseTransaction<M> {
         R::Key: RecordKey<Record = R> + Incrementable + Ord,
         M: Manifests<R>,
     {
-        let original_key = TableHeads::last_id::<R::Key, S>(database)?
-            .next_id()
-            .ok_or(DatabaseError::FailedToIncrement)?;
-        let writes = self.prepare_writes::<R>(&record, &original_key)?;
+        // let original_key = TableHeads::last_id::<R::Key, S>(database)?
+        //     .next_id()
+        //     .ok_or(DatabaseError::FailedToIncrement)?;
+        let last_key = database.manifest.last();
+        let new_key = last_key
+            .as_ref()
+            .map(|k| k.next_id().unwrap())
+            .unwrap_or_default();
+
+        let writes = self.prepare_writes::<R>(&record, &new_key)?;
         self.pending_writes.extend(writes);
-        Ok(original_key)
+        last_key.replace(new_key.clone());
+        Ok(new_key)
     }
 
     /// Adds a write operation to the transaction.

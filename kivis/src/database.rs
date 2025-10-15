@@ -7,7 +7,6 @@ use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
 use crate::wrap::{decode_value, empty_wrap, wrap, Subtable, Wrap, WrapPrelude};
 use crate::{DeriveKey, Incrementable, Manifest, Manifests, RecordKey};
-use std::marker::PhantomData;
 use std::ops::Range;
 
 type DatabaseIteratorItem<R, S> =
@@ -17,7 +16,7 @@ type DatabaseIteratorItem<R, S> =
 pub struct Database<S: Storage, M: Manifest> {
     store: S,
     fallback: Option<Box<dyn Storage<StoreError = S::StoreError>>>,
-    manifest: PhantomData<M>,
+    pub manifest: M,
     serialization_config: Configuration,
 }
 
@@ -31,12 +30,16 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     /// Creates a new [`Database`] instance over any storage backend.
     /// One of the key features of `kivis` is that it can work with any storage backend that implements the [`Storage`] trait.
     pub fn new(store: S) -> Self {
-        Database {
+        let mut db = Database {
             store,
             fallback: None,
-            manifest: PhantomData,
+            manifest: M::default(),
             serialization_config: Configuration::default(),
-        }
+        };
+        let mut manifest = M::default();
+        manifest.load(&mut db).unwrap();
+        db.manifest = manifest;
+        db
     }
 
     pub fn with_serialization_config(&mut self, config: Configuration) {
@@ -259,6 +262,16 @@ impl<S: Storage, M: Manifest> Database<S, M> {
                 Ok(deserialized.key)
             }),
         )
+    }
+
+    pub fn last_id<K: RecordKey + Ord + Default>(&self) -> Result<K, DatabaseError<S::StoreError>>
+    where
+        K::Record: DatabaseEntry<Key = K>,
+        M: Manifests<K::Record>,
+    {
+        let mut first = self.iter_all_keys::<K>()?;
+
+        Ok(first.next().transpose()?.unwrap_or_default())
     }
 
     /// Iterates over all index entries in the database within the specified range and returns their primary keys.

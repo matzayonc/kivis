@@ -39,7 +39,6 @@
 mod btreemap;
 mod database;
 mod errors;
-mod table_heads;
 mod traits;
 mod transaction;
 mod wrap;
@@ -50,7 +49,6 @@ pub use kivis_derive::Record;
 pub use traits::*;
 
 pub use crate::errors::{DatabaseError, InternalDatabaseError};
-pub use crate::table_heads::{TableHeads, TableHeadsError};
 
 #[cfg(feature = "atomic")]
 // Database transaction is only usefull if atomic storage is enabled.
