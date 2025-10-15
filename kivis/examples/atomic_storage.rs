@@ -59,25 +59,16 @@ fn atomic_storage_example() {
 
     // Then implement the AtomicStorage trait
     impl AtomicStorage for MyAtomicStorage {
-        fn batch_insert(
+        fn batch_mixed(
             &mut self,
-            operations: Vec<(Vec<u8>, Vec<u8>)>,
-        ) -> Result<(), Self::StoreError> {
-            // In a real implementation, this would be atomic
-            // For example, using database transactions or write-ahead logging
-            for (key, value) in operations {
+            inserts: Vec<(Vec<u8>, Vec<u8>)>,
+            removes: Vec<Vec<u8>>,
+        ) -> Result<Vec<Option<Vec<u8>>>, Self::StoreError> {
+            let mut removed = Vec::new();
+            for (key, value) in inserts {
                 self.data.insert(Reverse(key), value);
             }
-            Ok(())
-        }
-
-        fn batch_remove(
-            &mut self,
-            keys: Vec<Vec<u8>>,
-        ) -> Result<Vec<Option<Vec<u8>>>, Self::StoreError> {
-            // In a real implementation, this would be atomic
-            let mut removed = Vec::new();
-            for key in keys {
+            for key in removes {
                 removed.push(self.data.remove(&Reverse(key)));
             }
             Ok(removed)
@@ -98,11 +89,11 @@ fn atomic_storage_example() {
     ];
 
     // All insertions happen atomically
-    storage.batch_insert(operations).unwrap();
+    storage.batch_mixed(operations, Vec::new()).unwrap();
 
     // All removals happen atomically
     let keys_to_remove = vec![b"user1".to_vec(), b"user3".to_vec()];
-    let removed = storage.batch_remove(keys_to_remove).unwrap();
+    let removed = storage.batch_mixed(Vec::new(), keys_to_remove).unwrap();
 
     println!("Removed values: {:?}", removed);
 }

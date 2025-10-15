@@ -14,9 +14,9 @@ type DatabaseIteratorItem<R, S> =
 
 /// The `kivis` database type. All interactions with the database are done through this type.
 pub struct Database<S: Storage, M: Manifest> {
-    store: S,
+    pub(crate) store: S,
     fallback: Option<Box<dyn Storage<StoreError = S::StoreError>>>,
-    pub manifest: M,
+    pub(crate) manifest: M,
     serialization_config: Configuration,
 }
 

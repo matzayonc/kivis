@@ -13,6 +13,7 @@ authors = ["Mateusz Zając <matzayonc@gmail.com>"]
 readme = "../readme.md"
 
 [features]
+default = ["atomic"]
 atomic = []
 
 [dependencies]
