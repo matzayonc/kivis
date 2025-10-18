@@ -3,6 +3,9 @@ mod schema;
 mod serialization;
 mod storage;
 
+#[cfg(feature = "atomic")]
+mod atomic;
+
 use std::fmt::Debug;
 
 use serde::{de::DeserializeOwned, Serialize};
@@ -14,6 +17,11 @@ pub use storage::*;
 /// Error type for serialization operations, re-exported from the [`bincode`] crate.
 pub type SerializationError = bincode::error::EncodeError;
 pub type DeserializationError = bincode::error::DecodeError;
+
+#[cfg(feature = "atomic")]
+pub use atomic::*;
+
+use crate::{Database, DatabaseError};
 
 /// The main trait of the crate, defines a database entry that can be stored with its indexes.
 pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {
@@ -27,9 +35,19 @@ pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {
     }
 }
 
-pub trait Manifests<T: Scope> {}
+pub trait Manifests<T: Scope + DatabaseEntry> {
+    fn last(&mut self) -> &mut Option<T::Key>;
+}
 
-pub trait Manifestt {}
+pub trait Manifest: Default {
+    fn members() -> Vec<u8>;
+    fn load<S: Storage>(
+        &mut self,
+        db: &mut Database<S, Self>,
+    ) -> Result<(), DatabaseError<S::StoreError>>
+    where
+        Self: Sized;
+}
 
 pub trait Scope {
     /// Unique table identifier for this database entry type.
@@ -91,16 +109,37 @@ pub trait Scope {
 macro_rules! manifest {
     // Base case: empty list with manifest name
     ($manifest_name:ident:) => {
+        #[derive(Default)]
         pub struct $manifest_name;
     };
 
     // Multiple items case with manifest name - generate implementations with incrementing indices
     ($manifest_name:ident: $($ty:ty),+ $(,)?) => {
-        pub struct $manifest_name;
-
-        impl $crate::Manifestt for $manifest_name {}
+        paste::paste! {
+            #[derive(Default)]
+            pub struct $manifest_name {
+                $(
+                    [<last_ $ty:snake>]: Option<<$ty as $crate::DatabaseEntry>::Key>,
+                )*
+            }
+        }
 
         $crate::scope_impl_with_index!($manifest_name, 0; $($ty),+);
+
+        impl $crate::Manifest for $manifest_name {
+            fn members() -> Vec<u8> {
+                $crate::generate_member_scopes!(0; $($ty),+)
+            }
+
+            fn load<S: $crate::Storage>(&mut self, db: &mut $crate::Database<S, Self>) -> Result<(), $crate::DatabaseError<S::StoreError>> {
+                paste::paste! {
+                    $(
+                        self.[<last_ $ty:snake>] = Some(db.last_id()?);
+                    )*
+                }
+                Ok(())
+            }
+        }
     };
 
     // Error case: catch patterns without the required colon delimiter
@@ -111,6 +150,29 @@ macro_rules! manifest {
     // Error case: single type without colon
     ($ty:ty) => {
         compile_error!("manifest! macro requires a manifest name followed by a colon. Use: manifest![ManifestName: Type1, Type2, ...]");
+    };
+}
+
+/// Helper macro to generate member scope list
+#[macro_export]
+macro_rules! generate_member_scopes {
+    // Base case: no more types
+    ($index:expr;) => {
+        vec![]
+    };
+
+    // Single type remaining
+    ($index:expr; $ty:ty) => {
+        vec![$index]
+    };
+
+    // Multiple types remaining - add current index and recurse
+    ($index:expr; $ty:ty, $($rest:ty),+) => {
+        {
+            let mut scopes = vec![$index];
+            scopes.extend($crate::generate_member_scopes!($index + 1; $($rest),+));
+            scopes
+        }
     };
 }
 
@@ -126,7 +188,13 @@ macro_rules! scope_impl_with_index {
             const SCOPE: u8 = $index;
             type Manifest = $manifest_name;
         }
-        impl $crate::Manifests<$ty> for $manifest_name {}
+        impl $crate::Manifests<$ty> for $manifest_name {
+            fn last(&mut self) -> &mut Option<<$ty as $crate::DatabaseEntry>::Key> {
+                paste::paste! {
+                    &mut self.[<last_ $ty:snake>]
+                }
+            }
+        }
     };
 
     // Multiple types remaining - implement for first and recurse
@@ -135,7 +203,13 @@ macro_rules! scope_impl_with_index {
             const SCOPE: u8 = $index;
             type Manifest = $manifest_name;
         }
-        impl $crate::Manifests<$ty> for $manifest_name {}
+        impl $crate::Manifests<$ty> for $manifest_name {
+            fn last(&mut self) -> &mut Option<<$ty as $crate::DatabaseEntry>::Key> {
+                paste::paste! {
+                    &mut self.[<last_ $ty:snake>]
+                }
+            }
+        }
         $crate::scope_impl_with_index!($manifest_name, $index + 1; $($rest),+);
     };
 }

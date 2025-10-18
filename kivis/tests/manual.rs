@@ -1,6 +1,8 @@
 use std::{collections::BTreeMap, fmt::Display, ops::Range};
 
-use kivis::{Database, DatabaseEntry, DeriveKey, Incrementable, Index, KeyBytes, RecordKey, Scope};
+use kivis::{
+    Database, DatabaseEntry, DeriveKey, Incrementable, Index, KeyBytes, RecordKey, Scope, Storage,
+};
 
 // Define a record type for an User.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
@@ -45,6 +47,11 @@ pub struct User {
 // Define a record type for a Pet.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 struct PetKey(pub u64);
+impl Default for PetKey {
+    fn default() -> Self {
+        PetKey(u64::MAX)
+    }
+}
 impl RecordKey for PetKey {
     type Record = Pet;
 }
@@ -57,7 +64,7 @@ impl kivis::DatabaseEntry for Pet {
 }
 impl Incrementable for PetKey {
     // Order is reversed here, as we want to be able to get the latest entries first for the auto-increment.
-    const BOUNDS: (Self, Self) = (PetKey(u64::MAX), PetKey(0));
+    // const BOUNDS: (Self, Self) = (PetKey(u64::MAX), PetKey(0));
 
     fn next_id(&self) -> Option<Self> {
         self.0.checked_sub(1).map(PetKey)
@@ -70,14 +77,41 @@ struct Pet {
     owner: UserKey,
 }
 
-struct Manifest;
-impl kivis::Manifestt for Manifest {}
-impl kivis::Manifests<User> for Manifest {}
-impl kivis::Manifests<Pet> for Manifest {}
+#[derive(Default)]
+struct Manifest {
+    last_user: Option<UserKey>,
+    last_pet: Option<PetKey>,
+}
+impl kivis::Manifest for Manifest {
+    fn members() -> Vec<u8> {
+        vec![User::SCOPE, Pet::SCOPE]
+    }
+
+    fn load<S: Storage>(
+        &mut self,
+        db: &mut Database<S, Self>,
+    ) -> Result<(), kivis::DatabaseError<S::StoreError>> {
+        *self = Self {
+            last_user: None,
+            last_pet: Some(db.last_id::<PetKey>()?),
+        };
+        Ok(())
+    }
+}
+impl kivis::Manifests<User> for Manifest {
+    fn last(&mut self) -> &mut Option<<User as kivis::DatabaseEntry>::Key> {
+        &mut self.last_user
+    }
+}
+impl kivis::Manifests<Pet> for Manifest {
+    fn last(&mut self) -> &mut Option<<Pet as kivis::DatabaseEntry>::Key> {
+        &mut self.last_pet
+    }
+}
 
 // Define storage for the database.
 #[derive(Default)]
-struct Storage {
+struct ManualStorage {
     data: BTreeMap<Vec<u8>, Vec<u8>>,
 }
 #[derive(Debug, PartialEq, Eq)]
@@ -87,7 +121,7 @@ impl Display for NoError {
         Ok(())
     }
 }
-impl kivis::Storage for Storage {
+impl kivis::Storage for ManualStorage {
     type StoreError = NoError;
 
     fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
@@ -114,7 +148,7 @@ impl kivis::Storage for Storage {
 
 #[test]
 fn test_user_record() {
-    let db = Storage::default();
+    let db = ManualStorage::default();
     let mut database: Database<_, Manifest> = Database::new(db);
 
     let user = User {
@@ -131,7 +165,7 @@ fn test_user_record() {
 
 #[test]
 fn test_pet_record() {
-    let db = Storage::default();
+    let db = ManualStorage::default();
     let mut database: Database<_, Manifest> = Database::new(db);
 
     let pet = Pet {
@@ -147,7 +181,7 @@ fn test_pet_record() {
 
 #[test]
 fn test_get_owner_of_pet() {
-    let db = Storage::default();
+    let db = ManualStorage::default();
     let mut database: Database<_, Manifest> = Database::new(db);
 
     let mut user = User {
@@ -172,7 +206,7 @@ fn test_get_owner_of_pet() {
 
 #[test]
 fn test_index() {
-    let db = Storage::default();
+    let db = ManualStorage::default();
     let mut database: Database<_, Manifest> = Database::new(db);
 
     let user = User {
@@ -199,7 +233,7 @@ fn test_index() {
 
 #[test]
 fn test_iter() {
-    let db = Storage::default();
+    let db = ManualStorage::default();
     let mut database: Database<_, Manifest> = Database::new(db);
 
     let pet = Pet {
@@ -221,7 +255,7 @@ fn test_iter() {
 
 #[test]
 fn test_iter_index() {
-    let db = Storage::default();
+    let db = ManualStorage::default();
     let mut database: Database<_, Manifest> = kivis::Database::new(db);
 
     let user = User {

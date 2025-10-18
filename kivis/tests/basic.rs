@@ -36,6 +36,8 @@ fn test_iter() {
     let user_key = store.put(user.clone()).unwrap();
     let another_key = store.put(another.clone()).unwrap();
 
+    assert_ne!(user_key, another_key);
+
     let iter = store
         .iter_keys(UserRecordKey(0)..UserRecordKey(3))
         .unwrap()

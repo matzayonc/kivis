@@ -40,6 +40,7 @@ mod btreemap;
 mod database;
 mod errors;
 mod traits;
+mod transaction;
 mod wrap;
 
 pub use btreemap::{MemoryStorage, MemoryStorageError};
@@ -48,3 +49,7 @@ pub use kivis_derive::Record;
 pub use traits::*;
 
 pub use crate::errors::{DatabaseError, InternalDatabaseError};
+
+#[cfg(feature = "atomic")]
+// Database transaction is only usefull if atomic storage is enabled.
+pub use transaction::DatabaseTransaction;

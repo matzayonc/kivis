@@ -13,6 +13,8 @@ pub enum DatabaseError<S: Debug + Display> {
     Deserialization(DeserializationError),
     /// IO errors that occur while interacting with the storage backend.
     Io(S),
+    /// Storage errors that occur during atomic operations.
+    Storage(S),
     /// Errors that occur when trying to increment a key.
     FailedToIncrement,
     /// Internal errors that should never occur during normal operation of the database.
@@ -48,6 +50,7 @@ impl<S: Debug + Display + Eq + PartialEq> fmt::Display for DatabaseError<S> {
             Self::Serialization(ref e) => write!(f, "Serialization error: {e}"),
             Self::Deserialization(ref e) => write!(f, "Deserialization error: {e}"),
             Self::Io(ref s) => write!(f, "IO error: {s}"),
+            Self::Storage(ref s) => write!(f, "Storage error: {s}"),
             Self::FailedToIncrement => write!(f, "Failed to increment key value"),
             Self::Internal(ref e) => write!(f, "Internal database error: {e}"),
         }
@@ -63,5 +66,11 @@ impl fmt::Display for InternalDatabaseError {
             Self::Serialization(ref e) => write!(f, "Serialization error: {e}"),
             Self::Deserialization(ref e) => write!(f, "Deserialization error: {e}"),
         }
+    }
+}
+
+impl<S: Debug + Display + Eq + PartialEq> From<SerializationError> for DatabaseError<S> {
+    fn from(e: SerializationError) -> Self {
+        DatabaseError::Serialization(e)
     }
 }
