@@ -7,12 +7,49 @@ use serde::{Deserialize, Serialize};
 use crate::{DatabaseEntry, DeserializationError, SerializationError};
 
 /// Internal enum representing different subtables within a database scope.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug)]
 pub(crate) enum Subtable {
     /// Main data storage subtable.
     Main,
+    Reserved,
     /// Index subtable with discriminator.
     Index(u8),
+}
+
+impl Serialize for Subtable {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let value = match self {
+            Subtable::Main => 0u8,
+            Subtable::Reserved => 1u8,
+            Subtable::Index(discriminator) => {
+                // Reserve 1, start Index at 2
+                discriminator
+                    .checked_add(2)
+                    .expect("Index discriminator overflow when adding 2")
+            }
+        };
+        serializer.serialize_u8(value)
+    }
+}
+
+impl<'de> Deserialize<'de> for Subtable {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = u8::deserialize(deserializer)?;
+        match value {
+            0 => Ok(Subtable::Main),
+            1 => Err(serde::de::Error::custom("Reserved subtable value 1")),
+            n => Ok(Subtable::Index(
+                n.checked_sub(2)
+                    .expect("Index discriminator underflow when subtracting 2"),
+            )),
+        }
+    }
 }
 
 /// Internal structure for key prefixing to separate different scopes and subtables.
@@ -58,6 +95,28 @@ pub(crate) fn wrap<R: DatabaseEntry>(
         key: item_key.clone(),
     };
     encode_to_vec(wrapped, config)
+}
+
+pub(crate) fn empty_wrap<R: DatabaseEntry>(
+    config: Configuration,
+) -> Result<(Vec<u8>, Vec<u8>), SerializationError> {
+    let start = Wrap {
+        prelude: WrapPrelude {
+            scope: R::SCOPE,
+            subtable: Subtable::Main,
+        },
+        key: (),
+    };
+
+    let end = Wrap {
+        prelude: WrapPrelude {
+            scope: R::SCOPE,
+            subtable: Subtable::Reserved,
+        },
+        key: (),
+    };
+
+    Ok((encode_to_vec(start, config)?, encode_to_vec(end, config)?))
 }
 
 /// Encodes a database entry record to bytes for storage.

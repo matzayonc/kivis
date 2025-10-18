@@ -18,9 +18,9 @@ pub trait DeriveKey {
 }
 
 /// A trait describing how a key can be auto-incremented, defined for numeric types.
-pub trait Incrementable: Sized {
+pub trait Incrementable: Default + Sized {
     /// The first and last valid values of the type.
-    const BOUNDS: (Self, Self);
+    // const BOUNDS: (Self, Self);
     /// Returns the next value of the type, if applicable.
     fn next_id(&self) -> Option<Self>;
 }

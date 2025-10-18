@@ -4,38 +4,42 @@ use serde::de::DeserializeOwned;
 
 use crate::errors::DatabaseError;
 use crate::traits::{DatabaseEntry, Index, Storage};
-use crate::wrap::{decode_value, encode_value, wrap, Subtable, Wrap, WrapPrelude};
-use crate::{DeriveKey, Incrementable, KeyBytes, Manifests, Manifestt, RecordKey};
-use std::marker::PhantomData;
+use crate::transaction::DatabaseTransaction;
+use crate::wrap::{decode_value, empty_wrap, wrap, Subtable, Wrap, WrapPrelude};
+use crate::{DeriveKey, Incrementable, Manifest, Manifests, RecordKey};
 use std::ops::Range;
 
 type DatabaseIteratorItem<R, S> =
     Result<<R as DatabaseEntry>::Key, DatabaseError<<S as Storage>::StoreError>>;
 
 /// The `kivis` database type. All interactions with the database are done through this type.
-pub struct Database<S: Storage, M: Manifestt> {
-    store: S,
+pub struct Database<S: Storage, M: Manifest> {
+    pub(crate) store: S,
     fallback: Option<Box<dyn Storage<StoreError = S::StoreError>>>,
-    manifest: PhantomData<M>,
+    pub(crate) manifest: M,
     serialization_config: Configuration,
 }
 
-impl<S: Default + Storage, M: Manifestt> Default for Database<S, M> {
+impl<S: Default + Storage, M: Manifest> Default for Database<S, M> {
     fn default() -> Self {
         Self::new(S::default())
     }
 }
 
-impl<S: Storage, M: Manifestt> Database<S, M> {
+impl<S: Storage, M: Manifest> Database<S, M> {
     /// Creates a new [`Database`] instance over any storage backend.
     /// One of the key features of `kivis` is that it can work with any storage backend that implements the [`Storage`] trait.
     pub fn new(store: S) -> Self {
-        Database {
+        let mut db = Database {
             store,
             fallback: None,
-            manifest: PhantomData,
+            manifest: M::default(),
             serialization_config: Configuration::default(),
-        }
+        };
+        let mut manifest = M::default();
+        manifest.load(&mut db).unwrap();
+        db.manifest = manifest;
+        db
     }
 
     pub fn with_serialization_config(&mut self, config: Configuration) {
@@ -61,20 +65,10 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
         R::Key: RecordKey<Record = R> + Incrementable + Ord,
         M: Manifests<R>,
     {
-        let original_key = self
-            .last_id::<R::Key>(R::Key::BOUNDS)?
-            .next_id()
-            .ok_or(DatabaseError::FailedToIncrement)?;
-
-        let key = wrap::<R>(&original_key, self.serialization_config)
-            .map_err(DatabaseError::Serialization)?;
-
-        self.add_index_entries(&record, &original_key)?;
-
-        let value = encode_value(&record, self.serialization_config)
-            .map_err(DatabaseError::Serialization)?;
-        self.store.insert(key, value).map_err(DatabaseError::Io)?;
-        Ok(original_key)
+        let mut transaction = DatabaseTransaction::new(self);
+        let inserted_key = transaction.put(record, self)?;
+        self.commit(transaction)?;
+        Ok(inserted_key)
     }
 
     /// Inserts a record with a derived key into the database, together with all related index entries.
@@ -90,51 +84,37 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
         R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
         M: Manifests<R>,
     {
-        let original_key = R::key(&record);
-        let key = wrap::<R>(&original_key, self.serialization_config)
-            .map_err(DatabaseError::Serialization)?;
-
-        self.add_index_entries(&record, &original_key)?;
-
-        let value = encode_value(&record, self.serialization_config)
-            .map_err(DatabaseError::Serialization)?;
-        if let Some(fallback) = &mut self.fallback {
-            fallback
-                .insert(key.clone(), value.clone())
-                .map_err(DatabaseError::Io)?;
-        }
-        self.store.insert(key, value).map_err(DatabaseError::Io)?;
-        Ok(original_key)
+        let mut transaction = DatabaseTransaction::new(self);
+        let inserted_key = transaction.insert::<K, R>(record)?;
+        self.commit(transaction)?;
+        Ok(inserted_key)
     }
 
-    fn add_index_entries<R: DatabaseEntry>(
+    pub fn create_transaction(&self) -> DatabaseTransaction<M> {
+        DatabaseTransaction::new(self)
+    }
+
+    pub fn commit(
         &mut self,
-        record: &R,
-        key: &R::Key,
-    ) -> Result<(), DatabaseError<<S as Storage>::StoreError>>
-    where
-        R::Key: RecordKey<Record = R>,
-        M: Manifests<R>,
-    {
-        for (discriminator, index_key) in record.index_keys() {
-            let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator))
-                .to_bytes(self.serialization_config);
-            entry.extend_from_slice(&index_key.to_bytes(self.serialization_config));
-
-            // Indexes might be repeated, so we need to ensure that the key is unique.
-            // TODO: Add a way to declare as unique and deduplicate by provided hash.
-            let key_bytes = key.to_bytes(self.serialization_config);
-            entry.extend_from_slice(&key_bytes);
-
+        transaction: DatabaseTransaction<M>,
+    ) -> Result<(), DatabaseError<S::StoreError>> {
+        let (writes, deletes) = transaction.consume();
+        for (key, value) in writes {
             if let Some(fallback) = &mut self.fallback {
                 fallback
-                    .insert(entry.clone(), key_bytes.clone())
+                    .insert(key.clone(), value.clone())
                     .map_err(DatabaseError::Io)?;
             }
-            self.store
-                .insert(entry, key_bytes)
-                .map_err(DatabaseError::Io)?;
+            self.store.insert(key, value).map_err(DatabaseError::Io)?;
         }
+
+        for key in deletes {
+            if let Some(fallback) = &mut self.fallback {
+                fallback.remove(key.clone()).map_err(DatabaseError::Io)?;
+            }
+            self.store.remove(key).map_err(DatabaseError::Io)?;
+        }
+
         Ok(())
     }
 
@@ -249,6 +229,51 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
         )
     }
 
+    pub fn iter_all_keys<K: RecordKey + Ord>(
+        &self,
+    ) -> Result<
+        impl Iterator<Item = DatabaseIteratorItem<K::Record, S>> + use<'_, K, S, M>,
+        DatabaseError<S::StoreError>,
+    >
+    where
+        K::Record: DatabaseEntry<Key = K>,
+        M: Manifests<K::Record>,
+    {
+        let (start, end) = empty_wrap::<K::Record>(self.serialization_config)
+            .map_err(DatabaseError::Serialization)?;
+        let raw_iter = self
+            .store
+            .iter_keys(start..end)
+            .map_err(DatabaseError::Io)?;
+
+        Ok(
+            raw_iter.map(|elem: Result<Vec<u8>, <S as Storage>::StoreError>| {
+                let value = match elem {
+                    Ok(value) => value,
+                    Err(e) => return Err(DatabaseError::Io(e)),
+                };
+
+                let deserialized: Wrap<K> =
+                    match decode_from_slice(&value, self.serialization_config) {
+                        Ok((deserialized, _)) => deserialized,
+                        Err(e) => return Err(DatabaseError::Deserialization(e)),
+                    };
+
+                Ok(deserialized.key)
+            }),
+        )
+    }
+
+    pub fn last_id<K: RecordKey + Ord + Default>(&self) -> Result<K, DatabaseError<S::StoreError>>
+    where
+        K::Record: DatabaseEntry<Key = K>,
+        M: Manifests<K::Record>,
+    {
+        let mut first = self.iter_all_keys::<K>()?;
+
+        Ok(first.next().transpose()?.unwrap_or_default())
+    }
+
     /// Iterates over all index entries in the database within the specified range and returns their primary keys.
     ///
     /// The range is inclusive of the start and exclusive of the end.
@@ -279,20 +304,9 @@ impl<S: Storage, M: Manifestt> Database<S, M> {
         self.store
     }
 
-    /// Helper function to get the last ID in a given range, used for autoincrementing keys.
-    fn last_id<K: RecordKey + Ord>(&self, bounds: (K, K)) -> Result<K, DatabaseError<S::StoreError>>
-    where
-        K::Record: DatabaseEntry<Key = K>,
-        M: Manifests<K::Record>,
-    {
-        let (start, end) = bounds;
-        let range = if start < end {
-            start.clone()..end
-        } else {
-            end..start.clone()
-        };
-        let mut first = self.iter_keys::<K>(range)?;
-        Ok(first.next().transpose()?.unwrap_or(start))
+    /// Returns the current [`Configuration`] used by the database.
+    pub fn serialization_config(&self) -> Configuration {
+        self.serialization_config
     }
 
     /// Helper function to process iterator results and get deserialized values
