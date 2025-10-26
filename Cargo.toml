@@ -1,5 +1,5 @@
 [workspace]
-members = ["kivis", "kivis-derive"]
+members = ["fs-store", "kivis", "kivis-derive"]
 resolver = "2"
 
 [workspace.dependencies]
@@ -8,4 +8,4 @@ kivis-derive = { path = "kivis-derive" }
 
 serde = { version = "1.0.219", features = ["derive"] }
 bincode = { version = "2.0.1", features = ["serde"] }
-
+hex = "0.4.3"

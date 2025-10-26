@@ -115,7 +115,7 @@ macro_rules! manifest {
 
     // Multiple items case with manifest name - generate implementations with incrementing indices
     ($manifest_name:ident: $($ty:ty),+ $(,)?) => {
-        paste::paste! {
+        $crate::paste! {
             #[derive(Default)]
             pub struct $manifest_name {
                 $(
@@ -132,7 +132,7 @@ macro_rules! manifest {
             }
 
             fn load<S: $crate::Storage>(&mut self, db: &mut $crate::Database<S, Self>) -> Result<(), $crate::DatabaseError<S::StoreError>> {
-                paste::paste! {
+                $crate::paste! {
                     $(
                         self.[<last_ $ty:snake>] = Some(db.last_id()?);
                     )*
@@ -190,7 +190,7 @@ macro_rules! scope_impl_with_index {
         }
         impl $crate::Manifests<$ty> for $manifest_name {
             fn last(&mut self) -> &mut Option<<$ty as $crate::DatabaseEntry>::Key> {
-                paste::paste! {
+                $crate::paste! {
                     &mut self.[<last_ $ty:snake>]
                 }
             }
@@ -205,7 +205,7 @@ macro_rules! scope_impl_with_index {
         }
         impl $crate::Manifests<$ty> for $manifest_name {
             fn last(&mut self) -> &mut Option<<$ty as $crate::DatabaseEntry>::Key> {
-                paste::paste! {
+                $crate::paste! {
                     &mut self.[<last_ $ty:snake>]
                 }
             }
