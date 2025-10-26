@@ -1,0 +1,9 @@
+[package]
+name = "fs-store"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+kivis = { workspace = true }
+serde = { workspace = true }
+hex = { workspace = true }
