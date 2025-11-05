@@ -1,6 +1,6 @@
 [package]
 name = "kivis"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 description = "Type-safe database schema generation for Rust with support for custom storage backends, automatic indexing, and layered cache architectures"
 license = "MIT"
@@ -17,7 +17,7 @@ default = ["atomic"]
 atomic = []
 
 [dependencies]
-kivis-derive = { version = "0.1.0", path = "../kivis-derive" }
+kivis-derive = { version = "0.2.0", path = "../kivis-derive" }
 serde = { workspace = true }
 bincode = { workspace = true }
 paste = "1.0"
