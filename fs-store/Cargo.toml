@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-kivis = { workspace = true }
+kivis = { version = "0.2.0" }
 serde = { workspace = true }
 hex = { workspace = true }

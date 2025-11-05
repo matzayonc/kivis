@@ -63,12 +63,28 @@ pub trait Scope {
 /// # Example
 ///
 /// ```rust
-/// use kivis::{manifest, Scope};
+/// use kivis::{manifest, Scope, Record};
+/// use serde::{Serialize, Deserialize};
 ///
-/// struct User;
-/// struct Post;
-/// struct Comment;
-/// struct Tag;
+/// #[derive(Record, Debug, Serialize, Deserialize)]
+/// struct User {
+///     id: u64,
+/// }
+///
+/// #[derive(Record, Debug, Serialize, Deserialize)]
+/// struct Post {
+///     id: u64,
+/// }
+///
+/// #[derive(Record, Debug, Serialize, Deserialize)]
+/// struct Comment {
+///     id: u64,
+/// }
+///
+/// #[derive(Record, Debug, Serialize, Deserialize)]
+/// struct Tag {
+///     id: u64,
+/// }
 ///
 /// manifest![MyDatabase: User, Post, Comment, Tag];
 ///
@@ -103,7 +119,7 @@ pub trait Scope {
 ///
 /// // This will fail to compile with the same error:
 /// // "manifest! macro requires a manifest name followed by a colon. Use: manifest![ManifestName: Type1, Type2, ...]"
-/// manifest![User];
+/// manifest![M: User];
 /// ```
 #[macro_export]
 macro_rules! manifest {
