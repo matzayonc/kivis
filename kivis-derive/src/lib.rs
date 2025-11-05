@@ -11,7 +11,7 @@ use syn::{parse_macro_input, DeriveInput};
 mod generator;
 mod schema;
 
-use crate::generator::generate_record_impl;
+use crate::generator::Generator;
 use crate::schema::Schema;
 
 // Global registry to track table IDs across compilation
@@ -75,5 +75,5 @@ pub fn derive_record(input: TokenStream) -> TokenStream {
     }
 
     // Generate the implementation
-    generate_record_impl(&schema, visibility)
+    Generator::new(schema).generate_record_impl(visibility)
 }
