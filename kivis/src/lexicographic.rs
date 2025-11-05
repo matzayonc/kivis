@@ -2,12 +2,24 @@ use std::ops::{Deref, DerefMut};
 
 use serde::{de::Visitor, ser::SerializeTuple, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LexicographicString(String);
 
 impl LexicographicString {
     pub fn new(s: String) -> Self {
         LexicographicString(s)
+    }
+}
+
+impl PartialEq<str> for LexicographicString {
+    fn eq(&self, other: &str) -> bool {
+        self.0 == other
+    }
+}
+
+impl PartialEq<&str> for LexicographicString {
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == *other
     }
 }
 
