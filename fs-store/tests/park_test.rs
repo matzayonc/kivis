@@ -1,5 +1,5 @@
 use fs_store::FileStore;
-use kivis::{Database, DatabaseError, Record, manifest};
+use kivis::{Database, DatabaseError, LexicographicString, Record, manifest};
 
 /// A user record with an indexed name field
 #[derive(
@@ -7,7 +7,7 @@ use kivis::{Database, DatabaseError, Record, manifest};
 )]
 pub struct User {
     #[index]
-    name: String,
+    name: LexicographicString,
     email: String,
 }
 
@@ -40,12 +40,12 @@ fn test_flow() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
 
     // Users can be added to the file store
     let alice = User {
-        name: "Alice".to_string(),
+        name: "Alice".into(),
         email: "alice@example.com".to_string(),
     };
     let bob = User {
-        name: "Bob".to_string(),
-        email: "bob@example.com".to_string(),
+        name: "Bob".into(),
+        email: "bob@example.com".into(),
     };
 
     let alice_key = store.put(alice.clone())?;
@@ -53,12 +53,12 @@ fn test_flow() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
 
     // Pets can reference users as owners
     let fluffy = Pet {
-        name: "Fluffy".to_string(),
+        name: "Fluffy".into(),
         owner: alice_key.clone(),
         cat: true,
     };
     let rover = Pet {
-        name: "Rover".to_string(),
+        name: "Rover".into(),
         owner: bob_key.clone(),
         cat: false,
     };
@@ -76,7 +76,7 @@ fn test_flow() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
 
     // Query by indexed fields
     let users_named_alice = store
-        .iter_by_index(UserNameIndex("Alice".into())..UserNameIndex("Alicf".into()))?
+        .iter_by_index(UserNameIndex("Alice".into())..UserNameIndex("Bob".into()))?
         .collect::<Result<Vec<_>, _>>()?;
     assert_eq!(users_named_alice, vec![alice_key.clone()]);
 

@@ -40,3 +40,18 @@ The `Storage` trait's simplicity enables sophisticated layered cache architectur
 Each layer can implement the `Storage` trait and delegate to the next tier when data is not found locally, creating a transparent cache hierarchy that automatically optimizes data access patterns while maintaining the same simple API surface.
 
 By leveraging Rust's powerful type system and procedural macros, Kivis provides a highly efficient, type-safe, and developer-friendly approach to defining and managing database schemas. It streamlines the process of working with structured data in key-value stores, making it an ideal choice for applications requiring robust data modeling with minimal overhead.
+
+
+## Related work
+
+1. 🔑 Key Serialization preserving order (rel. `bytekey`, `storekey`)
+
+    Kivis uses its custom `LexicographicString` for order preservation, a specialized, self-contained solution that contrasts with the general-purpose library approach of bytekey/storekey for all data types.
+
+2. 🧱 High-Level Modeling (rel. `netabase_store`, `native_model`)
+
+    Kivis is philosophically aligned with netabase_store (backend-agnostic, attribute-driven keys) but uses a unique API centered on zero-cost Key Wrappers and a `Storage` trait for its layered architecture.
+
+3. 🛡️ Data Safety and Integrity (rel. `rkv`, `struct_db`)
+
+    Kivis provides compile-time referential integrity via its type-safe Foreign Key Wrappers, a powerful feature for relationship validation in the non-relational K/V ecosystem that goes beyond the runtime checks of rkv and struct_db.
