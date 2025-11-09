@@ -8,7 +8,7 @@ version = "0.2.2"
 
 [workspace.dependencies]
 kivis = { path = "kivis" }
-kivis-derive = { path = "kivis-derive" }
+kivis-derive = { path = "kivis-derive", version = "0.2.2" }
 
 serde = { version = "1.0.228", features = ["derive"] }
 bincode = { version = "2.0.1", features = ["serde"] }
