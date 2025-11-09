@@ -7,12 +7,21 @@ pub struct SchemaKey {
     pub ty: Type,
 }
 
+#[derive(Clone)]
+pub enum KeyStrategy {
+    /// Autoincrement key (no explicit keys, no derived_key attribute)
+    Autoincrement,
+    /// Explicit field keys (fields marked with #[key])
+    FieldKeys(Vec<SchemaKey>),
+    /// Derived keys (struct has #[derived_key(...)] attribute)
+    Derived(Vec<Type>),
+}
+
 pub struct Schema {
     pub name: Ident,
     pub generics: syn::Generics,
     pub attrs: Vec<syn::Attribute>,
-    pub table_value: Option<u8>,
-    pub keys: Vec<SchemaKey>,
+    pub key_strategy: KeyStrategy,
     pub indexes: Vec<SchemaKey>,
 }
 
@@ -23,38 +32,9 @@ impl Schema {
         let attrs = input
             .attrs
             .iter()
-            .filter(|a| !a.path().is_ident("external"))
+            .filter(|a| !a.path().is_ident("derived_key"))
             .cloned()
             .collect::<Vec<_>>();
-
-        // Look for the table attribute to get the record type
-        let table_value = if let Some(table_value) = input
-            .attrs
-            .iter()
-            .find(|attr| attr.path().is_ident("external"))
-        {
-            let Some(table_value) = table_value.parse_args::<syn::LitInt>().ok() else {
-                return Err(Error::new_spanned(
-                    &name,
-                    "Invalid #[external(value)] attribute. Expected an integer literal.",
-                )
-                .to_compile_error()
-                .into());
-            };
-
-            let Ok(table_value) = table_value.base10_parse::<u8>() else {
-                return Err(Error::new_spanned(
-                &name,
-                "Invalid #[external(value)] attribute could not be parsed. Expected an integer literal.",
-            )
-            .to_compile_error()
-            .into());
-            };
-
-            Some(table_value)
-        } else {
-            None
-        };
 
         // Ensure it's a struct
         let fields = match input.data {
@@ -117,6 +97,36 @@ impl Schema {
             }
         }
 
+        // Look for the derived_key attribute
+        let derived_key_types = input
+            .attrs
+            .iter()
+            .find(|attr| attr.path().is_ident("derived_key"))
+            .map(|attr| {
+                // Parse #[derived_key(Type1, Type2, ...)]
+                attr.parse_args_with(
+                    syn::punctuated::Punctuated::<Type, syn::Token![,]>::parse_terminated,
+                )
+                .map(|types| types.into_iter().collect::<Vec<_>>())
+                .unwrap_or_default()
+            })
+            .unwrap_or_default();
+
+        // Determine key strategy and validate that only one is used
+        let key_strategy = match (key_fields.is_empty(), derived_key_types.is_empty()) {
+            (true, true) => KeyStrategy::Autoincrement,
+            (false, true) => KeyStrategy::FieldKeys(key_fields),
+            (true, false) => KeyStrategy::Derived(derived_key_types),
+            (false, false) => {
+                return Err(Error::new_spanned(
+                    &name,
+                    "Cannot use both #[key] field attributes and #[derived_key] attribute on the same struct. Choose one key strategy.",
+                )
+                .to_compile_error()
+                .into());
+            }
+        };
+
         let index_fields = named_fields
             .iter()
             .filter_map(|field| {
@@ -135,8 +145,7 @@ impl Schema {
             name,
             generics,
             attrs,
-            table_value,
-            keys: key_fields,
+            key_strategy,
             indexes: index_fields,
         })
     }

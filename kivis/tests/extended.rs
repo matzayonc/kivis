@@ -1,10 +1,9 @@
 use kivis::{manifest, Database, DeriveKey, MemoryStorage, Record};
 use serde::{Deserialize, Serialize};
 
-// Test 1: Default behavior (first field as key) - existing test
+// Test 1: Default behavior (auto-incrementing key, not part of the struct) - existing test
 #[derive(Record, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 struct UserRecord {
-    id: u64,
     data: Vec<u8>,
 }
 
@@ -33,7 +32,6 @@ manifest![Manifest: UserRecord, OrderRecord, ProductRecord];
 #[test]
 fn test_default_key() {
     let user = UserRecord {
-        id: 1,
         data: vec![1, 2, 3, 4],
     };
 

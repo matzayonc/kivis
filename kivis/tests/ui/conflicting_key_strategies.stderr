@@ -1,0 +1,5 @@
+error: Cannot use both #[key] field attributes and #[derived_key] attribute on the same struct. Choose one key strategy.
+ --> tests/ui/conflicting_key_strategies.rs:7:8
+  |
+7 | struct ConflictingStrategies {
+  |        ^^^^^^^^^^^^^^^^^^^^^

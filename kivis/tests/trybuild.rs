@@ -1,2 +1,5 @@
-// This file is no longer needed since we've moved to doctests
-// The compilation error tests are now documented in the manifest macro's docstring
+#[test]
+fn ui() {
+    let t = trybuild::TestCases::new();
+    t.compile_fail("tests/ui/*.rs");
+}

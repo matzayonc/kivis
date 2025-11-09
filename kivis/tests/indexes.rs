@@ -32,6 +32,7 @@ fn test_user_record() {
 
     let retrieved: User = store.get(&user_key).unwrap().unwrap();
     assert_eq!(retrieved, user);
+    assert_eq!(user_key, UserKey(1));
 }
 
 #[test]

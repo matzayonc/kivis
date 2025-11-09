@@ -2,7 +2,7 @@ use convert_case::{Case, Casing};
 use proc_macro::TokenStream;
 use quote::quote;
 
-use crate::schema::{Schema, SchemaKey};
+use crate::schema::{KeyStrategy, Schema, SchemaKey};
 
 pub struct Generator(Schema);
 
@@ -30,15 +30,26 @@ impl Generator {
 
         TokenStream::from(key_impl)
     }
-
     fn generate_keys(&self) -> Vec<SchemaKey> {
-        if self.0.keys.is_empty() {
-            vec![SchemaKey {
-                name: syn::Ident::new("id", self.0.name.span()),
-                ty: syn::parse_quote!(u64),
-            }]
-        } else {
-            self.0.keys.clone()
+        match &self.0.key_strategy {
+            KeyStrategy::Autoincrement => {
+                vec![SchemaKey {
+                    name: syn::Ident::new("id", self.0.name.span()),
+                    ty: syn::parse_quote!(u64),
+                }]
+            }
+            KeyStrategy::FieldKeys(keys) => keys.clone(),
+            KeyStrategy::Derived(types) => {
+                // Create multiple SchemaKey entries for derived keys
+                types
+                    .iter()
+                    .enumerate()
+                    .map(|(i, ty)| SchemaKey {
+                        name: syn::Ident::new(&format!("derived_{}", i), self.0.name.span()),
+                        ty: ty.clone(),
+                    })
+                    .collect()
+            }
         }
     }
 
@@ -49,13 +60,12 @@ impl Generator {
         visibility: &syn::Visibility,
     ) -> proc_macro2::TokenStream {
         let other_attrs = &self.0.attrs;
-        let only_id_type = self.0.keys.is_empty();
 
         // Generate key type and implementation based on number of key fields
         let field_types: Vec<_> = keys.iter().map(|k| &k.ty).collect();
         let field_names: Vec<_> = keys.iter().map(|k| &k.name).collect();
 
-        let key_trait = self.generate_key_trait_impl(only_id_type, key_type, &field_names);
+        let key_trait = self.generate_key_trait_impl(key_type, &field_names);
 
         quote! {
             #(#other_attrs)*
@@ -68,30 +78,39 @@ impl Generator {
 
     fn generate_key_trait_impl(
         &self,
-        only_id_type: bool,
         key_type: &syn::Ident,
         field_names: &[&syn::Ident],
     ) -> proc_macro2::TokenStream {
         let name = &self.0.name;
         let (impl_generics, ty_generics, where_clause) = self.0.generics.split_for_impl();
 
-        if only_id_type {
-            quote! {
-                impl kivis::Incrementable for #key_type {
-                    // const BOUNDS: (Self, Self) = (#key_type(0), #key_type(u64::MAX));
-                    fn next_id(&self) -> Option<Self> {
-                        self.0.checked_add(1).map(|id| #key_type(id))
+        match &self.0.key_strategy {
+            KeyStrategy::Autoincrement => {
+                // Generate Incrementable for autoincrement keys
+                quote! {
+                    impl kivis::Incrementable for #key_type {
+                        // const BOUNDS: (Self, Self) = (#key_type(0), #key_type(u64::MAX));
+                        fn next_id(&self) -> Option<Self> {
+                            self.0.checked_add(1).map(|id| #key_type(id))
+                        }
                     }
                 }
             }
-        } else {
-            quote! {
-                impl #impl_generics kivis::DeriveKey for #name #ty_generics #where_clause {
-                    type Key = #key_type;
-                    fn key(c: &<Self::Key as kivis::RecordKey>::Record) -> Self::Key {
-                        #key_type(#(c.#field_names.clone()),*)
+            KeyStrategy::FieldKeys(_) => {
+                // Generate DeriveKey for field-based keys
+                quote! {
+                    impl #impl_generics kivis::DeriveKey for #name #ty_generics #where_clause {
+                        type Key = #key_type;
+                        fn key(c: &<Self::Key as kivis::RecordKey>::Record) -> Self::Key {
+                            #key_type(#(c.#field_names.clone()),*)
+                        }
                     }
                 }
+            }
+            KeyStrategy::Derived(_) => {
+                // Don't generate any trait implementation for derived keys
+                // The user must implement DeriveKey manually
+                quote! {}
             }
         }
     }

@@ -42,6 +42,15 @@ Each layer can implement the `Storage` trait and delegate to the next tier when 
 By leveraging Rust's powerful type system and procedural macros, Kivis provides a highly efficient, type-safe, and developer-friendly approach to defining and managing database schemas. It streamlines the process of working with structured data in key-value stores, making it an ideal choice for applications requiring robust data modeling with minimal overhead.
 
 
+## Key insights
+
+Type-Safe Key-Table Association: Kivis enforces compile-time referential integrity by using zero-cost key wrapper types (e.g., UserKey) to statically embed the target table correlation, preventing runtime errors associated with using the wrong key type for a record.
+
+Backend-Agnostic Storage: The separation of schema definition from the storage mechanism is achieved via a simple Storage trait, enabling Kivis to operate on any ordered key-value store and naturally support complex, layered cache architectures.
+
+Schema-as-Struct: Database schemas are declaratively defined directly from Rust structs using procedural macro attributes (#[key], #[index], etc.), which automatically generates all necessary data structures for persistence and querying, drastically reducing boilerplate and ensuring data model consistency.
+
+
 ## Related work
 
 1. 🔑 Key Serialization preserving order (rel. `bytekey`, `storekey`)
