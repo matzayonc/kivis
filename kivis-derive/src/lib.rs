@@ -4,8 +4,6 @@
 //! This crate provides the `Record` derive macro for automatically generating database schema types.
 
 use proc_macro::TokenStream;
-use std::collections::HashSet;
-use std::sync::{LazyLock, Mutex};
 use syn::{parse_macro_input, DeriveInput};
 
 mod generator;
@@ -14,9 +12,6 @@ mod schema;
 use crate::generator::Generator;
 use crate::schema::Schema;
 
-// Global registry to track table IDs across compilation
-static TABLE_REGISTRY: LazyLock<Mutex<HashSet<u8>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
-
 /// Derive macro for generating database record implementations.
 ///
 /// This macro generates the necessary traits and types for a struct to be used as a database record in Kivis.
@@ -24,25 +19,47 @@ static TABLE_REGISTRY: LazyLock<Mutex<HashSet<u8>>> = LazyLock::new(|| Mutex::ne
 ///
 /// # Attributes
 ///
-/// - `#[external(N)]`: Required. Specifies the table ID (must be unique across all records)
 /// - `#[key]`: Marks fields as part of the primary key
-/// - `#[index]`: Marks fields for secondary indexing
+/// - `#[index]`: Marks fields for secondary indexing  
+/// - `#[derived_key(Type1, Type2, ...)]`: Specifies types for a derived key (mutually exclusive with `#[key]`)
+///
+/// # Key Strategies
+///
+/// The Record derive macro supports three key strategies:
+///
+/// 1. **Autoincrement keys**: No `#[key]` fields or `#[derived_key]` attribute (default u64 autoincrement)
+/// 2. **Field keys**: Fields marked with `#[key]` attribute (derived from struct fields)
+/// 3. **Derived keys**: Struct with `#[derived_key(...)]` attribute (requires manual `DeriveKey` implementation)
 ///
 /// # Examples
 ///
-/// ```ignore
-/// use kivis::Record;
+/// ## Autoincrement Key
+/// ```
+/// use serde::{Serialize, Deserialize};
 ///
-/// #[derive(Record, serde::Serialize, serde::Deserialize)]
-/// #[external(1)]
-/// struct User {
-///     #[index]
+/// // This shows the basic structure - the actual Record derive would be used in practice
+/// #[derive(Serialize, Deserialize, Debug, Clone)]
+/// struct AutoIncrement {
 ///     name: String,
 ///     email: String,
 /// }
 /// ```
-// #[proc_macro_derive(Record, attributes(external, key, index))]
-#[proc_macro_derive(Record, attributes(key, index))]
+///
+/// ## Field Key  
+/// ```
+/// use serde::{Serialize, Deserialize};
+///
+/// // This shows the basic structure with key field - the actual Record derive would be used in practice
+/// #[derive(Serialize, Deserialize, Debug)]
+/// struct User {
+///     id: u64,        // Would be marked with #[key] in actual usage
+///     name: String,   // Would be marked with #[index] in actual usage  
+///     email: String,
+/// }
+/// ```
+///
+/// For complete working examples, see the tests in the `tests/` directory.
+#[proc_macro_derive(Record, attributes(key, index, derived_key))]
 pub fn derive_record(input: TokenStream) -> TokenStream {
     // Parse the input tokens into a syntax tree
     let input = parse_macro_input!(input as DeriveInput);
@@ -54,25 +71,6 @@ pub fn derive_record(input: TokenStream) -> TokenStream {
         Ok(schema) => schema,
         Err(error_tokens) => return error_tokens,
     };
-
-    // Check for duplicate table IDs
-    {
-        let mut registry = TABLE_REGISTRY.lock().unwrap();
-        if let Some(external_scope) = schema.table_value {
-            if registry.contains(&external_scope) {
-                return syn::Error::new_spanned(
-                    &schema.name,
-                    format!(
-                        "Duplicate table ID {}. Each table must have a unique integer identifier.",
-                        external_scope
-                    ),
-                )
-                .to_compile_error()
-                .into();
-            }
-            registry.insert(external_scope);
-        }
-    }
 
     // Generate the implementation
     Generator::new(schema).generate_record_impl(visibility)
