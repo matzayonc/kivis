@@ -280,7 +280,7 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     /// The index must implement the [`Index`] trait.
     /// The returned iterator yields items of type `Result<Index::Record, DatabaseError<S::StoreError>>`.
     pub fn iter_by_index<I: Index + Ord>(
-        &mut self,
+        &self,
         range: Range<I>,
     ) -> Result<
         impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S, M>,
@@ -305,7 +305,7 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     /// The index must implement the [`Index`] trait.
     /// The returned iterator yields items of type `Result<Index::Record, DatabaseError<S::StoreError>>`.
     pub fn iter_by_index_exact<I: Index + Ord>(
-        &mut self,
+        &self,
         index_key: &I,
     ) -> Result<
         impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S, M>,
