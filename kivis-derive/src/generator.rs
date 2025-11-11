@@ -88,9 +88,9 @@ impl Generator {
             KeyStrategy::Autoincrement => {
                 // Generate Incrementable for autoincrement keys
                 quote! {
-                    impl kivis::Incrementable for #key_type {
+                    impl ::kivis::Incrementable for #key_type {
                         // const BOUNDS: (Self, Self) = (#key_type(0), #key_type(u64::MAX));
-                        fn next_id(&self) -> Option<Self> {
+                        fn next_id(&self) -> ::std::option::Option<Self> {
                             self.0.checked_add(1).map(|id| #key_type(id))
                         }
                     }
@@ -99,9 +99,9 @@ impl Generator {
             KeyStrategy::FieldKeys(_) => {
                 // Generate DeriveKey for field-based keys
                 quote! {
-                    impl #impl_generics kivis::DeriveKey for #name #ty_generics #where_clause {
+                    impl #impl_generics ::kivis::DeriveKey for #name #ty_generics #where_clause {
                         type Key = #key_type;
-                        fn key(c: &<Self::Key as kivis::RecordKey>::Record) -> Self::Key {
+                        fn key(c: &<Self::Key as ::kivis::RecordKey>::Record) -> Self::Key {
                             #key_type(#(c.#field_names.clone()),*)
                         }
                     }
@@ -134,7 +134,7 @@ impl Generator {
                 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
                 #visibility struct #index_name(pub #index_type);
 
-                impl kivis::Index for #index_name {
+                impl ::kivis::Index for #index_name {
                     type Key = #key_type;
                     type Record = #name;
                     const INDEX: u8 = #i as u8;
@@ -159,15 +159,15 @@ impl Generator {
         let (impl_generics, ty_generics, where_clause) = self.0.generics.split_for_impl();
 
         quote! {
-            impl #impl_generics kivis::RecordKey for #key_type #ty_generics #where_clause {
+            impl #impl_generics ::kivis::RecordKey for #key_type #ty_generics #where_clause {
                 type Record = #name;
             }
 
-            impl #impl_generics kivis::DatabaseEntry for #name #ty_generics #where_clause {
+            impl #impl_generics ::kivis::DatabaseEntry for #name #ty_generics #where_clause {
                 type Key = #key_type;
 
-                fn index_keys(&self) -> Vec<(u8, &dyn kivis::KeyBytes)> {
-                    vec![#(#index_values,)*]
+                fn index_keys(&self) -> ::std::vec::Vec<(u8, &dyn ::kivis::KeyBytes)> {
+                    ::std::vec![#(#index_values,)*]
                 }
             }
         }
