@@ -140,3 +140,36 @@ fn test_iter_index() {
         .unwrap();
     assert_eq!(retrieved, UserKey(1));
 }
+
+#[test]
+fn test_iter_index_exact() {
+    let mut store = Database::<MemoryStorage, Manifest>::default();
+
+    let names = [
+        "Al", "Al", // The target name
+        "Ak", "Am", // Previous and next names
+        "Ala", "A",     // Shorter and longer names
+        "Alice", // Alice for tradition
+    ];
+    for name in names {
+        store
+            .put(User {
+                name: name.to_string(),
+                email: format!("{}@example.com", name.to_lowercase()),
+            })
+            .expect("Put should succeed.");
+    }
+
+    let als = store
+        .iter_by_index_exact(&UserNameIndex("Al".into()))
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+
+    assert_eq!(als.len(), 2);
+    let al_1 = store.get(&als[0]).unwrap().unwrap();
+    let al_2 = store.get(&als[1]).unwrap().unwrap();
+
+    assert_eq!(al_1.name, "Al");
+    assert_eq!(al_2.name, "Al");
+}

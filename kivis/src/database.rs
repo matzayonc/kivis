@@ -299,6 +299,39 @@ impl<S: Storage, M: Manifest> Database<S, M> {
         Ok(raw_iter.map(|elem| self.process_iter_result(elem)))
     }
 
+    /// Iterates over all index entries in the database that exactly match the given index key and returns their primary keys.
+    ///
+    /// This function outputs multiple results since multiple records can share the same index key.
+    /// The index must implement the [`Index`] trait.
+    /// The returned iterator yields items of type `Result<Index::Record, DatabaseError<S::StoreError>>`.
+    pub fn iter_by_index_exact<I: Index + Ord>(
+        &mut self,
+        index_key: &I,
+    ) -> Result<
+        impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S, M>,
+        DatabaseError<S::StoreError>,
+    > {
+        let index_prelude = WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX));
+        let mut start = index_prelude.to_bytes(self.serialization_config);
+        let mut end = index_prelude.to_bytes(self.serialization_config);
+
+        let start_bytes = index_key.to_bytes(self.serialization_config);
+        let end_bytes = {
+            let mut end_bytes = start_bytes.clone();
+            bytes_next(&mut end_bytes);
+            end_bytes
+        };
+        start.extend(start_bytes);
+        end.extend(end_bytes);
+
+        let raw_iter = self
+            .store
+            .iter_keys(start..end)
+            .map_err(DatabaseError::Io)?;
+
+        Ok(raw_iter.map(|elem| self.process_iter_result(elem)))
+    }
+
     /// Consumes the database and returns the underlying storage.
     pub fn dissolve(self) -> S {
         self.store
@@ -329,4 +362,20 @@ impl<S: Storage, M: Manifest> Database<S, M> {
             .map_err(DatabaseError::Deserialization)
             .map(|(v, _)| v)
     }
+}
+
+fn bytes_next(bytes: &mut Vec<u8>) {
+    for i in (0..bytes.len()).rev() {
+        // Add one if possible
+        if bytes[i] < 255 {
+            bytes[i] += 1;
+            return;
+        } else {
+            // Otherwise, set to zero and carry over
+            bytes[i] = 0;
+        }
+    }
+
+    // If all bytes were 255, we need to add a new byte
+    bytes.push(0);
 }
