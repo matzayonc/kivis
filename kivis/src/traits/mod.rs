@@ -135,7 +135,7 @@ macro_rules! manifest {
             #[derive(Default)]
             pub struct $manifest_name {
                 $(
-                    [<last_ $ty:snake>]: Option<<$ty as $crate::DatabaseEntry>::Key>,
+                    [<last_ $ty:snake>]: ::std::option::Option<<$ty as $crate::DatabaseEntry>::Key>,
                 )*
             }
         }
@@ -143,17 +143,17 @@ macro_rules! manifest {
         $crate::scope_impl_with_index!($manifest_name, 0; $($ty),+);
 
         impl $crate::Manifest for $manifest_name {
-            fn members() -> Vec<u8> {
+            fn members() -> ::std::vec::Vec<u8> {
                 $crate::generate_member_scopes!(0; $($ty),+)
             }
 
-            fn load<S: $crate::Storage>(&mut self, db: &mut $crate::Database<S, Self>) -> Result<(), $crate::DatabaseError<S::StoreError>> {
+            fn load<S: $crate::Storage>(&mut self, db: &mut $crate::Database<S, Self>) -> ::std::result::Result<(), $crate::DatabaseError<S::StoreError>> {
                 $crate::paste! {
                     $(
-                        self.[<last_ $ty:snake>] = Some(db.last_id()?);
+                        self.[<last_ $ty:snake>] = ::std::option::Option::Some(db.last_id()?);
                     )*
                 }
-                Ok(())
+                ::std::result::Result::Ok(())
             }
         }
     };
@@ -174,18 +174,18 @@ macro_rules! manifest {
 macro_rules! generate_member_scopes {
     // Base case: no more types
     ($index:expr;) => {
-        vec![]
+        ::std::vec::Vec::new()
     };
 
     // Single type remaining
     ($index:expr; $ty:ty) => {
-        vec![$index]
+        ::std::vec![$index]
     };
 
     // Multiple types remaining - add current index and recurse
     ($index:expr; $ty:ty, $($rest:ty),+) => {
         {
-            let mut scopes = vec![$index];
+            let mut scopes = ::std::vec![$index];
             scopes.extend($crate::generate_member_scopes!($index + 1; $($rest),+));
             scopes
         }
@@ -205,7 +205,7 @@ macro_rules! scope_impl_with_index {
             type Manifest = $manifest_name;
         }
         impl $crate::Manifests<$ty> for $manifest_name {
-            fn last(&mut self) -> &mut Option<<$ty as $crate::DatabaseEntry>::Key> {
+            fn last(&mut self) -> &mut ::std::option::Option<<$ty as $crate::DatabaseEntry>::Key> {
                 $crate::paste! {
                     &mut self.[<last_ $ty:snake>]
                 }
@@ -220,7 +220,7 @@ macro_rules! scope_impl_with_index {
             type Manifest = $manifest_name;
         }
         impl $crate::Manifests<$ty> for $manifest_name {
-            fn last(&mut self) -> &mut Option<<$ty as $crate::DatabaseEntry>::Key> {
+            fn last(&mut self) -> &mut ::std::option::Option<<$ty as $crate::DatabaseEntry>::Key> {
                 $crate::paste! {
                     &mut self.[<last_ $ty:snake>]
                 }
