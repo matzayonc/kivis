@@ -2,7 +2,7 @@ use convert_case::{Case, Casing};
 use proc_macro::TokenStream;
 use quote::quote;
 
-use crate::schema::{KeyStrategy, Schema, SchemaKey};
+use crate::schema::{FieldIdentifier, KeyStrategy, Schema, SchemaKey};
 
 pub struct Generator(Schema);
 
@@ -34,7 +34,7 @@ impl Generator {
         match &self.0.key_strategy {
             KeyStrategy::Autoincrement => {
                 vec![SchemaKey {
-                    name: syn::Ident::new("id", self.0.name.span()),
+                    field_id: FieldIdentifier::Indexed(0),
                     ty: syn::parse_quote!(u64),
                 }]
             }
@@ -45,7 +45,7 @@ impl Generator {
                     .iter()
                     .enumerate()
                     .map(|(i, ty)| SchemaKey {
-                        name: syn::Ident::new(&format!("derived_{}", i), self.0.name.span()),
+                        field_id: FieldIdentifier::Indexed(i),
                         ty: ty.clone(),
                     })
                     .collect()
@@ -63,9 +63,8 @@ impl Generator {
 
         // Generate key type and implementation based on number of key fields
         let field_types: Vec<_> = keys.iter().map(|k| &k.ty).collect();
-        let field_names: Vec<_> = keys.iter().map(|k| &k.name).collect();
 
-        let key_trait = self.generate_key_trait_impl(key_type, &field_names);
+        let key_trait = self.generate_key_trait_impl(key_type, keys);
 
         quote! {
             #(#other_attrs)*
@@ -79,7 +78,7 @@ impl Generator {
     fn generate_key_trait_impl(
         &self,
         key_type: &syn::Ident,
-        field_names: &[&syn::Ident],
+        keys: &[SchemaKey],
     ) -> proc_macro2::TokenStream {
         let name = &self.0.name;
         let (impl_generics, ty_generics, where_clause) = self.0.generics.split_for_impl();
@@ -98,11 +97,23 @@ impl Generator {
             }
             KeyStrategy::FieldKeys(_) => {
                 // Generate DeriveKey for field-based keys
+                // Generate field access based on field identifier type
+                let field_accesses: Vec<proc_macro2::TokenStream> = keys
+                    .iter()
+                    .map(|key| match &key.field_id {
+                        FieldIdentifier::Named(name) => quote! { c.#name.clone() },
+                        FieldIdentifier::Indexed(idx) => {
+                            let index = syn::Index::from(*idx);
+                            quote! { c.#index.clone() }
+                        }
+                    })
+                    .collect();
+                
                 quote! {
                     impl #impl_generics ::kivis::DeriveKey for #name #ty_generics #where_clause {
                         type Key = #key_type;
                         fn key(c: &<Self::Key as ::kivis::RecordKey>::Record) -> Self::Key {
-                            #key_type(#(c.#field_names.clone()),*)
+                            #key_type(#(#field_accesses),*)
                         }
                     }
                 }
@@ -125,11 +136,14 @@ impl Generator {
         let mut index_values = Vec::new();
 
         for (i, index) in self.0.indexes.iter().enumerate() {
-            let field_name = &index.name;
-            let field_type_pascal = field_name.to_string().to_case(Case::Pascal);
-            let index_name =
-                syn::Ident::new(&format!("{name}{field_type_pascal}Index"), name.span());
+            // Generate a name for the index type based on field identifier
+            let index_type_suffix = match &index.field_id {
+                FieldIdentifier::Named(field_name) => field_name.to_string().to_case(Case::Pascal),
+                FieldIdentifier::Indexed(idx) => format!("Field{}", idx),
+            };
+            let index_name = syn::Ident::new(&format!("{name}{index_type_suffix}Index"), name.span());
             let index_type = &index.ty;
+            
             let current_index_impl = quote! {
                 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
                 #visibility struct #index_name(pub #index_type);
@@ -142,8 +156,19 @@ impl Generator {
             };
             index_impl.extend(current_index_impl);
 
+            // Generate field access based on field identifier type
+            let field_access = match &index.field_id {
+                FieldIdentifier::Named(field_name) => {
+                    quote! { &self.#field_name }
+                }
+                FieldIdentifier::Indexed(idx) => {
+                    let index = syn::Index::from(*idx);
+                    quote! { &self.#index }
+                }
+            };
+
             index_values.push(quote! {
-                (#i as u8, &self.#field_name)
+                (#i as u8, #field_access)
             });
         }
 
