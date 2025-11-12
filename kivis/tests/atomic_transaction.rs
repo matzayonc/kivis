@@ -5,10 +5,15 @@ mod tests {
 
     use serde::{Deserialize, Serialize};
 
-    use kivis::{manifest, AtomicStorage, DatabaseTransaction, Record, Storage};
+    use kivis::{
+        manifest, AtomicStorage, Database, DatabaseError, DatabaseTransaction, Record, Storage,
+    };
 
-    #[derive(Debug, Record, Serialize, Deserialize)]
-    pub struct MockRecord(u64);
+    type TestResult =
+        std::result::Result<(), DatabaseError<<MockAtomicStorage as Storage>::StoreError>>;
+
+    #[derive(Debug, Record, PartialEq, Eq, Serialize, Deserialize)]
+    pub struct MockRecord(#[key] u8, char);
 
     manifest![Manifest: MockRecord];
 
@@ -75,117 +80,124 @@ mod tests {
     }
 
     #[test]
-    fn test_transaction_new() {
+    fn test_transaction_new() -> TestResult {
         let tx = DatabaseTransaction::<Manifest>::new_with_serialization_config(Default::default());
         assert!(tx.is_empty());
         assert_eq!(tx.write_count(), 0);
         assert_eq!(tx.delete_count(), 0);
+        Ok(())
     }
 
     #[test]
-    fn test_transaction_write() {
-        let mut tx =
-            DatabaseTransaction::<Manifest>::new_with_serialization_config(Default::default());
+    fn test_transaction_write() -> TestResult {
+        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new());
+        let mut tx = db.create_transaction();
 
-        tx.write(b"key1".to_vec(), b"value1".to_vec());
-        tx.write(b"key2".to_vec(), b"value2".to_vec());
+        tx.insert(MockRecord(1, 'a'))?;
+        tx.insert(MockRecord(2, 'b'))?;
 
         assert!(!tx.is_empty());
         assert_eq!(tx.write_count(), 2);
         assert_eq!(tx.delete_count(), 0);
+
+        Ok(())
     }
 
     #[test]
-    fn test_transaction_delete() {
-        let mut tx =
-            DatabaseTransaction::<Manifest>::new_with_serialization_config(Default::default());
+    fn test_transaction_delete() -> TestResult {
+        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new());
+        let mut tx = db.create_transaction();
 
-        tx.delete(b"key1".to_vec());
-        tx.delete(b"key2".to_vec());
+        tx.remove(&MockRecordKey(1), &MockRecord(1, 'a'))?;
+        tx.remove(&MockRecordKey(2), &MockRecord(2, 'b'))?;
 
         assert!(!tx.is_empty());
         assert_eq!(tx.write_count(), 0);
         assert_eq!(tx.delete_count(), 2);
+
+        Ok(())
     }
 
     #[test]
-    fn test_transaction_write_overrides_delete() {
-        let mut tx =
-            DatabaseTransaction::<Manifest>::new_with_serialization_config(Default::default());
+    fn test_transaction_write_overrides_delete() -> TestResult {
+        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new());
+        let mut tx = db.create_transaction();
 
         // Delete first, then write
-        tx.delete(b"key1".to_vec());
-        tx.write(b"key1".to_vec(), b"value1".to_vec());
+        tx.remove(&MockRecordKey(1), &MockRecord(1, 'a'))?;
+        tx.insert(MockRecord(1, 'a'))?;
 
         // Write should override delete
         assert_eq!(tx.write_count(), 1);
         assert_eq!(tx.delete_count(), 0);
+
+        Ok(())
     }
 
     #[test]
-    fn test_transaction_delete_ignored_after_write() {
-        let mut tx =
-            DatabaseTransaction::<Manifest>::new_with_serialization_config(Default::default());
+    fn test_transaction_delete_ignored_after_write() -> TestResult {
+        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new());
+        let mut tx = db.create_transaction();
 
         // Write first, then delete
-        tx.write(b"key1".to_vec(), b"value1".to_vec());
-        tx.delete(b"key1".to_vec());
+        tx.insert(MockRecord(1, 'a'))?;
+        tx.remove(&MockRecordKey(1), &MockRecord(1, 'a'))?;
 
         // Delete should be ignored since key is being written
         assert_eq!(tx.write_count(), 1);
         assert_eq!(tx.delete_count(), 0);
+        Ok(())
     }
 
     #[test]
-    fn test_transaction_multiple_writes_same_key() {
-        let mut tx =
-            DatabaseTransaction::<Manifest>::new_with_serialization_config(Default::default());
+    fn test_transaction_multiple_writes_same_key() -> TestResult {
+        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new());
+        let mut tx = db.create_transaction();
 
-        tx.write(b"key1".to_vec(), b"value1".to_vec());
-        tx.write(b"key1".to_vec(), b"value2".to_vec());
-        tx.write(b"key1".to_vec(), b"value3".to_vec());
+        tx.insert(MockRecord(1, 'a'))?;
+        tx.insert(MockRecord(1, 'b'))?;
+        tx.insert(MockRecord(1, 'c'))?;
 
         // Should only have one write (last value)
         assert_eq!(tx.write_count(), 1);
 
         let writes: Vec<_> = tx.pending_writes().collect();
         assert_eq!(writes.len(), 1);
-        assert_eq!(writes[0].1, b"value3".to_vec());
+
+        let mut tx_only_c = db.create_transaction();
+        tx_only_c.insert(MockRecord(1, 'c'))?;
+
+        assert_eq!(writes[0].1, tx_only_c.pending_writes().next().unwrap().1);
+        Ok(())
     }
 
     #[test]
-    fn test_transaction_commit() {
-        let mut storage = MockAtomicStorage::new();
-        let mut tx =
-            DatabaseTransaction::<Manifest>::new_with_serialization_config(Default::default());
+    fn test_transaction_commit() -> TestResult {
+        let mut db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new());
+        let mut tx = db.create_transaction();
 
         // Add some operations
-        tx.write(b"key1".to_vec(), b"value1".to_vec());
-        tx.write(b"key2".to_vec(), b"value2".to_vec());
-        tx.delete(b"key3".to_vec());
+        tx.insert(MockRecord(1, 'a'))?;
+        tx.insert(MockRecord(2, 'b'))?;
+        tx.remove(&MockRecordKey(1), &MockRecord(1, 'a'))?;
 
         // Commit the transaction
-        let result = tx.commit(&mut storage);
+        let result = db.commit(tx);
         assert!(result.is_ok());
 
         // Verify the writes were applied
-        assert_eq!(
-            storage.get(b"key1".to_vec()).unwrap(),
-            Some(b"value1".to_vec())
-        );
-        assert_eq!(
-            storage.get(b"key2".to_vec()).unwrap(),
-            Some(b"value2".to_vec())
-        );
+        assert_eq!(db.get(&MockRecordKey(1))?, Some(MockRecord(1, 'a')));
+        assert_eq!(db.get(&MockRecordKey(2))?, Some(MockRecord(2, 'b')));
+        Ok(())
     }
 
     #[test]
-    fn test_transaction_rollback() {
-        let mut tx =
-            DatabaseTransaction::<Manifest>::new_with_serialization_config(Default::default());
+    fn test_transaction_rollback() -> TestResult {
+        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new());
+        let mut tx = db.create_transaction();
 
-        tx.write(b"key1".to_vec(), b"value1".to_vec());
-        tx.delete(b"key2".to_vec());
+        tx.insert(MockRecord(1, 'a'))?;
+        tx.remove(&MockRecordKey(2), &MockRecord(2, 'b'))?;
 
         assert!(!tx.is_empty());
 
@@ -194,15 +206,17 @@ mod tests {
 
         // No way to verify rollback directly since transaction is consumed,
         // but this tests that rollback doesn't panic
+        Ok(())
     }
 
     #[test]
-    fn test_empty_transaction_commit() {
+    fn test_empty_transaction_commit() -> TestResult {
         let mut storage = MockAtomicStorage::new();
         let tx = DatabaseTransaction::<Manifest>::new_with_serialization_config(Default::default());
 
         // Empty transaction should succeed and return empty vector
         let result = tx.commit(&mut storage).unwrap();
         assert!(result.is_empty());
+        Ok(())
     }
 }
