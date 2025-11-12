@@ -82,6 +82,20 @@ impl<M: Manifest> DatabaseTransaction<M> {
         Ok(new_key)
     }
 
+    pub fn remove<S: Storage, R: DatabaseEntry>(
+        &mut self,
+        key: &R::Key,
+        record: &R,
+    ) -> Result<(), DatabaseError<S::StoreError>>
+    where
+        R::Key: RecordKey<Record = R>,
+        M: Manifests<R>,
+    {
+        let deletes = self.prepare_deletes::<R>(record, key)?;
+        self.pending_deletes.extend(deletes);
+        Ok(())
+    }
+
     /// Adds a write operation to the transaction.
     ///
     /// If the same key is written multiple times, only the last value is kept.
@@ -200,5 +214,32 @@ impl<M: Manifest> DatabaseTransaction<M> {
         writes.push((key, value));
 
         Ok(writes)
+    }
+
+    fn prepare_deletes<R: DatabaseEntry>(
+        &self,
+        record: &R,
+        key: &R::Key,
+    ) -> Result<Vec<Vec<u8>>, SerializationError>
+    where
+        R::Key: RecordKey<Record = R>,
+    {
+        let index_keys = record.index_keys();
+        let mut deletes = Vec::with_capacity(1 + index_keys.len());
+
+        for (discriminator, index_key) in record.index_keys() {
+            let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator))
+                .to_bytes(self.serialization_config());
+            entry.extend_from_slice(&index_key.to_bytes(self.serialization_config()));
+            let key_bytes = key.to_bytes(self.serialization_config());
+            entry.extend_from_slice(&key_bytes);
+
+            deletes.push(entry.clone());
+        }
+
+        let key = wrap::<R>(key, self.serialization_config())?;
+        deletes.push(key);
+
+        Ok(deletes)
     }
 }

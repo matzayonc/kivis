@@ -157,34 +157,22 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     /// The record must implement the [`DatabaseEntry`] trait, with the key type implementing the [`RecordKey`] trait pointing back to it.
     /// If the record is not found, `None` is returned.
     /// The record's index entries are also removed.
-    // TODO: Remove the index entries.
-    pub fn remove<K: RecordKey>(
+    pub fn remove<K: RecordKey<Record = R>, R>(
         &mut self,
         key: &K,
-    ) -> Result<Option<K::Record>, DatabaseError<S::StoreError>>
+    ) -> Result<(), DatabaseError<<S as Storage>::StoreError>>
     where
-        K::Record: DatabaseEntry<Key = K>,
-        M: Manifests<K::Record>,
+        R: DatabaseEntry<Key = K>,
+        R::Key: RecordKey<Record = R>,
+        M: Manifests<R> + Manifests<K::Record>,
     {
-        let key = wrap::<K::Record>(key, self.serialization_config)
-            .map_err(DatabaseError::Serialization)?;
-
-        let value = if let Some(fallback) = &mut self.fallback {
-            let fallback_value = fallback.remove(key.clone()).map_err(DatabaseError::Io)?;
-            self.store.remove(key).map_err(DatabaseError::Io)?;
-            fallback_value
-        } else {
-            self.store.remove(key).map_err(DatabaseError::Io)?
+        let Some(record) = self.get(key)? else {
+            return Ok(());
         };
-
-        Ok(if let Some(ref value) = value {
-            Some(
-                decode_value(value, self.serialization_config)
-                    .map_err(DatabaseError::Deserialization)?,
-            )
-        } else {
-            None
-        })
+        let mut transaction = DatabaseTransaction::new(self);
+        transaction.remove::<S, R>(key, &record)?;
+        self.commit(transaction)?;
+        Ok(())
     }
 
     /// Iterates over all keys in the database within the specified range.
