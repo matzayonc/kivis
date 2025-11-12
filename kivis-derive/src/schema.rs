@@ -2,8 +2,14 @@ use proc_macro::TokenStream;
 use syn::{Data, DeriveInput, Error, Fields, Ident, Type};
 
 #[derive(Clone)]
+pub enum FieldIdentifier {
+    Named(Ident),
+    Indexed(usize),
+}
+
+#[derive(Clone)]
 pub struct SchemaKey {
-    pub name: Ident,
+    pub field_id: FieldIdentifier,
     pub ty: Type,
 }
 
@@ -49,17 +55,10 @@ impl Schema {
             }
         };
 
-        // Get named fields
-        let named_fields = match fields {
-            Fields::Named(fields) => &fields.named,
-            Fields::Unnamed(_) => {
-                return Err(Error::new_spanned(
-                    &name,
-                    "kivis::Record doesn't support tuple structs, use named fields",
-                )
-                .to_compile_error()
-                .into());
-            }
+        // Handle both named and unnamed (tuple) fields
+        let field_list = match fields {
+            Fields::Named(fields) => fields.named.iter().collect::<Vec<_>>(),
+            Fields::Unnamed(fields) => fields.unnamed.iter().collect::<Vec<_>>(),
             Fields::Unit => {
                 return Err(Error::new_spanned(
                     &name,
@@ -70,7 +69,7 @@ impl Schema {
             }
         };
 
-        if named_fields.is_empty() {
+        if field_list.is_empty() {
             return Err(Error::new_spanned(
                 &name,
                 "Struct must have at least one field to derive kivis::Record",
@@ -81,19 +80,18 @@ impl Schema {
 
         // Find fields marked with #[key] attribute
         let mut key_fields = Vec::new();
-        for field in named_fields {
+        for (index, field) in field_list.iter().enumerate() {
             let has_key_attr = field.attrs.iter().any(|attr| attr.path().is_ident("key"));
             if has_key_attr {
-                if let Some(ident) = &field.ident {
-                    key_fields.push(SchemaKey {
-                        name: ident.clone(),
-                        ty: field.ty.clone(),
-                    });
+                let field_id = if let Some(ident) = &field.ident {
+                    FieldIdentifier::Named(ident.clone())
                 } else {
-                    return Err(Error::new_spanned(&name, "Key field must have a name")
-                        .to_compile_error()
-                        .into());
-                }
+                    FieldIdentifier::Indexed(index)
+                };
+                key_fields.push(SchemaKey {
+                    field_id,
+                    ty: field.ty.clone(),
+                });
             }
         }
 
@@ -127,12 +125,18 @@ impl Schema {
             }
         };
 
-        let index_fields = named_fields
+        let index_fields = field_list
             .iter()
-            .filter_map(|field| {
+            .enumerate()
+            .filter_map(|(index, field)| {
                 if field.attrs.iter().any(|attr| attr.path().is_ident("index")) {
-                    field.ident.as_ref().map(|ident| SchemaKey {
-                        name: ident.clone(),
+                    let field_id = if let Some(ident) = &field.ident {
+                        FieldIdentifier::Named(ident.clone())
+                    } else {
+                        FieldIdentifier::Indexed(index)
+                    };
+                    Some(SchemaKey {
+                        field_id,
                         ty: field.ty.clone(),
                     })
                 } else {

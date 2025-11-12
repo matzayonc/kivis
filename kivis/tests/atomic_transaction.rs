@@ -8,9 +8,7 @@ mod tests {
     use kivis::{manifest, AtomicStorage, DatabaseTransaction, Record, Storage};
 
     #[derive(Debug, Record, Serialize, Deserialize)]
-    pub struct MockRecord {
-        _id: u64,
-    }
+    pub struct MockRecord(u64);
 
     manifest![Manifest: MockRecord];
 
