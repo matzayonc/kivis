@@ -170,7 +170,7 @@ impl<S: Storage, M: Manifest> Database<S, M> {
             return Ok(());
         };
         let mut transaction = DatabaseTransaction::new(self);
-        transaction.remove::<S, R>(key, &record)?;
+        transaction.remove(key, &record)?;
         self.commit(transaction)?;
         Ok(())
     }

@@ -108,7 +108,7 @@ impl Generator {
                         }
                     })
                     .collect();
-                
+
                 quote! {
                     impl #impl_generics ::kivis::DeriveKey for #name #ty_generics #where_clause {
                         type Key = #key_type;
@@ -141,9 +141,10 @@ impl Generator {
                 FieldIdentifier::Named(field_name) => field_name.to_string().to_case(Case::Pascal),
                 FieldIdentifier::Indexed(idx) => format!("Field{}", idx),
             };
-            let index_name = syn::Ident::new(&format!("{name}{index_type_suffix}Index"), name.span());
+            let index_name =
+                syn::Ident::new(&format!("{name}{index_type_suffix}Index"), name.span());
             let index_type = &index.ty;
-            
+
             let current_index_impl = quote! {
                 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
                 #visibility struct #index_name(pub #index_type);

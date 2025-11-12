@@ -54,7 +54,9 @@ impl<M: Manifest> DatabaseTransaction<M> {
     {
         let original_key = R::key(&record);
         let writes = self.prepare_writes::<R>(&record, &original_key)?;
-        self.pending_writes.extend(writes);
+        for (k, v) in writes {
+            self.write(k, v);
+        }
         Ok(original_key)
     }
 
@@ -77,22 +79,26 @@ impl<M: Manifest> DatabaseTransaction<M> {
             .unwrap_or_default();
 
         let writes = self.prepare_writes::<R>(&record, &new_key)?;
-        self.pending_writes.extend(writes);
+        for (k, v) in writes {
+            self.write(k, v);
+        }
         last_key.replace(new_key.clone());
         Ok(new_key)
     }
 
-    pub fn remove<S: Storage, R: DatabaseEntry>(
+    pub fn remove<R: DatabaseEntry>(
         &mut self,
         key: &R::Key,
         record: &R,
-    ) -> Result<(), DatabaseError<S::StoreError>>
+    ) -> Result<(), SerializationError>
     where
         R::Key: RecordKey<Record = R>,
         M: Manifests<R>,
     {
         let deletes = self.prepare_deletes::<R>(record, key)?;
-        self.pending_deletes.extend(deletes);
+        for d in deletes {
+            self.delete(d);
+        }
         Ok(())
     }
 
@@ -100,7 +106,7 @@ impl<M: Manifest> DatabaseTransaction<M> {
     ///
     /// If the same key is written multiple times, only the last value is kept.
     /// If a key is both written and deleted, the write takes precedence.
-    pub fn write(&mut self, key: Vec<u8>, value: Vec<u8>) {
+    fn write(&mut self, key: Vec<u8>, value: Vec<u8>) {
         self.pending_writes.retain(|(k, _)| k != &key);
         self.pending_deletes.retain(|k| k != &key);
         // Remove from deletes if it was there
@@ -111,7 +117,7 @@ impl<M: Manifest> DatabaseTransaction<M> {
     ///
     /// If a key is both written and deleted, the write takes precedence
     /// (so this delete will be ignored if the key was already written).
-    pub fn delete(&mut self, key: Vec<u8>) {
+    fn delete(&mut self, key: Vec<u8>) {
         // Only add to deletes if it's not already being written
         if !self.pending_writes.iter().any(|(k, _)| k == &key) {
             self.pending_deletes.push(key);

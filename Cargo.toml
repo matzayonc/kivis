@@ -4,11 +4,11 @@ exclude = ["fs-store"]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.5"
+version = "0.3.0"
 
 [workspace.dependencies]
 kivis = { path = "kivis" }
-kivis-derive = { path = "kivis-derive", version = "0.2.2" }
+kivis-derive = { path = "kivis-derive", version = "0.3.0" }
 
 serde = { version = "1.0.228", features = ["derive"] }
 bincode = { version = "2.0.1", features = ["serde"] }
