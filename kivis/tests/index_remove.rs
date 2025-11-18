@@ -29,7 +29,7 @@ fn test_index_after_remove() {
     ];
     for name in names {
         store
-            .put(Pet {
+            .put(&Pet {
                 name: LexicographicString::from(name),
                 color: Color::Brown,
             })

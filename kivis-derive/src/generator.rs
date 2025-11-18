@@ -11,7 +11,7 @@ impl Generator {
         Self(schema)
     }
 
-    pub fn generate_record_impl(&self, visibility: syn::Visibility) -> TokenStream {
+    pub fn generate_record_impl(&self, visibility: &syn::Visibility) -> TokenStream {
         let name = &self.0.name;
         let key_type = syn::Ident::new(&format!("{name}Key"), name.span());
 
@@ -19,10 +19,10 @@ impl Generator {
         let keys = self.generate_keys();
 
         // Generate key implementation
-        let mut key_impl = self.generate_key_impl(&key_type, &keys, &visibility);
+        let mut key_impl = self.generate_key_impl(&key_type, &keys, visibility);
 
         // Generate index implementations
-        let (index_impl, index_values) = self.generate_index_impls(&key_type, &visibility);
+        let (index_impl, index_values) = self.generate_index_impls(&key_type, visibility);
         key_impl.extend(index_impl);
 
         let trait_impls = self.generate_main_impl(&key_type, &index_values);
@@ -139,7 +139,7 @@ impl Generator {
             // Generate a name for the index type based on field identifier
             let index_type_suffix = match &index.field_id {
                 FieldIdentifier::Named(field_name) => field_name.to_string().to_case(Case::Pascal),
-                FieldIdentifier::Indexed(idx) => format!("Field{}", idx),
+                FieldIdentifier::Indexed(idx) => format!("Field{idx}"),
             };
             let index_name =
                 syn::Ident::new(&format!("{name}{index_type_suffix}Index"), name.span());

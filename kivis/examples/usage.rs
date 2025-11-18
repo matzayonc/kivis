@@ -54,8 +54,8 @@ fn main() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
         name: "Bob".to_string(),
         email: "bob@example.com".to_string(),
     };
-    let alice_key = store.put(alice)?;
-    let bob_key = store.put(bob)?;
+    let alice_key = store.put(&alice)?;
+    let bob_key = store.put(&bob)?;
 
     let toy = Toy {
         kind: ToyKind::Ball,
@@ -66,8 +66,8 @@ fn main() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
         owner: alice_key,
         favourite_toy: Toy::key(&toy),
     };
-    store.put(alex)?;
-    store.insert(toy)?;
+    store.put(&alex)?;
+    store.insert(&toy)?;
 
     // Records can be retrieved by indexed name
     let users_named_bob = store

@@ -20,7 +20,7 @@ fn test_layered_cache_architecture() {
     };
 
     let mut fallback_database = Database::<_, Manifest>::new(fallback_storage.clone());
-    let key = fallback_database.put(record.clone()).unwrap();
+    let key = fallback_database.put(&record).unwrap();
     let fallback_storage = fallback_database.dissolve();
 
     let mut database = Database::<_, Manifest>::new(MemoryStorage::new());

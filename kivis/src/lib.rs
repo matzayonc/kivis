@@ -31,12 +31,13 @@
 //!     name: "Alice".to_string(),
 //!     email: "alice@example.com".to_string(),
 //! };
-//! let user_key = db.put(user)?;
+//! let user_key = db.put(&user)?;
 //! # Ok(())
 //! # }
 //! ```
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![warn(clippy::pedantic)]
 
 // Always link to the `alloc` crate and re-export it so generated code inside macros
 // can reference `::kivis::alloc::vec::Vec` and not depend on the consumer to import alloc.

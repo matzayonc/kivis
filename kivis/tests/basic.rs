@@ -16,7 +16,7 @@ fn test_lifecycle() {
         data: vec![1, 2, 3, 4],
     };
 
-    let user_key = store.put(user.clone()).unwrap();
+    let user_key = store.put(&user).unwrap();
     assert_eq!(store.get(&user_key).unwrap(), Some(user.clone()));
     store.remove(&user_key).unwrap();
     assert_eq!(store.get(&user_key).unwrap(), None);
@@ -33,8 +33,8 @@ fn test_iter() {
         data: vec![5, 6, 7, 8],
     };
 
-    let user_key = store.put(user.clone()).unwrap();
-    let another_key = store.put(another.clone()).unwrap();
+    let user_key = store.put(&user).unwrap();
+    let another_key = store.put(&another).unwrap();
 
     assert_ne!(user_key, another_key);
 

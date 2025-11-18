@@ -10,6 +10,8 @@ use serde::{de::Visitor, ser::SerializeTuple, Serialize};
 pub struct LexicographicString(String);
 
 impl LexicographicString {
+    /// Creates a new `LexicographicString` from a `String`.
+    #[must_use]
     pub fn new(s: String) -> Self {
         LexicographicString(s)
     }
@@ -138,7 +140,7 @@ mod tests {
     fn test_serialization_as_expected() {
         let lex_str = LexicographicString::from("A");
         let serialized = bincode::serde::encode_to_vec(&lex_str, CONFIG).unwrap();
-        assert_eq!(serialized, vec![65, 0]); // ASCII 'A' + null terminator
+        assert_eq!(serialized, [65u8, 0u8].to_vec()); // ASCII 'A' + null terminator
     }
 
     #[test]
