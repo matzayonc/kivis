@@ -1,4 +1,4 @@
-use super::*;
+use super::Storage;
 
 /// A trait defining atomic operations for storage backends.
 ///
@@ -20,8 +20,12 @@ pub trait AtomicStorage: Storage {
     /// * `removes` - A vector of keys to remove
     ///
     /// # Returns
-    /// `Ok(Vec<Option<Vec<u8>>>)` with the previous values (if any) for removed keys,
+    ///
+    /// Returns `Ok(Vec<Option<Vec<u8>>>)` with the previous values (if any) for removed keys,
     /// or an error if any operation fails. In case of error, no changes should be persisted.
+    ///
+    /// # Errors
+    /// Returns an error if any of the insert or remove operations fail.
     fn batch_mixed(
         &mut self,
         inserts: Vec<(Vec<u8>, Vec<u8>)>,

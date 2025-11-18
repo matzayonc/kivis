@@ -157,7 +157,7 @@ fn test_user_record() {
         email: "alice@example.com".to_string(),
     };
 
-    database.insert(user.clone()).unwrap();
+    database.insert(&user).unwrap();
 
     let retrieved: User = database.get(&UserKey(user.id)).unwrap().unwrap();
     assert_eq!(retrieved, user);
@@ -173,7 +173,7 @@ fn test_pet_record() {
         owner: UserKey(1),
     };
 
-    let pet_key = database.put(pet.clone()).unwrap();
+    let pet_key = database.put(&pet).unwrap();
 
     let retrieved: Pet = database.get(&pet_key).unwrap().unwrap();
     assert_eq!(retrieved, pet);
@@ -194,8 +194,8 @@ fn test_get_owner_of_pet() {
         owner: UserKey(user.id),
     };
 
-    user.id = database.insert(user.clone()).unwrap().0;
-    let pet_key = database.put(pet.clone()).unwrap();
+    user.id = database.insert(&user).unwrap().0;
+    let pet_key = database.put(&pet).unwrap();
 
     let retrieved: Pet = database.get(&pet_key).unwrap().unwrap();
     assert_eq!(retrieved, pet);
@@ -215,7 +215,7 @@ fn test_index() {
         email: "alice@example.com".to_string(),
     };
 
-    let _user_key = database.insert(user.clone()).unwrap();
+    let _user_key = database.insert(&user).unwrap();
 
     let index_keys = user.index_keys();
     assert_eq!(index_keys.len(), 1);
@@ -241,7 +241,7 @@ fn test_iter() {
         owner: UserKey(1),
     };
 
-    let pet_key = database.put(pet.clone()).unwrap();
+    let pet_key = database.put(&pet).unwrap();
 
     let retrieved = database
         .iter_keys(PetKey(1)..PetKey(u64::MAX))
@@ -264,7 +264,7 @@ fn test_iter_index() {
         email: "alice@example.com".to_string(),
     };
 
-    database.insert(user.clone()).unwrap();
+    database.insert(&user).unwrap();
 
     let retrieved: UserKey = database
         .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))

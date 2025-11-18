@@ -15,11 +15,11 @@ pub struct SchemaKey {
 
 #[derive(Clone)]
 pub enum KeyStrategy {
-    /// Autoincrement key (no explicit keys, no derived_key attribute)
+    /// Autoincrement key (no explicit keys, no `#[derived_key(...)]` attribute)
     Autoincrement,
     /// Explicit field keys (fields marked with #[key])
     FieldKeys(Vec<SchemaKey>),
-    /// Derived keys (struct has #[derived_key(...)] attribute)
+    /// Derived keys (struct has `#[derived_key(...)]` attribute)
     Derived(Vec<Type>),
 }
 
@@ -32,6 +32,7 @@ pub struct Schema {
 }
 
 impl Schema {
+    #[allow(clippy::too_many_lines)]
     pub fn from_derive_input(input: DeriveInput) -> Result<Self, TokenStream> {
         let name = input.ident;
         let generics = input.generics;

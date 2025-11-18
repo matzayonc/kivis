@@ -69,7 +69,7 @@ fn test_hash_key_storage_and_retrieval() {
     let expected_key = ContentRecord::key(&record);
 
     // Store the record using insert() for hash-based keys
-    let stored_key = store.insert(record.clone()).unwrap();
+    let stored_key = store.insert(&record).unwrap();
 
     // The stored key should match our expected hash
     assert_eq!(stored_key, expected_key);
@@ -103,8 +103,8 @@ fn test_hash_key_uniqueness() {
     };
 
     // Store both records using insert() for hash-based keys
-    let key1 = store.insert(record1.clone()).unwrap();
-    let key2 = store.insert(record2.clone()).unwrap();
+    let key1 = store.insert(&record1).unwrap();
+    let key2 = store.insert(&record2).unwrap();
 
     // Keys should be different
     assert_ne!(key1, key2);
@@ -123,7 +123,7 @@ fn test_hash_key_removal() {
         value: 999,
     };
 
-    let key = store.insert(record.clone()).unwrap();
+    let key = store.insert(&record).unwrap();
 
     // Verify record exists
     assert_eq!(store.get(&key).unwrap(), Some(record));

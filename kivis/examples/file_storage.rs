@@ -118,8 +118,8 @@ fn main() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
         email: "bob@example.com".to_string(),
     };
 
-    let alice_key = store.put(alice.clone())?;
-    let bob_key = store.put(bob.clone())?;
+    let alice_key = store.put(&alice)?;
+    let bob_key = store.put(&bob)?;
 
     // Pets can reference users as owners
     let fluffy = Pet {
@@ -133,8 +133,8 @@ fn main() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
         cat: false,
     };
 
-    let fluffy_key = store.put(fluffy.clone())?;
-    let _rover_key = store.put(rover.clone())?;
+    let fluffy_key = store.put(&fluffy)?;
+    let _rover_key = store.put(&rover)?;
 
     // Retrieve records by key
     let retrieved_alice = store.get(&alice_key)?.unwrap();

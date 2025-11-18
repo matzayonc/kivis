@@ -37,7 +37,7 @@ fn test_default_key() {
 
     let mut store: Database<_, Manifest> = Database::new(MemoryStorage::new());
 
-    let user_key = store.put(user.clone()).unwrap();
+    let user_key = store.put(&user).unwrap();
     assert_eq!(user_key, UserRecordKey(1));
 
     assert_eq!(store.get(&user_key).unwrap(), Some(user.clone()));
@@ -68,11 +68,11 @@ fn test_specified_key() {
 
     let mut store: Database<_, Manifest> = Database::new(MemoryStorage::new());
 
-    store.insert(product1.clone()).unwrap();
+    store.insert(&product1).unwrap();
     assert_eq!(store.get(&key1).unwrap(), Some(product1.clone()));
 
     // Insert product2 with same key should overwrite
-    store.insert(product2.clone()).unwrap();
+    store.insert(&product2).unwrap();
     assert_eq!(store.get(&key1).unwrap(), Some(product2));
 }
 
@@ -113,9 +113,9 @@ fn test_composite_key() {
     let mut store: Database<_, Manifest> = Database::new(MemoryStorage::new());
 
     // Insert all orders
-    store.insert(order1.clone()).unwrap();
-    store.insert(order2.clone()).unwrap();
-    store.insert(order3.clone()).unwrap();
+    store.insert(&order1).unwrap();
+    store.insert(&order2).unwrap();
+    store.insert(&order3).unwrap();
 
     // Verify all can be retrieved with their respective keys
     assert_eq!(store.get(&key1).unwrap(), Some(order1));

@@ -38,6 +38,8 @@ impl<M: Manifest> DatabaseTransaction<M> {
         }
     }
 
+    /// Creates a new empty transaction with the specified serialization configuration.
+    #[must_use]
     pub fn new_with_serialization_config(serialization_config: Configuration) -> Self {
         Self {
             pending_writes: Vec::new(),
@@ -47,41 +49,46 @@ impl<M: Manifest> DatabaseTransaction<M> {
         }
     }
 
+    /// # Errors
+    ///
+    /// Returns a [`SerializationError`] if serializing keys or values fails while preparing the writes.
     pub fn insert<K: RecordKey<Record = R>, R>(
         &mut self,
-        record: R,
+        record: &R,
     ) -> Result<K, SerializationError>
     where
         R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
         M: Manifests<R>,
     {
-        let original_key = R::key(&record);
-        let writes = self.prepare_writes::<R>(&record, &original_key)?;
+        let original_key = R::key(record);
+        let writes = self.prepare_writes::<R>(record, &original_key)?;
         for (k, v) in writes {
             self.write(k, v);
         }
         Ok(original_key)
     }
 
+    /// # Errors
+    ///
+    /// Returns a [`DatabaseError`] if writing to the underlying storage fails.
+    ///
     pub fn put<S: Storage, R: DatabaseEntry>(
         &mut self,
-        record: R,
+        record: &R,
         database: &mut Database<S, M>,
     ) -> Result<R::Key, DatabaseError<S::StoreError>>
     where
         R::Key: RecordKey<Record = R> + Incrementable + Ord,
         M: Manifests<R>,
     {
-        // let original_key = TableHeads::last_id::<R::Key, S>(database)?
-        //     .next_id()
-        //     .ok_or(DatabaseError::FailedToIncrement)?;
         let last_key = database.manifest.last();
-        let new_key = last_key
-            .as_ref()
-            .map(|k| k.next_id().unwrap())
-            .unwrap_or_default();
+        let new_key = if let Some(ref k) = last_key {
+            k.next_id().ok_or(DatabaseError::FailedToIncrement)?
+        } else {
+            Default::default()
+        };
 
-        let writes = self.prepare_writes::<R>(&record, &new_key)?;
+        let writes = self.prepare_writes::<R>(record, &new_key)?;
         for (k, v) in writes {
             self.write(k, v);
         }
@@ -89,6 +96,9 @@ impl<M: Manifest> DatabaseTransaction<M> {
         Ok(new_key)
     }
 
+    /// # Errors
+    ///
+    /// Returns a [`SerializationError`] if serializing keys to delete fails.
     pub fn remove<R: DatabaseEntry>(
         &mut self,
         key: &R::Key,
@@ -128,16 +138,19 @@ impl<M: Manifest> DatabaseTransaction<M> {
     }
 
     /// Returns true if the transaction has no pending operations.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.pending_writes.is_empty() && self.pending_deletes.is_empty()
     }
 
     /// Returns the number of pending write operations.
+    #[must_use]
     pub fn write_count(&self) -> usize {
         self.pending_writes.len()
     }
 
     /// Returns the number of pending delete operations.
+    #[must_use]
     pub fn delete_count(&self) -> usize {
         self.pending_deletes.len()
     }
@@ -163,6 +176,9 @@ impl<M: Manifest> DatabaseTransaction<M> {
     ///
     /// This method is only available when the "atomic" feature is enabled.
     #[cfg(feature = "atomic")]
+    /// # Errors
+    ///
+    /// Returns a [`DatabaseError`] if the underlying batch operation fails.
     pub fn commit<S: AtomicStorage>(
         self,
         storage: &mut S,

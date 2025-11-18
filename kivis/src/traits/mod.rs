@@ -43,6 +43,10 @@ pub trait Manifests<T: Scope + DatabaseEntry> {
 
 pub trait Manifest: Default {
     fn members() -> Vec<u8>;
+    /// # Errors
+    ///
+    /// Returns a [`DatabaseError`] if loading manifests requires access to the
+    /// underlying storage and that operation fails.
     fn load<S: Storage>(
         &mut self,
         db: &mut Database<S, Self>,
@@ -200,7 +204,7 @@ macro_rules! generate_member_scopes {
     };
 }
 
-/// Helper macro for scope_impl that tracks the current index and manifest name
+/// Helper macro for `scope_impl` that tracks the current index and manifest name
 #[macro_export]
 macro_rules! scope_impl_with_index {
     // Base case: no more types

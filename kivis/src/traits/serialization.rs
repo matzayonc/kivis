@@ -3,7 +3,7 @@ use bincode::{
     serde::{decode_from_slice, encode_to_vec},
 };
 
-use super::*;
+use super::{DeserializationError, DeserializeOwned, Serialize};
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 

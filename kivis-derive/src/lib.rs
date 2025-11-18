@@ -1,3 +1,4 @@
+#![warn(clippy::pedantic)]
 //! # Kivis Derive Macros
 //!
 //! Procedural macros for the Kivis database schema library.
@@ -73,5 +74,5 @@ pub fn derive_record(input: TokenStream) -> TokenStream {
     };
 
     // Generate the implementation
-    Generator::new(schema).generate_record_impl(visibility)
+    Generator::new(schema).generate_record_impl(&visibility)
 }

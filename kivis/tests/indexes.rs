@@ -28,7 +28,7 @@ fn test_user_record() {
         name: "Alice".to_string(),
         email: "alice@example.com".to_string(),
     };
-    let user_key = store.put(user.clone()).unwrap();
+    let user_key = store.put(&user).unwrap();
 
     let retrieved: User = store.get(&user_key).unwrap().unwrap();
     assert_eq!(retrieved, user);
@@ -44,7 +44,7 @@ fn test_pet_record() {
         owner: UserKey(1),
     };
 
-    let pet_key = store.put(pet.clone()).unwrap();
+    let pet_key = store.put(&pet).unwrap();
 
     let retrieved: Pet = store.get(&pet_key).unwrap().unwrap();
     assert_eq!(retrieved, pet);
@@ -58,12 +58,12 @@ fn test_get_owner_of_pet() {
         name: "Alice".to_string(),
         email: "alice@example.com".to_string(),
     };
-    let user_key = store.put(user.clone()).unwrap();
+    let user_key = store.put(&user).unwrap();
     let pet = Pet {
         name: "Fido".to_string(),
         owner: user_key.clone(),
     };
-    let pet_key = store.put(pet.clone()).unwrap();
+    let pet_key = store.put(&pet).unwrap();
 
     let userr: User = store.get(&user_key).unwrap().unwrap();
     assert_eq!(user, userr);
@@ -84,7 +84,7 @@ fn test_index() {
         email: "alice@example.com".to_string(),
     };
 
-    let user_key = store.put(user.clone()).unwrap();
+    let user_key = store.put(&user).unwrap();
 
     let index_keys = user.index_keys();
     assert_eq!(index_keys.len(), 1);
@@ -109,7 +109,7 @@ fn test_iter() {
         owner: UserKey(1),
     };
 
-    store.put(pet.clone()).unwrap();
+    store.put(&pet).unwrap();
 
     let retrieved = store
         .iter_keys(PetKey(0)..PetKey(u64::MAX))
@@ -130,7 +130,7 @@ fn test_iter_index() {
         email: "alice@example.com".to_string(),
     };
 
-    store.put(user.clone()).unwrap();
+    store.put(&user).unwrap();
 
     let retrieved = store
         .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))
@@ -153,7 +153,7 @@ fn test_iter_index_exact() {
     ];
     for name in names {
         store
-            .put(User {
+            .put(&User {
                 name: name.to_string(),
                 email: format!("{}@example.com", name.to_lowercase()),
             })

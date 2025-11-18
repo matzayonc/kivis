@@ -32,6 +32,9 @@ impl<S: Default + Storage, M: Manifest> Default for Database<S, M> {
 impl<S: Storage, M: Manifest> Database<S, M> {
     /// Creates a new [`Database`] instance over any storage backend.
     /// One of the key features of `kivis` is that it can work with any storage backend that implements the [`Storage`] trait.
+    /// # Panics
+    ///
+    /// Panics if the manifest fails to load during initialization.
     pub fn new(store: S) -> Self {
         let mut db = Database {
             store,
@@ -60,9 +63,12 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     /// The record must implement the [`DatabaseEntry`] trait, with the key type implementing the [`RecordKey`] trait pointing back to it.
     /// The record's key must implement the [`Incrementable`] trait.
     /// For records that do not have an autoincremented key, use [`Self::insert`] instead.
+    /// # Errors
+    ///
+    /// Returns a [`DatabaseError`] if serializing or writing the record fails.
     pub fn put<R: DatabaseEntry>(
         &mut self,
-        record: R,
+        record: &R,
     ) -> Result<R::Key, DatabaseError<<S as Storage>::StoreError>>
     where
         R::Key: RecordKey<Record = R> + Incrementable + Ord,
@@ -79,9 +85,12 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     /// The record must implement the [`DatabaseEntry`] trait, with the key type implementing the [`RecordKey`] trait pointing back to it.
     /// The record's key must implement the [`DeriveKey`] trait, returning the key type.
     /// For records that don't store keys internally, use [`Self::put`] instead.
+    /// # Errors
+    ///
+    /// Returns a [`DatabaseError`] if serializing or writing the record fails.
     pub fn insert<K: RecordKey<Record = R>, R>(
         &mut self,
-        record: R,
+        record: &R,
     ) -> Result<K, DatabaseError<<S as Storage>::StoreError>>
     where
         R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
@@ -97,6 +106,9 @@ impl<S: Storage, M: Manifest> Database<S, M> {
         DatabaseTransaction::new(self)
     }
 
+    /// # Errors
+    ///
+    /// Returns a [`DatabaseError`] if writing to the underlying storage fails.
     pub fn commit(
         &mut self,
         transaction: DatabaseTransaction<M>,
@@ -125,6 +137,10 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     ///
     /// The record must implement the [`DatabaseEntry`] trait, with the key type implementing the [`RecordKey`] trait pointing back to it.
     /// If the record is not found, `None` is returned.
+    /// # Errors
+    ///
+    /// Returns a [`DatabaseError`] if the key cannot be serialized, if IO fails,
+    /// or if deserializing the result fails.
     pub fn get<K: RecordKey>(
         &self,
         key: &K,
@@ -160,6 +176,10 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     /// The record must implement the [`DatabaseEntry`] trait, with the key type implementing the [`RecordKey`] trait pointing back to it.
     /// If the record is not found, `None` is returned.
     /// The record's index entries are also removed.
+    /// # Errors
+    ///
+    /// Returns a [`DatabaseError`] if the key cannot be serialized or if the underlying
+    /// storage reports an error while removing or retrieving records.
     pub fn remove<K: RecordKey<Record = R>, R>(
         &mut self,
         key: &K,
@@ -182,6 +202,10 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     ///
     /// The range is inclusive of the start and exclusive of the end.
     /// The keys must implement the [`RecordKey`] trait, and the related [`DatabaseEntry`] must point back to it.
+    /// # Errors
+    ///
+    /// Returns a [`DatabaseError`] if serializing the range bounds fails or if the
+    /// underlying storage iterator errors.
     pub fn iter_keys<K: RecordKey + Ord>(
         &self,
         range: Range<K>,
@@ -220,6 +244,10 @@ impl<S: Storage, M: Manifest> Database<S, M> {
         )
     }
 
+    /// # Errors
+    ///
+    /// Returns a [`DatabaseError`] if serializing the range bounds fails or if the
+    /// underlying storage iterator errors.
     pub fn iter_all_keys<K: RecordKey + Ord>(
         &self,
     ) -> Result<
@@ -255,6 +283,9 @@ impl<S: Storage, M: Manifest> Database<S, M> {
         )
     }
 
+    /// # Errors
+    ///
+    /// Returns a [`DatabaseError`] if retrieving keys from the underlying storage fails.
     pub fn last_id<K: RecordKey + Ord + Default>(&self) -> Result<K, DatabaseError<S::StoreError>>
     where
         K::Record: DatabaseEntry<Key = K>,
@@ -270,6 +301,9 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     /// The range is inclusive of the start and exclusive of the end.
     /// The index must implement the [`Index`] trait.
     /// The returned iterator yields items of type `Result<Index::Record, DatabaseError<S::StoreError>>`.
+    /// # Errors
+    ///
+    /// Returns a [`DatabaseError`] if the underlying storage iterator encounters an error.
     pub fn iter_by_index<I: Index + Ord>(
         &self,
         range: Range<I>,
@@ -295,6 +329,9 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     /// This function outputs multiple results since multiple records can share the same index key.
     /// The index must implement the [`Index`] trait.
     /// The returned iterator yields items of type `Result<Index::Record, DatabaseError<S::StoreError>>`.
+    /// # Errors
+    ///
+    /// Returns a [`DatabaseError`] if the underlying storage iterator encounters an error.
     pub fn iter_by_index_exact<I: Index + Ord>(
         &self,
         index_key: &I,
@@ -361,10 +398,9 @@ fn bytes_next(bytes: &mut Vec<u8>) {
         if bytes[i] < 255 {
             bytes[i] += 1;
             return;
-        } else {
-            // Otherwise, set to zero and carry over
-            bytes[i] = 0;
         }
+        // Otherwise, set to zero and carry over
+        bytes[i] = 0;
     }
 
     // If all bytes were 255, we need to add a new byte

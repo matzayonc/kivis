@@ -2,7 +2,7 @@
 use alloc::vec::Vec;
 use core::{fmt::Display, ops::Range};
 
-use super::*;
+use super::Debug;
 
 /// A trait defining a storage backend for the database.
 ///
@@ -14,12 +14,28 @@ pub trait Storage {
     type StoreError: Debug + Display + Eq + PartialEq;
 
     /// Should insert the given key-value pair into the storage.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the underlying storage fails to insert the key-value pair.
     fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError>;
     /// Should retrieve the value associated with the given key from the storage.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the underlying storage fails while retrieving the value.
     fn get(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError>;
     /// Should remove the value associated with the given key from the storage.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the underlying storage fails while removing the value.
     fn remove(&mut self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError>;
     /// Should iterate over the keys in the storage that are in range.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the underlying storages fails during iteration.
     fn iter_keys(
         &self,
         range: Range<Vec<u8>>,
