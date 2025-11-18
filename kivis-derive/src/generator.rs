@@ -89,7 +89,7 @@ impl Generator {
                 quote! {
                     impl ::kivis::Incrementable for #key_type {
                         // const BOUNDS: (Self, Self) = (#key_type(0), #key_type(u64::MAX));
-                        fn next_id(&self) -> ::std::option::Option<Self> {
+                        fn next_id(&self) -> ::core::option::Option<Self> {
                             self.0.checked_add(1).map(|id| #key_type(id))
                         }
                     }
@@ -160,11 +160,11 @@ impl Generator {
             // Generate field access based on field identifier type
             let field_access = match &index.field_id {
                 FieldIdentifier::Named(field_name) => {
-                    quote! { &self.#field_name }
+                    quote! { (&self.#field_name) as &dyn ::kivis::KeyBytes }
                 }
                 FieldIdentifier::Indexed(idx) => {
                     let index = syn::Index::from(*idx);
-                    quote! { &self.#index }
+                    quote! { (&self.#index) as &dyn ::kivis::KeyBytes }
                 }
             };
 
@@ -192,8 +192,12 @@ impl Generator {
             impl #impl_generics ::kivis::DatabaseEntry for #name #ty_generics #where_clause {
                 type Key = #key_type;
 
-                fn index_keys(&self) -> ::std::vec::Vec<(u8, &dyn ::kivis::KeyBytes)> {
-                    ::std::vec![#(#index_values,)*]
+                fn index_keys(&self) -> ::kivis::alloc::vec::Vec<(u8, &dyn ::kivis::KeyBytes)> {
+                    let mut _v = ::kivis::alloc::vec::Vec::new();
+                    #(
+                        _v.push(#index_values as (u8, &dyn ::kivis::KeyBytes));
+                    )*
+                    _v
                 }
             }
         }

@@ -4,6 +4,8 @@ use bincode::{
 };
 
 use super::*;
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
 
 /// A trait for converting keys to and from byte representations.
 ///

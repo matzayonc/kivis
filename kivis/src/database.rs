@@ -7,7 +7,10 @@ use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
 use crate::wrap::{decode_value, empty_wrap, wrap, Subtable, Wrap, WrapPrelude};
 use crate::{DeriveKey, Incrementable, Manifest, Manifests, RecordKey};
-use std::ops::Range;
+use core::ops::Range;
+
+#[cfg(not(feature = "std"))]
+use alloc::{boxed::Box, vec::Vec};
 
 type DatabaseIteratorItem<R, S> =
     Result<<R as DatabaseEntry>::Key, DatabaseError<<S as Storage>::StoreError>>;

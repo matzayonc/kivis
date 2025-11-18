@@ -1,3 +1,5 @@
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
 use bincode::{
     config::{Config, Configuration},
     serde::{decode_from_slice, encode_to_vec},

@@ -36,6 +36,13 @@
 //! # }
 //! ```
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
+// Always link to the `alloc` crate and re-export it so generated code inside macros
+// can reference `::kivis::alloc::vec::Vec` and not depend on the consumer to import alloc.
+pub extern crate alloc;
+
+#[cfg(feature = "memory-storage")]
 mod btreemap;
 mod database;
 mod errors;
@@ -44,6 +51,7 @@ mod traits;
 mod transaction;
 mod wrap;
 
+#[cfg(feature = "memory-storage")]
 pub use btreemap::{MemoryStorage, MemoryStorageError};
 pub use database::Database;
 pub use kivis_derive::Record;

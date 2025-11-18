@@ -13,8 +13,10 @@ authors = ["Mateusz Zając <matzayonc@gmail.com>"]
 readme = "../readme.md"
 
 [features]
-default = ["atomic"]
+default = ["std", "atomic", "memory-storage"]
+std = []
 atomic = []
+memory-storage = ["std"]
 
 [dependencies]
 kivis-derive = { workspace = true }

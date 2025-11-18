@@ -1,4 +1,6 @@
-use std::{fmt::Display, ops::Range};
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+use core::{fmt::Display, ops::Range};
 
 use super::*;
 

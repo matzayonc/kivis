@@ -6,7 +6,9 @@ mod storage;
 #[cfg(feature = "atomic")]
 mod atomic;
 
-use std::fmt::Debug;
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+use core::fmt::Debug;
 
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -31,7 +33,7 @@ pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {
     /// Returns the index keys for this entry.
     /// Each tuple contains the index discriminator and the key bytes.
     fn index_keys(&self) -> Vec<(u8, &dyn KeyBytes)> {
-        vec![]
+        Vec::new()
     }
 }
 
@@ -131,29 +133,29 @@ macro_rules! manifest {
 
     // Multiple items case with manifest name - generate implementations with incrementing indices
     ($manifest_name:ident: $($ty:ty),+ $(,)?) => {
-        $crate::paste! {
-            #[derive(Default)]
-            pub struct $manifest_name {
-                $(
-                    [<last_ $ty:snake>]: ::std::option::Option<<$ty as $crate::DatabaseEntry>::Key>,
-                )*
-            }
-        }
+                $crate::paste! {
+                    #[derive(Default)]
+                    pub struct $manifest_name {
+                        $(
+                            [<last_ $ty:snake>]: ::core::option::Option<<$ty as $crate::DatabaseEntry>::Key>,
+                        )*
+                    }
+                }
 
         $crate::scope_impl_with_index!($manifest_name, 0; $($ty),+);
 
         impl $crate::Manifest for $manifest_name {
-            fn members() -> ::std::vec::Vec<u8> {
+            fn members() -> ::kivis::alloc::vec::Vec<u8> {
                 $crate::generate_member_scopes!(0; $($ty),+)
             }
 
-            fn load<S: $crate::Storage>(&mut self, db: &mut $crate::Database<S, Self>) -> ::std::result::Result<(), $crate::DatabaseError<S::StoreError>> {
+            fn load<S: $crate::Storage>(&mut self, db: &mut $crate::Database<S, Self>) -> ::core::result::Result<(), $crate::DatabaseError<S::StoreError>> {
                 $crate::paste! {
                     $(
-                        self.[<last_ $ty:snake>] = ::std::option::Option::Some(db.last_id()?);
+                        self.[<last_ $ty:snake>] = ::core::option::Option::Some(db.last_id()?);
                     )*
                 }
-                ::std::result::Result::Ok(())
+                ::core::result::Result::Ok(())
             }
         }
     };
@@ -174,18 +176,24 @@ macro_rules! manifest {
 macro_rules! generate_member_scopes {
     // Base case: no more types
     ($index:expr;) => {
-        ::std::vec::Vec::new()
+        {
+            ::kivis::alloc::vec::Vec::new()
+        }
     };
 
     // Single type remaining
     ($index:expr; $ty:ty) => {
-        ::std::vec![$index]
+        {
+            ::kivis::alloc::vec::Vec::from([$index])
+        }
     };
 
     // Multiple types remaining - add current index and recurse
     ($index:expr; $ty:ty, $($rest:ty),+) => {
         {
-            let mut scopes = ::std::vec![$index];
+            let mut scopes = {
+                ::kivis::alloc::vec::Vec::from([$index])
+            };
             scopes.extend($crate::generate_member_scopes!($index + 1; $($rest),+));
             scopes
         }
@@ -205,7 +213,7 @@ macro_rules! scope_impl_with_index {
             type Manifest = $manifest_name;
         }
         impl $crate::Manifests<$ty> for $manifest_name {
-            fn last(&mut self) -> &mut ::std::option::Option<<$ty as $crate::DatabaseEntry>::Key> {
+            fn last(&mut self) -> &mut ::core::option::Option<<$ty as $crate::DatabaseEntry>::Key> {
                 $crate::paste! {
                     &mut self.[<last_ $ty:snake>]
                 }
@@ -220,7 +228,7 @@ macro_rules! scope_impl_with_index {
             type Manifest = $manifest_name;
         }
         impl $crate::Manifests<$ty> for $manifest_name {
-            fn last(&mut self) -> &mut ::std::option::Option<<$ty as $crate::DatabaseEntry>::Key> {
+            fn last(&mut self) -> &mut ::core::option::Option<<$ty as $crate::DatabaseEntry>::Key> {
                 $crate::paste! {
                     &mut self.[<last_ $ty:snake>]
                 }

@@ -1,4 +1,8 @@
-use std::ops::{Deref, DerefMut};
+use core::fmt;
+use core::ops::{Deref, DerefMut};
+
+#[cfg(not(feature = "std"))]
+use alloc::{string::String, string::ToString, vec::Vec};
 
 use serde::{de::Visitor, ser::SerializeTuple, Serialize};
 
@@ -83,7 +87,7 @@ struct LexicographicStringVisitor;
 impl<'de> Visitor<'de> for LexicographicStringVisitor {
     type Value = LexicographicString;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("a lexicographically ordered string")
     }
 
@@ -104,7 +108,7 @@ impl<'de> Visitor<'de> for LexicographicStringVisitor {
 
         // Convert bytes to string
         let s =
-            std::str::from_utf8(&bytes).map_err(|_| serde::de::Error::custom("invalid UTF-8"))?;
+            core::str::from_utf8(&bytes).map_err(|_| serde::de::Error::custom("invalid UTF-8"))?;
         Ok(LexicographicString::from(s))
     }
 }

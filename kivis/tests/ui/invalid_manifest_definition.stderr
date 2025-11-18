@@ -12,4 +12,4 @@ warning: unused import: `Scope`
 1 | use kivis::{manifest, Scope};
   |                       ^^^^^
   |
-  = note: `#[warn(unused_imports)]` on by default
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
