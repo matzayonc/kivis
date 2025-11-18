@@ -8,6 +8,9 @@ use crate::{
     Manifests, RecordKey, SerializationError, Storage,
 };
 
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+use core::marker::PhantomData;
 type Write = (Vec<u8>, Vec<u8>);
 
 /// A database transaction that accumulates low-level byte operations (writes and deletes)
@@ -21,7 +24,7 @@ pub struct DatabaseTransaction<Manifest> {
     pending_deletes: Vec<Vec<u8>>,
     /// Serialization configuration
     serialization_config: Configuration,
-    _marker: std::marker::PhantomData<Manifest>,
+    _marker: PhantomData<Manifest>,
 }
 
 impl<M: Manifest> DatabaseTransaction<M> {
@@ -31,7 +34,7 @@ impl<M: Manifest> DatabaseTransaction<M> {
             pending_writes: Vec::new(),
             pending_deletes: Vec::new(),
             serialization_config: database.serialization_config(),
-            _marker: std::marker::PhantomData,
+            _marker: PhantomData,
         }
     }
 
@@ -40,7 +43,7 @@ impl<M: Manifest> DatabaseTransaction<M> {
             pending_writes: Vec::new(),
             pending_deletes: Vec::new(),
             serialization_config,
-            _marker: std::marker::PhantomData,
+            _marker: PhantomData,
         }
     }
 
