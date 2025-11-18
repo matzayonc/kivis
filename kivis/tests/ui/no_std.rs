@@ -1,7 +1,7 @@
 #![no_std]
 extern crate alloc;
 
-use alloc::{string::String, vec::Vec};
+use alloc::string::String;
 use kivis::manifest;
 use kivis::Record;
 use serde::{Deserialize, Serialize};

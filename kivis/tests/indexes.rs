@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use kivis::{manifest, Database, DatabaseEntry, Index, KeyBytes, MemoryStorage, Record};
 
 #[derive(
@@ -22,7 +23,7 @@ manifest![Manifest: User, Pet];
 
 #[test]
 fn test_user_record() {
-    let mut store = Database::<MemoryStorage, Manifest>::default();
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
 
     let user = User {
         name: "Alice".to_string(),
@@ -37,7 +38,7 @@ fn test_user_record() {
 
 #[test]
 fn test_pet_record() {
-    let mut store = Database::<MemoryStorage, Manifest>::default();
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
 
     let pet = Pet {
         name: "Fido".to_string(),
@@ -52,7 +53,7 @@ fn test_pet_record() {
 
 #[test]
 fn test_get_owner_of_pet() {
-    let mut store = Database::<MemoryStorage, Manifest>::default();
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
 
     let user = User {
         name: "Alice".to_string(),
@@ -77,7 +78,7 @@ fn test_get_owner_of_pet() {
 
 #[test]
 fn test_index() {
-    let mut store = Database::<MemoryStorage, Manifest>::default();
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
 
     let user = User {
         name: "Alice".to_string(),
@@ -90,8 +91,11 @@ fn test_index() {
     assert_eq!(index_keys.len(), 1);
     assert_eq!(index_keys[0].0, UserNameIndex::INDEX);
     assert_eq!(
-        index_keys[0].1.to_bytes(bincode::config::standard()),
-        user.name.to_bytes(bincode::config::standard())
+        index_keys[0]
+            .1
+            .to_bytes(bincode::config::standard())
+            .unwrap(),
+        user.name.to_bytes(bincode::config::standard()).unwrap()
     );
 
     let retrieved: User = store.get(&user_key).unwrap().unwrap();
@@ -102,7 +106,7 @@ fn test_index() {
 
 #[test]
 fn test_iter() {
-    let mut store = Database::<MemoryStorage, Manifest>::default();
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
 
     let pet = Pet {
         name: "Fido".to_string(),
@@ -123,7 +127,7 @@ fn test_iter() {
 
 #[test]
 fn test_iter_index() {
-    let mut store = Database::<MemoryStorage, Manifest>::default();
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
 
     let user = User {
         name: "Al".to_string(),
@@ -143,7 +147,7 @@ fn test_iter_index() {
 
 #[test]
 fn test_iter_index_exact() {
-    let mut store = Database::<MemoryStorage, Manifest>::default();
+    let mut store = Database::<MemoryStorage, Manifest>::new(MemoryStorage::default()).unwrap();
 
     let names = [
         "Al", "Al", // The target name

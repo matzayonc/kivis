@@ -2,6 +2,7 @@
 use alloc::vec::Vec;
 use bincode::{
     config::{Config, Configuration},
+    error::EncodeError,
     serde::{decode_from_slice, encode_to_vec},
 };
 use serde::{Deserialize, Serialize};
@@ -28,9 +29,9 @@ impl Serialize for Subtable {
             Subtable::Reserved => 1u8,
             Subtable::Index(discriminator) => {
                 // Reserve 1, start Index at 2
-                discriminator
-                    .checked_add(2)
-                    .expect("Index discriminator overflow when adding 2")
+                discriminator.checked_add(2).ok_or_else(|| {
+                    serde::ser::Error::custom("Index discriminator overflow when adding 2")
+                })?
             }
         };
         serializer.serialize_u8(value)
@@ -46,10 +47,9 @@ impl<'de> Deserialize<'de> for Subtable {
         match value {
             0 => Ok(Subtable::Main),
             1 => Err(serde::de::Error::custom("Reserved subtable value 1")),
-            n => Ok(Subtable::Index(
-                n.checked_sub(2)
-                    .expect("Index discriminator underflow when subtracting 2"),
-            )),
+            n => Ok(Subtable::Index(n.checked_sub(2).ok_or_else(|| {
+                serde::de::Error::custom("Index discriminator underflow when subtracting 2")
+            })?)),
         }
     }
 }
@@ -71,9 +71,8 @@ impl WrapPrelude {
     }
 
     /// Converts the wrap prelude to bytes for storage key prefixing.
-    pub fn to_bytes(&self, config: Configuration) -> Vec<u8> {
-        // This should never fail as WrapPrelude is a simple, well-defined structure
-        encode_to_vec(self, config).expect("BCS serialization failed for WrapPrelude")
+    pub fn to_bytes(&self, config: Configuration) -> Result<Vec<u8>, EncodeError> {
+        encode_to_vec(self, config)
     }
 }
 

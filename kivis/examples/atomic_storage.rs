@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 // Example showing how to use the AtomicStorage trait
 // This example requires the "atomic" feature to be enabled
 

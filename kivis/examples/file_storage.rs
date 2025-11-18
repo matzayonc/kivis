@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use kivis::{manifest, Database, DatabaseError, Record, Storage};
 use std::fs;
 use std::path::PathBuf;
@@ -106,7 +107,7 @@ fn main() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
 
     // Create a new file-based database instance
     let file_store = FileStore::new("./data/example").expect("Failed to create file store");
-    let mut store: Database<_, Manifest> = Database::new(file_store);
+    let mut store: Database<_, Manifest> = Database::new(file_store)?;
 
     // Users can be added to the file store
     let alice = User {

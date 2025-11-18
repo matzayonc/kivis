@@ -14,6 +14,7 @@
  * - Database.insert() method for records with derived keys
  */
 
+#![allow(clippy::unwrap_used)]
 use kivis::{manifest, Database, DatabaseEntry, DeriveKey, KeyBytes, MemoryStorage, RecordKey};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -57,7 +58,7 @@ manifest![Manifest: ContentRecord];
 
 #[test]
 fn test_hash_key_storage_and_retrieval() {
-    let mut store = Database::<MemoryStorage, Manifest>::default();
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
 
     // Create a record
     let record = ContentRecord {
@@ -89,7 +90,7 @@ fn test_hash_key_storage_and_retrieval() {
 
 #[test]
 fn test_hash_key_uniqueness() {
-    let mut store = Database::<MemoryStorage, Manifest>::default();
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
 
     // Create two different records
     let record1 = ContentRecord {
@@ -116,7 +117,7 @@ fn test_hash_key_uniqueness() {
 
 #[test]
 fn test_hash_key_removal() {
-    let mut store = Database::<MemoryStorage, Manifest>::default();
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
 
     let record = ContentRecord {
         data: "test removal".to_string(),

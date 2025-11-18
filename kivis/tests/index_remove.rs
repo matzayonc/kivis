@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use kivis::{manifest, Database, LexicographicString, MemoryStorage, Record};
 
 // Define a record type for a Pet.
@@ -18,7 +19,7 @@ manifest![Manifest: Pet];
 
 #[test]
 fn test_index_after_remove() {
-    let mut store = Database::<MemoryStorage, Manifest>::default();
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
 
     // Prepare 2 records with the same index value, name "Al".
     let names = [

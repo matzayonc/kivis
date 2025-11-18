@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 #[cfg(feature = "atomic")]
 #[cfg(test)]
 mod tests {
@@ -90,7 +91,7 @@ mod tests {
 
     #[test]
     fn test_transaction_write() -> TestResult {
-        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new());
+        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
         let mut tx = db.create_transaction();
 
         tx.insert(&MockRecord(1, 'a'))?;
@@ -105,7 +106,7 @@ mod tests {
 
     #[test]
     fn test_transaction_delete() -> TestResult {
-        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new());
+        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
         let mut tx = db.create_transaction();
 
         tx.remove(&MockRecordKey(1), &MockRecord(1, 'a'))?;
@@ -120,7 +121,7 @@ mod tests {
 
     #[test]
     fn test_transaction_write_overrides_delete() -> TestResult {
-        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new());
+        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
         let mut tx = db.create_transaction();
 
         // Delete first, then write
@@ -136,7 +137,7 @@ mod tests {
 
     #[test]
     fn test_transaction_delete_ignored_after_write() -> TestResult {
-        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new());
+        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
         let mut tx = db.create_transaction();
 
         // Write first, then delete
@@ -151,7 +152,7 @@ mod tests {
 
     #[test]
     fn test_transaction_multiple_writes_same_key() -> TestResult {
-        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new());
+        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
         let mut tx = db.create_transaction();
 
         tx.insert(&MockRecord(1, 'a'))?;
@@ -173,7 +174,7 @@ mod tests {
 
     #[test]
     fn test_transaction_commit() -> TestResult {
-        let mut db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new());
+        let mut db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
         let mut tx = db.create_transaction();
 
         // Add some operations
@@ -193,7 +194,7 @@ mod tests {
 
     #[test]
     fn test_transaction_rollback() -> TestResult {
-        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new());
+        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
         let mut tx = db.create_transaction();
 
         tx.insert(&MockRecord(1, 'a'))?;

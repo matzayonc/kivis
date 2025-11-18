@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use kivis::{manifest, Database, MemoryStorage, Record};
 use serde::{Deserialize, Serialize};
 
@@ -10,7 +11,7 @@ manifest![Manifest: UserRecord];
 
 #[test]
 fn test_lifecycle() {
-    let mut store = Database::<MemoryStorage, Manifest>::default();
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
 
     let user = UserRecord {
         data: vec![1, 2, 3, 4],
@@ -24,7 +25,7 @@ fn test_lifecycle() {
 
 #[test]
 fn test_iter() {
-    let mut store = Database::<MemoryStorage, Manifest>::default();
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
 
     let user = UserRecord {
         data: vec![1, 2, 3, 4],

@@ -23,19 +23,13 @@ pub struct Database<S: Storage, M: Manifest> {
     serialization_config: Configuration,
 }
 
-impl<S: Default + Storage, M: Manifest> Default for Database<S, M> {
-    fn default() -> Self {
-        Self::new(S::default())
-    }
-}
-
 impl<S: Storage, M: Manifest> Database<S, M> {
     /// Creates a new [`Database`] instance over any storage backend.
     /// One of the key features of `kivis` is that it can work with any storage backend that implements the [`Storage`] trait.
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if the manifest fails to load during initialization.
-    pub fn new(store: S) -> Self {
+    /// Returns a [`DatabaseError`] if the manifest fails to load during initialization.
+    pub fn new(store: S) -> Result<Self, DatabaseError<<S as Storage>::StoreError>> {
         let mut db = Database {
             store,
             fallback: None,
@@ -43,9 +37,9 @@ impl<S: Storage, M: Manifest> Database<S, M> {
             serialization_config: Configuration::default(),
         };
         let mut manifest = M::default();
-        manifest.load(&mut db).unwrap();
+        manifest.load(&mut db)?;
         db.manifest = manifest;
-        db
+        Ok(db)
     }
 
     pub fn with_serialization_config(&mut self, config: Configuration) {
@@ -312,10 +306,10 @@ impl<S: Storage, M: Manifest> Database<S, M> {
         DatabaseError<S::StoreError>,
     > {
         let index_prelude = WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX));
-        let mut start = index_prelude.to_bytes(self.serialization_config);
+        let mut start = index_prelude.to_bytes(self.serialization_config)?;
         let mut end = start.clone();
-        start.extend(range.start.to_bytes(self.serialization_config));
-        end.extend(range.end.to_bytes(self.serialization_config));
+        start.extend(range.start.to_bytes(self.serialization_config)?);
+        end.extend(range.end.to_bytes(self.serialization_config)?);
         let raw_iter = self
             .store
             .iter_keys(start..end)
@@ -340,10 +334,10 @@ impl<S: Storage, M: Manifest> Database<S, M> {
         DatabaseError<S::StoreError>,
     > {
         let index_prelude = WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX));
-        let mut start = index_prelude.to_bytes(self.serialization_config);
-        let mut end = index_prelude.to_bytes(self.serialization_config);
+        let mut start = index_prelude.to_bytes(self.serialization_config)?;
+        let mut end = index_prelude.to_bytes(self.serialization_config)?;
 
-        let start_bytes = index_key.to_bytes(self.serialization_config);
+        let start_bytes = index_key.to_bytes(self.serialization_config)?;
         let end_bytes = {
             let mut end_bytes = start_bytes.clone();
             bytes_next(&mut end_bytes);

@@ -3,6 +3,8 @@ use bincode::{
     serde::{decode_from_slice, encode_to_vec},
 };
 
+use crate::SerializationError;
+
 use super::{DeserializationError, DeserializeOwned, Serialize};
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
@@ -17,7 +19,11 @@ pub trait KeyBytes {
     ///
     /// This method serializes the key into a byte vector that can be stored
     /// in the underlying storage backend.
-    fn to_bytes(&self, serialization_config: Configuration) -> Vec<u8>;
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`SerializationError`] if the key cannot be serialized.
+    fn to_bytes(&self, serialization_config: Configuration) -> Result<Vec<u8>, SerializationError>;
 
     /// Reconstructs the key from bytes.
     ///
@@ -37,9 +43,8 @@ pub trait KeyBytes {
 }
 
 impl<T: Serialize + DeserializeOwned> KeyBytes for T {
-    fn to_bytes(&self, serialization_config: Configuration) -> Vec<u8> {
-        // This should never fail for well-formed types that implement Serialize
-        encode_to_vec(self, serialization_config).expect("Serialization should not fail")
+    fn to_bytes(&self, serialization_config: Configuration) -> Result<Vec<u8>, SerializationError> {
+        encode_to_vec(self, serialization_config)
     }
 
     fn from_bytes(

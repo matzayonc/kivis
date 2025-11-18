@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use std::{collections::BTreeMap, fmt::Display, ops::Range};
 
 use kivis::{
@@ -149,7 +150,7 @@ impl kivis::Storage for ManualStorage {
 #[test]
 fn test_user_record() {
     let db = ManualStorage::default();
-    let mut database: Database<_, Manifest> = Database::new(db);
+    let mut database: Database<_, Manifest> = Database::new(db).unwrap();
 
     let user = User {
         id: 1,
@@ -166,7 +167,7 @@ fn test_user_record() {
 #[test]
 fn test_pet_record() {
     let db = ManualStorage::default();
-    let mut database: Database<_, Manifest> = Database::new(db);
+    let mut database: Database<_, Manifest> = Database::new(db).unwrap();
 
     let pet = Pet {
         name: "Fido".to_string(),
@@ -182,7 +183,7 @@ fn test_pet_record() {
 #[test]
 fn test_get_owner_of_pet() {
     let db = ManualStorage::default();
-    let mut database: Database<_, Manifest> = Database::new(db);
+    let mut database: Database<_, Manifest> = Database::new(db).unwrap();
 
     let mut user = User {
         id: 1,
@@ -207,7 +208,7 @@ fn test_get_owner_of_pet() {
 #[test]
 fn test_index() {
     let db = ManualStorage::default();
-    let mut database: Database<_, Manifest> = Database::new(db);
+    let mut database: Database<_, Manifest> = Database::new(db).unwrap();
 
     let user = User {
         id: 1,
@@ -221,8 +222,11 @@ fn test_index() {
     assert_eq!(index_keys.len(), 1);
     assert_eq!(index_keys[0].0, 1);
     assert_eq!(
-        index_keys[0].1.to_bytes(bincode::config::standard()),
-        user.name.to_bytes(bincode::config::standard())
+        index_keys[0]
+            .1
+            .to_bytes(bincode::config::standard())
+            .unwrap(),
+        user.name.to_bytes(bincode::config::standard()).unwrap()
     );
 
     let retrieved: User = database.get(&UserKey(user.id)).unwrap().unwrap();
@@ -234,7 +238,7 @@ fn test_index() {
 #[test]
 fn test_iter() {
     let db = ManualStorage::default();
-    let mut database: Database<_, Manifest> = Database::new(db);
+    let mut database: Database<_, Manifest> = Database::new(db).unwrap();
 
     let pet = Pet {
         name: "Fido".to_string(),
@@ -255,8 +259,7 @@ fn test_iter() {
 
 #[test]
 fn test_iter_index() {
-    let db = ManualStorage::default();
-    let mut database: Database<_, Manifest> = kivis::Database::new(db);
+    let mut database: Database<_, Manifest> = Database::new(ManualStorage::default()).unwrap();
 
     let user = User {
         id: 42,
@@ -264,15 +267,28 @@ fn test_iter_index() {
         email: "alice@example.com".to_string(),
     };
 
-    database.insert(&user).unwrap();
-
-    let retrieved: UserKey = database
+    // Before inserting the user.
+    let retrieved = database
         .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))
         .unwrap()
-        .next()
-        .unwrap()
-        .unwrap();
-    assert_eq!(retrieved, UserKey(42));
+        .collect::<Vec<_>>();
+    assert!(retrieved.is_empty());
 
-    // database.insert(user.clone()).unwrap();
+    // After inserting the user.
+    database.insert(&user).unwrap();
+    let retrieved = database
+        .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(retrieved, vec![UserKey(42)]);
+
+    // After inserting the same user again.
+    database.insert(&user).unwrap();
+    let retrieved = database
+        .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))
+        .unwrap()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(retrieved, vec![UserKey(42)]);
 }
