@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use kivis::{manifest, Database, DeriveKey, MemoryStorage, Record};
 use serde::{Deserialize, Serialize};
 
@@ -35,7 +36,7 @@ fn test_default_key() {
         data: vec![1, 2, 3, 4],
     };
 
-    let mut store: Database<_, Manifest> = Database::new(MemoryStorage::new());
+    let mut store: Database<_, Manifest> = Database::new(MemoryStorage::new()).unwrap();
 
     let user_key = store.put(&user).unwrap();
     assert_eq!(user_key, UserRecordKey(1));
@@ -66,7 +67,7 @@ fn test_specified_key() {
     assert_eq!(key1, key2);
     assert_eq!(key1, ProductRecordKey("WID-001".to_string()));
 
-    let mut store: Database<_, Manifest> = Database::new(MemoryStorage::new());
+    let mut store: Database<_, Manifest> = Database::new(MemoryStorage::new()).unwrap();
 
     store.insert(&product1).unwrap();
     assert_eq!(store.get(&key1).unwrap(), Some(product1.clone()));
@@ -110,7 +111,7 @@ fn test_composite_key() {
     assert_ne!(key1, key3);
     assert_ne!(key2, key3);
 
-    let mut store: Database<_, Manifest> = Database::new(MemoryStorage::new());
+    let mut store: Database<_, Manifest> = Database::new(MemoryStorage::new()).unwrap();
 
     // Insert all orders
     store.insert(&order1).unwrap();

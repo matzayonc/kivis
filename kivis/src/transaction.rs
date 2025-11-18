@@ -223,12 +223,12 @@ impl<M: Manifest> DatabaseTransaction<M> {
 
         for (discriminator, index_key) in record.index_keys() {
             let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator))
-                .to_bytes(self.serialization_config());
-            entry.extend_from_slice(&index_key.to_bytes(self.serialization_config()));
+                .to_bytes(self.serialization_config())?;
+            entry.extend_from_slice(&index_key.to_bytes(self.serialization_config())?);
 
             // Indexes might be repeated, so we need to ensure that the key is unique.
             // TODO: Add a way to declare as unique and deduplicate by provided hash.
-            let key_bytes = key.to_bytes(self.serialization_config());
+            let key_bytes = key.to_bytes(self.serialization_config())?;
             entry.extend_from_slice(&key_bytes);
 
             writes.push((entry.clone(), key_bytes.clone()));
@@ -254,9 +254,9 @@ impl<M: Manifest> DatabaseTransaction<M> {
 
         for (discriminator, index_key) in record.index_keys() {
             let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator))
-                .to_bytes(self.serialization_config());
-            entry.extend_from_slice(&index_key.to_bytes(self.serialization_config()));
-            let key_bytes = key.to_bytes(self.serialization_config());
+                .to_bytes(self.serialization_config())?;
+            entry.extend_from_slice(&index_key.to_bytes(self.serialization_config())?);
+            let key_bytes = key.to_bytes(self.serialization_config())?;
             entry.extend_from_slice(&key_bytes);
 
             deletes.push(entry.clone());

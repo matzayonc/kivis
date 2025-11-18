@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used)]
 use kivis::{manifest, Database, DatabaseError, DeriveKey, MemoryStorage, Record};
 
 /// A user record with an indexed name field
@@ -43,7 +44,7 @@ manifest![Pets: User, Pet, Toy];
 
 fn main() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
     // Create a new in-memory database instance
-    let mut store: Database<_, Pets> = Database::new(MemoryStorage::new());
+    let mut store: Database<_, Pets> = Database::new(MemoryStorage::new()).unwrap();
 
     // Users can be added to a store.
     let alice = User {

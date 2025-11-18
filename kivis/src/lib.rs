@@ -38,6 +38,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(clippy::pedantic)]
+#![deny(clippy::unwrap_used)]
+#![deny(clippy::expect_used)]
 
 // Always link to the `alloc` crate and re-export it so generated code inside macros
 // can reference `::kivis::alloc::vec::Vec` and not depend on the consumer to import alloc.

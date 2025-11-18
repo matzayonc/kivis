@@ -1,8 +1,10 @@
-#![warn(clippy::pedantic)]
 //! # Kivis Derive Macros
 //!
 //! Procedural macros for the Kivis database schema library.
 //! This crate provides the `Record` derive macro for automatically generating database schema types.
+#![warn(clippy::pedantic)]
+#![deny(clippy::unwrap_used)]
+#![deny(clippy::expect_used)]
 
 use proc_macro::TokenStream;
 use syn::{parse_macro_input, DeriveInput};

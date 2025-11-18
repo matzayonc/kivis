@@ -1,4 +1,5 @@
 // Example demonstrating the AtomicStorage trait
+#![allow(clippy::unwrap_used)]
 #[cfg(feature = "atomic")]
 #[cfg(test)]
 mod atomic_storage_example {

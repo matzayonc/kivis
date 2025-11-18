@@ -1,4 +1,6 @@
-use kivis::{manifest, Database, DeriveKey, Record};
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::duplicated_attributes)]
+use kivis::{manifest, Database, DeriveKey, MemoryStorage, Record};
 use serde::{Deserialize, Serialize};
 
 type Payload = u16;
@@ -42,7 +44,8 @@ manifest![Manifest: Autoincremented, Field, Composite, WithDerived];
 
 #[test]
 fn test_key_types() {
-    let mut database = Database::<kivis::MemoryStorage, Manifest>::default();
+    let mut database =
+        Database::<kivis::MemoryStorage, Manifest>::new(MemoryStorage::default()).unwrap();
 
     // Autoincremented key
     let autoincremented = Autoincremented { p: 5 };
