@@ -1,9 +1,8 @@
-#![allow(clippy::unwrap_used)]
 // Example showing how to use the AtomicStorage trait
 // This example requires the "atomic" feature to be enabled
 
 #[cfg(feature = "atomic")]
-fn atomic_storage_example() {
+fn atomic_storage_example() -> anyhow::Result<()> {
     use kivis::{AtomicStorage, Storage};
     use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
@@ -97,12 +96,15 @@ fn atomic_storage_example() {
     let removed = storage.batch_mixed(Vec::new(), keys_to_remove).unwrap();
 
     println!("Removed values: {:?}", removed);
+    Ok(())
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     #[cfg(feature = "atomic")]
-    atomic_storage_example();
+    atomic_storage_example()?;
 
     #[cfg(not(feature = "atomic"))]
     println!("This example requires the 'atomic' feature to be enabled. Run with: cargo run --example atomic_storage --features atomic");
+
+    Ok(())
 }

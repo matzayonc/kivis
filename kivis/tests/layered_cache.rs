@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used)]
 use kivis::{manifest, Database, MemoryStorage, Record};
 use serde::{Deserialize, Serialize};
 
@@ -11,7 +10,7 @@ struct CacheTestRecord {
 manifest![Manifest: CacheTestRecord];
 
 #[test]
-fn test_layered_cache_architecture() {
+fn test_layered_cache_architecture() -> anyhow::Result<()> {
     let fallback_storage = MemoryStorage::new();
 
     // Test data
@@ -20,14 +19,15 @@ fn test_layered_cache_architecture() {
         data: vec![1, 2, 3, 4, 5],
     };
 
-    let mut fallback_database = Database::<_, Manifest>::new(fallback_storage.clone()).unwrap();
-    let key = fallback_database.put(&record).unwrap();
+    let mut fallback_database = Database::<_, Manifest>::new(fallback_storage.clone())?;
+    let key = fallback_database.put(&record)?;
     let fallback_storage = fallback_database.dissolve();
 
-    let mut database = Database::<_, Manifest>::new(MemoryStorage::new()).unwrap();
+    let mut database = Database::<_, Manifest>::new(MemoryStorage::new())?;
     database.set_fallback(Box::new(fallback_storage));
 
     // Verify record can be retrieved
-    let retrieved = database.get(&key).unwrap();
+    let retrieved = database.get(&key)?;
     assert_eq!(retrieved, Some(record.clone()));
+    Ok(())
 }

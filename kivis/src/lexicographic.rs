@@ -116,57 +116,64 @@ impl<'de> Visitor<'de> for LexicographicStringVisitor {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
     const CONFIG: bincode::config::Configuration = bincode::config::standard();
 
-    fn is_less(a: &LexicographicString, b: &LexicographicString) -> bool {
-        let a = bincode::serde::encode_to_vec(a, CONFIG).unwrap();
-        let b = bincode::serde::encode_to_vec(b, CONFIG).unwrap();
-        a < b
+    fn is_less(
+        a: &LexicographicString,
+        b: &LexicographicString,
+    ) -> Result<bool, Box<dyn std::error::Error>> {
+        let a = bincode::serde::encode_to_vec(a, CONFIG)?;
+        let b = bincode::serde::encode_to_vec(b, CONFIG)?;
+        Ok(a < b)
     }
 
     #[test]
-    fn test_lexicographic_string_serialization() {
+    fn test_lexicographic_string_serialization() -> Result<(), Box<dyn std::error::Error>> {
         let original = LexicographicString::from("Hello, World!");
-        let serialized = bincode::serde::encode_to_vec(&original, CONFIG).unwrap();
+        let serialized = bincode::serde::encode_to_vec(&original, CONFIG)?;
         let (deserialized, _): (LexicographicString, _) =
-            bincode::serde::decode_from_slice(&serialized, CONFIG).unwrap();
+            bincode::serde::decode_from_slice(&serialized, CONFIG)?;
         assert_eq!(original, deserialized);
+        Ok(())
     }
 
     #[test]
-    fn test_serialization_as_expected() {
+    fn test_serialization_as_expected() -> Result<(), Box<dyn std::error::Error>> {
         let lex_str = LexicographicString::from("A");
-        let serialized = bincode::serde::encode_to_vec(&lex_str, CONFIG).unwrap();
+        let serialized = bincode::serde::encode_to_vec(&lex_str, CONFIG)?;
         assert_eq!(serialized, [65u8, 0u8].to_vec()); // ASCII 'A' + null terminator
+        Ok(())
     }
 
     #[test]
-    fn test_order_of_same_length() {
+    fn test_order_of_same_length() -> Result<(), Box<dyn std::error::Error>> {
         let smaller = LexicographicString::from("Apples");
         let larger = LexicographicString::from("Banana");
-        assert!(is_less(&smaller, &larger));
+        assert!(is_less(&smaller, &larger)?);
+        Ok(())
     }
 
     #[test]
-    fn test_order_of_prefix() {
+    fn test_order_of_prefix() -> Result<(), Box<dyn std::error::Error>> {
         let smaller = LexicographicString::from("Cat");
         let larger = LexicographicString::from("Caterpillar");
-        assert!(is_less(&smaller, &larger));
+        assert!(is_less(&smaller, &larger)?);
+        Ok(())
     }
 
     #[test]
-    fn test_order_of_different_length() {
+    fn test_order_of_different_length() -> Result<(), Box<dyn std::error::Error>> {
         let first = LexicographicString::from("Aa");
         let second = LexicographicString::from("B");
-        assert!(is_less(&first, &second));
+        assert!(is_less(&first, &second)?);
+        Ok(())
     }
 
     #[test]
-    fn test_serialization_in_structs() {
+    fn test_serialization_in_structs() -> Result<(), Box<dyn std::error::Error>> {
         #[derive(Serialize, serde::Deserialize, PartialEq, Debug)]
         struct TestStruct {
             before: u16,
@@ -180,9 +187,10 @@ mod tests {
             value: 100,
         };
 
-        let serialized = bincode::serde::encode_to_vec(&original, CONFIG).unwrap();
+        let serialized = bincode::serde::encode_to_vec(&original, CONFIG)?;
         let (deserialized, _): (TestStruct, _) =
-            bincode::serde::decode_from_slice(&serialized, CONFIG).unwrap();
+            bincode::serde::decode_from_slice(&serialized, CONFIG)?;
         assert_eq!(original, deserialized);
+        Ok(())
     }
 }

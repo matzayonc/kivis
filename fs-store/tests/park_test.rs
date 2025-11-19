@@ -25,7 +25,7 @@ struct Pet {
 manifest![Park: User, Pet];
 
 #[test]
-fn test_flow() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
+fn test_flow() -> anyhow::Result<()> {
     const PATH: &str = "./data/fs-store";
 
     // Clean up any existing data for a fresh start
@@ -67,8 +67,8 @@ fn test_flow() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
     let _rover_key = store.put(rover.clone())?;
 
     // Retrieve records by key
-    let retrieved_alice = store.get(&alice_key)?.unwrap();
-    let retrieved_fluffy = store.get(&fluffy_key)?.unwrap();
+    let retrieved_alice = store.get(&alice_key)?.ok_or(())?;
+    let retrieved_fluffy = store.get(&fluffy_key)?.ok_or(())?;
 
     assert_eq!(retrieved_alice.name, "Alice");
     assert_eq!(retrieved_fluffy.name, "Fluffy");

@@ -1,10 +1,9 @@
 // Example demonstrating the AtomicStorage trait
-#![allow(clippy::unwrap_used)]
 #[cfg(feature = "atomic")]
 #[cfg(test)]
 mod atomic_storage_example {
     use kivis::{AtomicStorage, Storage};
-    use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
+    use std::{cmp::Reverse, collections::BTreeMap, error::Error, fmt::Display, ops::Range};
 
     // Example error type for our mock atomic storage
     #[derive(Debug, PartialEq, Eq)]
@@ -15,6 +14,7 @@ mod atomic_storage_example {
             write!(f, "MockAtomicError: {}", self.0)
         }
     }
+    impl Error for MockAtomicError {}
 
     // Mock atomic storage implementation
     pub struct MockAtomicStorage {
@@ -97,7 +97,7 @@ mod atomic_storage_example {
     }
 
     #[test]
-    fn test_atomic_batch_mixed_inserts_only() {
+    fn test_atomic_batch_mixed_inserts_only() -> anyhow::Result<()> {
         let mut storage = MockAtomicStorage::new();
 
         let inserts = vec![
@@ -107,43 +107,29 @@ mod atomic_storage_example {
         ];
 
         // Test batch mixed with only inserts
-        let removed = storage.batch_mixed(inserts, vec![]).unwrap();
+        let removed = storage.batch_mixed(inserts, vec![])?;
         assert!(removed.is_empty());
 
         // Verify all values were inserted
-        assert_eq!(
-            storage.get(b"key1".to_vec()).unwrap(),
-            Some(b"value1".to_vec())
-        );
-        assert_eq!(
-            storage.get(b"key2".to_vec()).unwrap(),
-            Some(b"value2".to_vec())
-        );
-        assert_eq!(
-            storage.get(b"key3".to_vec()).unwrap(),
-            Some(b"value3".to_vec())
-        );
+        assert_eq!(storage.get(b"key1".to_vec())?, Some(b"value1".to_vec()));
+        assert_eq!(storage.get(b"key2".to_vec())?, Some(b"value2".to_vec()));
+        assert_eq!(storage.get(b"key3".to_vec())?, Some(b"value3".to_vec()));
+        Ok(())
     }
 
     #[test]
-    fn test_atomic_batch_mixed_removes_only() {
+    fn test_atomic_batch_mixed_removes_only() -> anyhow::Result<()> {
         let mut storage = MockAtomicStorage::new();
 
         // Insert some test data
-        storage
-            .insert(b"key1".to_vec(), b"value1".to_vec())
-            .unwrap();
-        storage
-            .insert(b"key2".to_vec(), b"value2".to_vec())
-            .unwrap();
-        storage
-            .insert(b"key3".to_vec(), b"value3".to_vec())
-            .unwrap();
+        storage.insert(b"key1".to_vec(), b"value1".to_vec())?;
+        storage.insert(b"key2".to_vec(), b"value2".to_vec())?;
+        storage.insert(b"key3".to_vec(), b"value3".to_vec())?;
 
         let keys_to_remove = vec![b"key1".to_vec(), b"key2".to_vec(), b"nonexistent".to_vec()];
 
         // Test batch mixed with only removes
-        let removed = storage.batch_mixed(vec![], keys_to_remove).unwrap();
+        let removed = storage.batch_mixed(vec![], keys_to_remove)?;
 
         // Verify return values
         assert_eq!(removed[0], Some(b"value1".to_vec()));
@@ -151,25 +137,19 @@ mod atomic_storage_example {
         assert_eq!(removed[2], None); // nonexistent key
 
         // Verify keys were actually removed
-        assert_eq!(storage.get(b"key1".to_vec()).unwrap(), None);
-        assert_eq!(storage.get(b"key2".to_vec()).unwrap(), None);
-        assert_eq!(
-            storage.get(b"key3".to_vec()).unwrap(),
-            Some(b"value3".to_vec())
-        );
+        assert_eq!(storage.get(b"key1".to_vec())?, None);
+        assert_eq!(storage.get(b"key2".to_vec())?, None);
+        assert_eq!(storage.get(b"key3".to_vec())?, Some(b"value3".to_vec()));
+        Ok(())
     }
 
     #[test]
-    fn test_atomic_batch_mixed() {
+    fn test_atomic_batch_mixed() -> anyhow::Result<()> {
         let mut storage = MockAtomicStorage::new();
 
         // Insert some initial data
-        storage
-            .insert(b"existing1".to_vec(), b"value1".to_vec())
-            .unwrap();
-        storage
-            .insert(b"existing2".to_vec(), b"value2".to_vec())
-            .unwrap();
+        storage.insert(b"existing1".to_vec(), b"value1".to_vec())?;
+        storage.insert(b"existing2".to_vec(), b"value2".to_vec())?;
 
         let inserts = vec![
             (b"new1".to_vec(), b"newvalue1".to_vec()),
@@ -179,32 +159,27 @@ mod atomic_storage_example {
         let removes = vec![b"existing1".to_vec(), b"nonexistent".to_vec()];
 
         // Test mixed operations
-        let removed = storage.batch_mixed(inserts, removes).unwrap();
+        let removed = storage.batch_mixed(inserts, removes)?;
 
         // Verify removals
         assert_eq!(removed[0], Some(b"value1".to_vec()));
         assert_eq!(removed[1], None);
 
         // Verify inserts
-        assert_eq!(
-            storage.get(b"new1".to_vec()).unwrap(),
-            Some(b"newvalue1".to_vec())
-        );
-        assert_eq!(
-            storage.get(b"new2".to_vec()).unwrap(),
-            Some(b"newvalue2".to_vec())
-        );
+        assert_eq!(storage.get(b"new1".to_vec())?, Some(b"newvalue1".to_vec()));
+        assert_eq!(storage.get(b"new2".to_vec())?, Some(b"newvalue2".to_vec()));
 
         // Verify removes
-        assert_eq!(storage.get(b"existing1".to_vec()).unwrap(), None);
+        assert_eq!(storage.get(b"existing1".to_vec())?, None);
         assert_eq!(
-            storage.get(b"existing2".to_vec()).unwrap(),
+            storage.get(b"existing2".to_vec())?,
             Some(b"value2".to_vec())
         );
+        Ok(())
     }
 
     #[test]
-    fn test_atomic_failure_handling() {
+    fn test_atomic_failure_handling() -> anyhow::Result<()> {
         let mut storage = MockAtomicStorage::new();
 
         storage.set_fail_next(true);
@@ -215,8 +190,9 @@ mod atomic_storage_example {
         let result = storage.batch_mixed(inserts, vec![]);
         assert!(result.is_err());
         assert_eq!(
-            result.unwrap_err(),
-            MockAtomicError("Batch mixed operation failed".to_string())
+            result,
+            Err(MockAtomicError("Batch mixed operation failed".to_string()))
         );
+        Ok(())
     }
 }

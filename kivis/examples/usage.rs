@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used)]
 use kivis::{manifest, Database, DatabaseError, DeriveKey, MemoryStorage, Record};
 
 /// A user record with an indexed name field

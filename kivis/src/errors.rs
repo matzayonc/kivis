@@ -1,4 +1,7 @@
-use core::fmt::{self, Debug, Display};
+use core::{
+    error::Error,
+    fmt::{self, Debug, Display},
+};
 
 use crate::traits::{DeserializationError, SerializationError};
 
@@ -74,3 +77,5 @@ impl<S: Debug + Display + Eq + PartialEq> From<SerializationError> for DatabaseE
         DatabaseError::Serialization(e)
     }
 }
+
+impl<S> Error for DatabaseError<S> where S: Debug + Display + Eq + PartialEq {}

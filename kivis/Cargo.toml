@@ -27,3 +27,4 @@ paste = { workspace = true }
 [dev-dependencies]
 hex = "0.4.3"
 trybuild = "1.0"
+anyhow = "1.0"

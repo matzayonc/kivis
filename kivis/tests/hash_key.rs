@@ -14,7 +14,6 @@
  * - Database.insert() method for records with derived keys
  */
 
-#![allow(clippy::unwrap_used)]
 use kivis::{manifest, Database, DatabaseEntry, DeriveKey, KeyBytes, MemoryStorage, RecordKey};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
@@ -57,8 +56,8 @@ impl DatabaseEntry for ContentRecord {
 manifest![Manifest: ContentRecord];
 
 #[test]
-fn test_hash_key_storage_and_retrieval() {
-    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
+fn test_hash_key_storage_and_retrieval() -> anyhow::Result<()> {
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default())?;
 
     // Create a record
     let record = ContentRecord {
@@ -70,13 +69,13 @@ fn test_hash_key_storage_and_retrieval() {
     let expected_key = ContentRecord::key(&record);
 
     // Store the record using insert() for hash-based keys
-    let stored_key = store.insert(&record).unwrap();
+    let stored_key = store.insert(&record)?;
 
     // The stored key should match our expected hash
     assert_eq!(stored_key, expected_key);
 
     // Retrieve the record using the key
-    let retrieved = store.get(&stored_key).unwrap();
+    let retrieved = store.get(&stored_key)?;
     assert_eq!(retrieved, Some(record.clone()));
 
     // Test that the same content always produces the same hash
@@ -86,11 +85,12 @@ fn test_hash_key_storage_and_retrieval() {
     };
     let key2 = ContentRecord::key(&record2);
     assert_eq!(stored_key, key2);
+    Ok(())
 }
 
 #[test]
-fn test_hash_key_uniqueness() {
-    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
+fn test_hash_key_uniqueness() -> anyhow::Result<()> {
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default())?;
 
     // Create two different records
     let record1 = ContentRecord {
@@ -104,36 +104,38 @@ fn test_hash_key_uniqueness() {
     };
 
     // Store both records using insert() for hash-based keys
-    let key1 = store.insert(&record1).unwrap();
-    let key2 = store.insert(&record2).unwrap();
+    let key1 = store.insert(&record1)?;
+    let key2 = store.insert(&record2)?;
 
     // Keys should be different
     assert_ne!(key1, key2);
 
     // Both records should be retrievable
-    assert_eq!(store.get(&key1).unwrap(), Some(record1));
-    assert_eq!(store.get(&key2).unwrap(), Some(record2));
+    assert_eq!(store.get(&key1)?, Some(record1));
+    assert_eq!(store.get(&key2)?, Some(record2));
+    Ok(())
 }
 
 #[test]
-fn test_hash_key_removal() {
-    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
+fn test_hash_key_removal() -> anyhow::Result<()> {
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default())?;
 
     let record = ContentRecord {
         data: "test removal".to_string(),
         value: 999,
     };
 
-    let key = store.insert(&record).unwrap();
+    let key = store.insert(&record)?;
 
     // Verify record exists
-    assert_eq!(store.get(&key).unwrap(), Some(record));
+    assert_eq!(store.get(&key)?, Some(record));
 
     // Remove the record
-    store.remove(&key).unwrap();
+    store.remove(&key)?;
 
     // Verify record no longer exists
-    assert_eq!(store.get(&key).unwrap(), None);
+    assert_eq!(store.get(&key)?, None);
+    Ok(())
 }
 
 #[test]

@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used)]
 use kivis::{manifest, Database, MemoryStorage, Record};
 use serde::{Deserialize, Serialize};
 
@@ -10,22 +9,25 @@ struct UserRecord {
 manifest![Manifest: UserRecord];
 
 #[test]
-fn test_lifecycle() {
-    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
+fn test_lifecycle() -> anyhow::Result<()> {
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default())?;
 
     let user = UserRecord {
         data: vec![1, 2, 3, 4],
     };
 
-    let user_key = store.put(&user).unwrap();
-    assert_eq!(store.get(&user_key).unwrap(), Some(user.clone()));
-    store.remove(&user_key).unwrap();
-    assert_eq!(store.get(&user_key).unwrap(), None);
+    let user_key = store.put(&user)?;
+    let got = store.get(&user_key)?;
+    assert_eq!(got, Some(user.clone()));
+    store.remove(&user_key)?;
+    let got2 = store.get(&user_key)?;
+    assert_eq!(got2, None);
+    Ok(())
 }
 
 #[test]
-fn test_iter() {
-    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
+fn test_iter() -> anyhow::Result<()> {
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default())?;
 
     let user = UserRecord {
         data: vec![1, 2, 3, 4],
@@ -34,15 +36,14 @@ fn test_iter() {
         data: vec![5, 6, 7, 8],
     };
 
-    let user_key = store.put(&user).unwrap();
-    let another_key = store.put(&another).unwrap();
+    let user_key = store.put(&user)?;
+    let another_key = store.put(&another)?;
 
     assert_ne!(user_key, another_key);
 
     let iter = store
-        .iter_keys(UserRecordKey(0)..UserRecordKey(3))
-        .unwrap()
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap();
+        .iter_keys(UserRecordKey(0)..UserRecordKey(3))?
+        .collect::<Result<Vec<_>, _>>()?;
     assert_eq!(iter, vec![another_key, user_key]);
+    Ok(())
 }

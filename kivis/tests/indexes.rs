@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used)]
+use anyhow::Context;
 use kivis::{manifest, Database, DatabaseEntry, Index, KeyBytes, MemoryStorage, Record};
 
 #[derive(
@@ -22,70 +22,73 @@ struct Pet {
 manifest![Manifest: User, Pet];
 
 #[test]
-fn test_user_record() {
-    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
+fn test_user_record() -> anyhow::Result<()> {
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default())?;
 
     let user = User {
         name: "Alice".to_string(),
         email: "alice@example.com".to_string(),
     };
-    let user_key = store.put(&user).unwrap();
+    let user_key = store.put(&user)?;
 
-    let retrieved: User = store.get(&user_key).unwrap().unwrap();
+    let retrieved = store.get(&user_key)?.context("Missing")?;
     assert_eq!(retrieved, user);
     assert_eq!(user_key, UserKey(1));
+    Ok(())
 }
 
 #[test]
-fn test_pet_record() {
-    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
+fn test_pet_record() -> anyhow::Result<()> {
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default())?;
 
     let pet = Pet {
         name: "Fido".to_string(),
         owner: UserKey(1),
     };
 
-    let pet_key = store.put(&pet).unwrap();
+    let pet_key = store.put(&pet)?;
 
-    let retrieved: Pet = store.get(&pet_key).unwrap().unwrap();
+    let retrieved = store.get(&pet_key)?.context("Missing")?;
     assert_eq!(retrieved, pet);
+    Ok(())
 }
 
 #[test]
-fn test_get_owner_of_pet() {
-    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
+fn test_get_owner_of_pet() -> anyhow::Result<()> {
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default())?;
 
     let user = User {
         name: "Alice".to_string(),
         email: "alice@example.com".to_string(),
     };
-    let user_key = store.put(&user).unwrap();
+    let user_key = store.put(&user)?;
     let pet = Pet {
         name: "Fido".to_string(),
         owner: user_key.clone(),
     };
-    let pet_key = store.put(&pet).unwrap();
+    let pet_key = store.put(&pet)?;
 
-    let userr: User = store.get(&user_key).unwrap().unwrap();
+    let userr = store.get(&user_key)?.context("Missing")?;
     assert_eq!(user, userr);
 
-    let retrieved: Pet = store.get(&pet_key).unwrap().unwrap();
+    let retrieved = store.get(&pet_key)?.context("Missing")?;
     assert_eq!(retrieved, pet);
 
-    let owner: User = store.get(&pet.owner).unwrap().unwrap();
+    let owner = store.get(&pet.owner)?.context("Missing")?;
     assert_eq!(owner, user);
+    Ok(())
 }
 
 #[test]
-fn test_index() {
-    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
+fn test_index() -> anyhow::Result<()> {
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default())?;
 
     let user = User {
         name: "Alice".to_string(),
         email: "alice@example.com".to_string(),
     };
 
-    let user_key = store.put(&user).unwrap();
+    let user_key = store.put(&user)?;
 
     let index_keys = user.index_keys();
     assert_eq!(index_keys.len(), 1);
@@ -94,60 +97,62 @@ fn test_index() {
         index_keys[0]
             .1
             .to_bytes(bincode::config::standard())
-            .unwrap(),
-        user.name.to_bytes(bincode::config::standard()).unwrap()
+            .context("Missing")?,
+        user.name
+            .to_bytes(bincode::config::standard())
+            .context("Missing")?
     );
 
-    let retrieved: User = store.get(&user_key).unwrap().unwrap();
+    let retrieved = store.get(&user_key)?.context("Missing")?;
     assert_eq!(retrieved, user);
 
-    assert_eq!(store.dissolve().len(), 2)
+    assert_eq!(store.dissolve().len(), 2);
+    Ok(())
 }
 
 #[test]
-fn test_iter() {
-    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
+fn test_keys_iter() -> anyhow::Result<()> {
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default())?;
 
     let pet = Pet {
         name: "Fido".to_string(),
         owner: UserKey(1),
     };
 
-    store.put(&pet).unwrap();
+    store.put(&pet)?;
 
     let retrieved = store
-        .iter_keys(PetKey(0)..PetKey(u64::MAX))
-        .unwrap()
+        .iter_keys(PetKey(0)..PetKey(u64::MAX))?
         .next()
-        .unwrap()
-        .unwrap();
+        .context("Missing")??;
 
     assert_eq!(retrieved, PetKey(1));
+    Ok(())
 }
 
 #[test]
-fn test_iter_index() {
-    let mut store = Database::<_, Manifest>::new(MemoryStorage::default()).unwrap();
+fn test_iter_index() -> anyhow::Result<()> {
+    let mut store = Database::<_, Manifest>::new(MemoryStorage::default())?;
 
     let user = User {
         name: "Al".to_string(),
         email: "alice@example.com".to_string(),
     };
 
-    store.put(&user).unwrap();
+    store.put(&user)?;
 
     let retrieved = store
-        .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))
-        .unwrap()
+        .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))?
         .next()
-        .unwrap()
-        .unwrap();
+        .transpose()?;
+    let retrieved = retrieved.context("Missing")?;
     assert_eq!(retrieved, UserKey(1));
+    Ok(())
 }
 
 #[test]
-fn test_iter_index_exact() {
-    let mut store = Database::<MemoryStorage, Manifest>::new(MemoryStorage::default()).unwrap();
+fn test_iter_index_exact() -> anyhow::Result<()> {
+    let mut store = Database::<MemoryStorage, Manifest>::new(MemoryStorage::default())?;
 
     let names = [
         "Al", "Al", // The target name
@@ -156,24 +161,20 @@ fn test_iter_index_exact() {
         "Alice", // Alice for tradition
     ];
     for name in names {
-        store
-            .put(&User {
-                name: name.to_string(),
-                email: format!("{}@example.com", name.to_lowercase()),
-            })
-            .expect("Put should succeed.");
+        store.put(&User {
+            name: name.to_string(),
+            email: format!("{}@example.com", name.to_lowercase()),
+        })?;
     }
 
     let als = store
-        .iter_by_index_exact(&UserNameIndex("Al".into()))
-        .unwrap()
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap();
+        .iter_by_index_exact(&UserNameIndex("Al".into()))?
+        .collect::<Result<Vec<_>, _>>()?;
 
     assert_eq!(als.len(), 2);
-    let al_1 = store.get(&als[0]).unwrap().unwrap();
-    let al_2 = store.get(&als[1]).unwrap().unwrap();
-
+    let al_1 = store.get(&als[0])?.context("Missing")?;
+    let al_2 = store.get(&als[1])?.context("Missing")?;
     assert_eq!(al_1.name, "Al");
     assert_eq!(al_2.name, "Al");
+    Ok(())
 }

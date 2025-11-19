@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used)]
+// Note: test functions return Result and avoid using `unwrap()`
 #[cfg(feature = "atomic")]
 #[cfg(test)]
 mod tests {
@@ -6,12 +6,7 @@ mod tests {
 
     use serde::{Deserialize, Serialize};
 
-    use kivis::{
-        manifest, AtomicStorage, Database, DatabaseError, DatabaseTransaction, Record, Storage,
-    };
-
-    type TestResult =
-        std::result::Result<(), DatabaseError<<MockAtomicStorage as Storage>::StoreError>>;
+    use kivis::{manifest, AtomicStorage, Database, DatabaseTransaction, Record, Storage};
 
     #[derive(Debug, Record, PartialEq, Eq, Serialize, Deserialize)]
     pub struct MockRecord(#[key] u8, char);
@@ -81,7 +76,7 @@ mod tests {
     }
 
     #[test]
-    fn test_transaction_new() -> TestResult {
+    fn test_transaction_new() -> anyhow::Result<()> {
         let tx = DatabaseTransaction::<Manifest>::new_with_serialization_config(Default::default());
         assert!(tx.is_empty());
         assert_eq!(tx.write_count(), 0);
@@ -90,7 +85,7 @@ mod tests {
     }
 
     #[test]
-    fn test_transaction_write() -> TestResult {
+    fn test_transaction_write() -> anyhow::Result<()> {
         let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
         let mut tx = db.create_transaction();
 
@@ -105,7 +100,7 @@ mod tests {
     }
 
     #[test]
-    fn test_transaction_delete() -> TestResult {
+    fn test_transaction_delete() -> anyhow::Result<()> {
         let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
         let mut tx = db.create_transaction();
 
@@ -120,7 +115,7 @@ mod tests {
     }
 
     #[test]
-    fn test_transaction_write_overrides_delete() -> TestResult {
+    fn test_transaction_write_overrides_delete() -> anyhow::Result<()> {
         let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
         let mut tx = db.create_transaction();
 
@@ -136,7 +131,7 @@ mod tests {
     }
 
     #[test]
-    fn test_transaction_delete_ignored_after_write() -> TestResult {
+    fn test_transaction_delete_ignored_after_write() -> anyhow::Result<()> {
         let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
         let mut tx = db.create_transaction();
 
@@ -151,7 +146,7 @@ mod tests {
     }
 
     #[test]
-    fn test_transaction_multiple_writes_same_key() -> TestResult {
+    fn test_transaction_multiple_writes_same_key() -> anyhow::Result<()> {
         let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
         let mut tx = db.create_transaction();
 
@@ -168,12 +163,16 @@ mod tests {
         let mut tx_only_c = db.create_transaction();
         tx_only_c.insert(&MockRecord(1, 'c'))?;
 
-        assert_eq!(writes[0].1, tx_only_c.pending_writes().next().unwrap().1);
+        if let Some(w) = tx_only_c.pending_writes().next() {
+            assert_eq!(writes[0].1, w.1);
+        } else {
+            panic!("expected one pending write");
+        }
         Ok(())
     }
 
     #[test]
-    fn test_transaction_commit() -> TestResult {
+    fn test_transaction_commit() -> anyhow::Result<()> {
         let mut db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
         let mut tx = db.create_transaction();
 
@@ -193,7 +192,7 @@ mod tests {
     }
 
     #[test]
-    fn test_transaction_rollback() -> TestResult {
+    fn test_transaction_rollback() -> anyhow::Result<()> {
         let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
         let mut tx = db.create_transaction();
 
@@ -211,12 +210,12 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_transaction_commit() -> TestResult {
+    fn test_empty_transaction_commit() -> anyhow::Result<()> {
         let mut storage = MockAtomicStorage::new();
         let tx = DatabaseTransaction::<Manifest>::new_with_serialization_config(Default::default());
 
         // Empty transaction should succeed and return empty vector
-        let result = tx.commit(&mut storage).unwrap();
+        let result = tx.commit(&mut storage)?;
         assert!(result.is_empty());
         Ok(())
     }
