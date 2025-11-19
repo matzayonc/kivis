@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used)]
 use kivis::{manifest, Database, DeriveKey, MemoryStorage, Record};
 use serde::{Deserialize, Serialize};
 
@@ -31,23 +30,24 @@ struct OrderRecord {
 manifest![Manifest: UserRecord, OrderRecord, ProductRecord];
 
 #[test]
-fn test_default_key() {
+fn test_default_key() -> anyhow::Result<()> {
     let user = UserRecord {
         data: vec![1, 2, 3, 4],
     };
 
-    let mut store: Database<_, Manifest> = Database::new(MemoryStorage::new()).unwrap();
+    let mut store: Database<_, Manifest> = Database::new(MemoryStorage::new())?;
 
-    let user_key = store.put(&user).unwrap();
+    let user_key = store.put(&user)?;
     assert_eq!(user_key, UserRecordKey(1));
 
-    assert_eq!(store.get(&user_key).unwrap(), Some(user.clone()));
-    store.remove(&user_key).unwrap();
-    assert_eq!(store.get(&user_key).unwrap(), None);
+    assert_eq!(store.get(&user_key)?, Some(user.clone()));
+    store.remove(&user_key)?;
+    assert_eq!(store.get(&user_key)?, None);
+    Ok(())
 }
 
 #[test]
-fn test_specified_key() {
+fn test_specified_key() -> anyhow::Result<()> {
     let product1 = ProductRecord {
         name: "Widget".to_string(),
         sku: "WID-001".to_string(),
@@ -67,18 +67,19 @@ fn test_specified_key() {
     assert_eq!(key1, key2);
     assert_eq!(key1, ProductRecordKey("WID-001".to_string()));
 
-    let mut store: Database<_, Manifest> = Database::new(MemoryStorage::new()).unwrap();
+    let mut store: Database<_, Manifest> = Database::new(MemoryStorage::new())?;
 
-    store.insert(&product1).unwrap();
-    assert_eq!(store.get(&key1).unwrap(), Some(product1.clone()));
+    store.insert(&product1)?;
+    assert_eq!(store.get(&key1)?, Some(product1.clone()));
 
     // Insert product2 with same key should overwrite
-    store.insert(&product2).unwrap();
-    assert_eq!(store.get(&key1).unwrap(), Some(product2));
+    store.insert(&product2)?;
+    assert_eq!(store.get(&key1)?, Some(product2));
+    Ok(())
 }
 
 #[test]
-fn test_composite_key() {
+fn test_composite_key() -> anyhow::Result<()> {
     let order1 = OrderRecord {
         user_id: 123,
         order_date: "2024-01-01".to_string(),
@@ -111,21 +112,22 @@ fn test_composite_key() {
     assert_ne!(key1, key3);
     assert_ne!(key2, key3);
 
-    let mut store: Database<_, Manifest> = Database::new(MemoryStorage::new()).unwrap();
+    let mut store: Database<_, Manifest> = Database::new(MemoryStorage::new())?;
 
     // Insert all orders
-    store.insert(&order1).unwrap();
-    store.insert(&order2).unwrap();
-    store.insert(&order3).unwrap();
+    store.insert(&order1)?;
+    store.insert(&order2)?;
+    store.insert(&order3)?;
 
     // Verify all can be retrieved with their respective keys
-    assert_eq!(store.get(&key1).unwrap(), Some(order1));
-    assert_eq!(store.get(&key2).unwrap(), Some(order2));
-    assert_eq!(store.get(&key3).unwrap(), Some(order3));
+    assert_eq!(store.get(&key1)?, Some(order1));
+    assert_eq!(store.get(&key2)?, Some(order2));
+    assert_eq!(store.get(&key3)?, Some(order3));
 
     // Remove one and verify others remain
-    store.remove(&key1).unwrap();
-    assert_eq!(store.get(&key1).unwrap(), None);
-    assert!(store.get(&key2).unwrap().is_some());
-    assert!(store.get(&key3).unwrap().is_some());
+    store.remove(&key1)?;
+    assert_eq!(store.get(&key1)?, None);
+    assert!(store.get(&key2)?.is_some());
+    assert!(store.get(&key3)?.is_some());
+    Ok(())
 }

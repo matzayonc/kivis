@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used)]
+use anyhow::Context;
 use std::{collections::BTreeMap, fmt::Display, ops::Range};
 
 use kivis::{
@@ -111,7 +111,7 @@ impl kivis::Manifests<Pet> for Manifest {
 }
 
 // Define storage for the database.
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct ManualStorage {
     data: BTreeMap<Vec<u8>, Vec<u8>>,
 }
@@ -122,6 +122,7 @@ impl Display for NoError {
         Ok(())
     }
 }
+
 impl kivis::Storage for ManualStorage {
     type StoreError = NoError;
 
@@ -148,9 +149,9 @@ impl kivis::Storage for ManualStorage {
 }
 
 #[test]
-fn test_user_record() {
+fn test_user_record() -> anyhow::Result<()> {
     let db = ManualStorage::default();
-    let mut database: Database<_, Manifest> = Database::new(db).unwrap();
+    let mut database: Database<_, Manifest> = Database::new(db)?;
 
     let user = User {
         id: 1,
@@ -158,32 +159,35 @@ fn test_user_record() {
         email: "alice@example.com".to_string(),
     };
 
-    database.insert(&user).unwrap();
+    database.insert(&user)?;
 
-    let retrieved: User = database.get(&UserKey(user.id)).unwrap().unwrap();
+    let retrieved = database.get(&UserKey(user.id))?.context("Missing")?;
     assert_eq!(retrieved, user);
+    Ok(())
 }
 
 #[test]
-fn test_pet_record() {
+fn test_pet_record() -> anyhow::Result<()> {
     let db = ManualStorage::default();
-    let mut database: Database<_, Manifest> = Database::new(db).unwrap();
+    let mut database: Database<_, Manifest> = Database::new(db)?;
 
     let pet = Pet {
         name: "Fido".to_string(),
         owner: UserKey(1),
     };
 
-    let pet_key = database.put(&pet).unwrap();
+    let pet_key = database.put(&pet)?;
 
-    let retrieved: Pet = database.get(&pet_key).unwrap().unwrap();
+    let retrieved: Option<Pet> = database.get(&pet_key)?;
+    let retrieved = retrieved.context("Missing")?;
     assert_eq!(retrieved, pet);
+    Ok(())
 }
 
 #[test]
-fn test_get_owner_of_pet() {
+fn test_get_owner_of_pet() -> anyhow::Result<()> {
     let db = ManualStorage::default();
-    let mut database: Database<_, Manifest> = Database::new(db).unwrap();
+    let mut database: Database<_, Manifest> = Database::new(db)?;
 
     let mut user = User {
         id: 1,
@@ -195,20 +199,21 @@ fn test_get_owner_of_pet() {
         owner: UserKey(user.id),
     };
 
-    user.id = database.insert(&user).unwrap().0;
-    let pet_key = database.put(&pet).unwrap();
+    user.id = database.insert(&user)?.0;
+    let pet_key = database.put(&pet)?;
 
-    let retrieved: Pet = database.get(&pet_key).unwrap().unwrap();
+    let retrieved = database.get(&pet_key)?.context("Missing")?;
     assert_eq!(retrieved, pet);
 
-    let owner: User = database.get(&pet.owner).unwrap().unwrap();
+    let owner = database.get(&pet.owner)?.context("Missing")?;
     assert_eq!(owner, user);
+    Ok(())
 }
 
 #[test]
-fn test_index() {
+fn test_index() -> anyhow::Result<()> {
     let db = ManualStorage::default();
-    let mut database: Database<_, Manifest> = Database::new(db).unwrap();
+    let mut database: Database<_, Manifest> = Database::new(db)?;
 
     let user = User {
         id: 1,
@@ -216,7 +221,7 @@ fn test_index() {
         email: "alice@example.com".to_string(),
     };
 
-    let _user_key = database.insert(&user).unwrap();
+    let _user_key = database.insert(&user)?;
 
     let index_keys = user.index_keys();
     assert_eq!(index_keys.len(), 1);
@@ -225,41 +230,43 @@ fn test_index() {
         index_keys[0]
             .1
             .to_bytes(bincode::config::standard())
-            .unwrap(),
-        user.name.to_bytes(bincode::config::standard()).unwrap()
+            .context("Missing")?,
+        user.name
+            .to_bytes(bincode::config::standard())
+            .context("Missing")?,
     );
 
-    let retrieved: User = database.get(&UserKey(user.id)).unwrap().unwrap();
+    let retrieved = database.get(&UserKey(user.id))?.context("Missing")?;
     assert_eq!(retrieved, user);
 
-    assert_eq!(database.dissolve().data.len(), 2)
+    assert_eq!(database.dissolve().data.len(), 2);
+    Ok(())
 }
 
 #[test]
-fn test_iter() {
+fn test_iter() -> anyhow::Result<()> {
     let db = ManualStorage::default();
-    let mut database: Database<_, Manifest> = Database::new(db).unwrap();
+    let mut database: Database<_, Manifest> = Database::new(db)?;
 
     let pet = Pet {
         name: "Fido".to_string(),
         owner: UserKey(1),
     };
 
-    let pet_key = database.put(&pet).unwrap();
+    let pet_key = database.put(&pet)?;
 
     let retrieved = database
-        .iter_keys(PetKey(1)..PetKey(u64::MAX))
-        .unwrap()
+        .iter_keys(PetKey(1)..PetKey(u64::MAX))?
         .next()
-        .unwrap()
-        .unwrap();
+        .context("Missing")??;
 
     assert_eq!(retrieved, pet_key);
+    Ok(())
 }
 
 #[test]
-fn test_iter_index() {
-    let mut database: Database<_, Manifest> = Database::new(ManualStorage::default()).unwrap();
+fn test_iter_index() -> anyhow::Result<()> {
+    let mut database: Database<_, Manifest> = Database::new(ManualStorage::default())?;
 
     let user = User {
         id: 42,
@@ -269,26 +276,22 @@ fn test_iter_index() {
 
     // Before inserting the user.
     let retrieved = database
-        .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))
-        .unwrap()
+        .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))?
         .collect::<Vec<_>>();
     assert!(retrieved.is_empty());
 
     // After inserting the user.
-    database.insert(&user).unwrap();
+    database.insert(&user)?;
     let retrieved = database
-        .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))
-        .unwrap()
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap();
+        .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))?
+        .collect::<Result<Vec<_>, _>>()?;
     assert_eq!(retrieved, vec![UserKey(42)]);
 
     // After inserting the same user again.
-    database.insert(&user).unwrap();
+    database.insert(&user)?;
     let retrieved = database
-        .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))
-        .unwrap()
-        .collect::<Result<Vec<_>, _>>()
-        .unwrap();
+        .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))?
+        .collect::<Result<Vec<_>, _>>()?;
     assert_eq!(retrieved, vec![UserKey(42)]);
+    Ok(())
 }

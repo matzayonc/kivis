@@ -1,4 +1,3 @@
-#![allow(clippy::unwrap_used)]
 use kivis::{manifest, Database, DatabaseError, Record, Storage};
 use std::fs;
 use std::path::PathBuf;
