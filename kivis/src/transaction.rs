@@ -1,33 +1,37 @@
 use bincode::config::Configuration;
+use serde::Serialize;
 
 #[cfg(feature = "atomic")]
 use crate::traits::AtomicStorage;
 use crate::{
     wrap::{encode_value, wrap, Subtable, WrapPrelude},
-    Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, KeyBytes, Manifest,
-    Manifests, RecordKey, SerializationError, Storage,
+    BinaryStorage, Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, KeyBytes,
+    Manifest, Manifests, RecordKey, SerializationError, Storage,
 };
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 use core::marker::PhantomData;
-type Write = (Vec<u8>, Vec<u8>);
 
 /// A database transaction that accumulates low-level byte operations (writes and deletes)
 /// without immediately applying them to storage.
 ///
 /// This struct is always available, but the `commit` method is only available when the "atomic" feature is enabled.
-pub struct DatabaseTransaction<Manifest> {
+pub struct DatabaseTransaction<Manifest, Data> {
     /// Pending write operations: (key, value) pairs
-    pending_writes: Vec<Write>,
+    pending_writes: Vec<(Data, Data)>,
     /// Pending delete operations: keys to delete
-    pending_deletes: Vec<Vec<u8>>,
+    pending_deletes: Vec<Data>,
     /// Serialization configuration
     serialization_config: Configuration,
     _marker: PhantomData<Manifest>,
 }
 
-impl<M: Manifest> DatabaseTransaction<M> {
+pub trait TransactionData: Eq {
+    fn join(a: &mut Self, b: Self);
+}
+
+impl<M: Manifest, D: TransactionData> DatabaseTransaction<M, D> {
     /// Creates a new empty transaction. Should be used by [`Database::create_transaction`].
     pub fn new<S: Storage>(database: &Database<S, M>) -> Self {
         Self {
@@ -119,7 +123,7 @@ impl<M: Manifest> DatabaseTransaction<M> {
     ///
     /// If the same key is written multiple times, only the last value is kept.
     /// If a key is both written and deleted, the write takes precedence.
-    fn write(&mut self, key: Vec<u8>, value: Vec<u8>) {
+    fn write(&mut self, key: D, value: D) {
         self.pending_writes.retain(|(k, _)| k != &key);
         self.pending_deletes.retain(|k| k != &key);
         // Remove from deletes if it was there
@@ -130,7 +134,7 @@ impl<M: Manifest> DatabaseTransaction<M> {
     ///
     /// If a key is both written and deleted, the write takes precedence
     /// (so this delete will be ignored if the key was already written).
-    fn delete(&mut self, key: Vec<u8>) {
+    fn delete(&mut self, key: D) {
         // Only add to deletes if it's not already being written
         if !self.pending_writes.iter().any(|(k, _)| k == &key) {
             self.pending_deletes.push(key);
@@ -156,12 +160,12 @@ impl<M: Manifest> DatabaseTransaction<M> {
     }
 
     /// Returns an iterator over the pending write operations.
-    pub fn pending_writes(&self) -> impl Iterator<Item = &Write> {
+    pub fn pending_writes(&self) -> impl Iterator<Item = &(D, D)> {
         self.pending_writes.iter()
     }
 
     /// Returns an iterator over the pending delete keys.
-    pub fn pending_deletes(&self) -> impl Iterator<Item = &Vec<u8>> {
+    pub fn pending_deletes(&self) -> impl Iterator<Item = &D> {
         self.pending_deletes.iter()
     }
 
@@ -179,17 +183,17 @@ impl<M: Manifest> DatabaseTransaction<M> {
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if the underlying batch operation fails.
-    pub fn commit<S: AtomicStorage>(
+    pub fn commit<S: AtomicStorage<Data = D>>(
         self,
         storage: &mut S,
-    ) -> Result<Vec<Option<Vec<u8>>>, DatabaseError<S::StoreError>> {
+    ) -> Result<Vec<Option<D>>, DatabaseError<S::StoreError>> {
         if self.is_empty() {
             return Ok(Vec::new());
         }
 
         // Convert to the format expected by batch_mixed
-        let inserts: Vec<Write> = self.pending_writes.into_iter().collect();
-        let removes: Vec<Vec<u8>> = self.pending_deletes.into_iter().collect();
+        let inserts: Vec<(D, D)> = self.pending_writes.into_iter().collect();
+        let removes: Vec<D> = self.pending_deletes.into_iter().collect();
 
         storage
             .batch_mixed(inserts, removes)
@@ -203,7 +207,7 @@ impl<M: Manifest> DatabaseTransaction<M> {
         drop(self);
     }
 
-    pub fn consume(self) -> (impl Iterator<Item = Write>, impl Iterator<Item = Vec<u8>>) {
+    pub fn consume(self) -> (impl Iterator<Item = (D, D)>, impl Iterator<Item = D>) {
         (
             self.pending_writes.into_iter(),
             self.pending_deletes.into_iter(),
@@ -214,7 +218,7 @@ impl<M: Manifest> DatabaseTransaction<M> {
         &self,
         record: &R,
         key: &R::Key,
-    ) -> Result<Vec<Write>, SerializationError>
+    ) -> Result<Vec<(D, D)>, SerializationError>
     where
         R::Key: RecordKey<Record = R>,
     {
@@ -222,9 +226,8 @@ impl<M: Manifest> DatabaseTransaction<M> {
         let mut writes = Vec::with_capacity(1 + index_keys.len());
 
         for (discriminator, index_key) in record.index_keys() {
-            let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator))
-                .to_bytes(self.serialization_config())?;
-            entry.extend_from_slice(&index_key.to_bytes(self.serialization_config())?);
+            let mut entry = Self::serialize(WrapPrelude::new::<R>(Subtable::Index(discriminator)))?;
+            D::join(&mut entry, &Self::serialize(index_key)?);
 
             // Indexes might be repeated, so we need to ensure that the key is unique.
             // TODO: Add a way to declare as unique and deduplicate by provided hash.
@@ -234,8 +237,8 @@ impl<M: Manifest> DatabaseTransaction<M> {
             writes.push((entry.clone(), key_bytes.clone()));
         }
 
-        let key = wrap::<R>(key, self.serialization_config())?;
-        let value = encode_value(record, self.serialization_config())?;
+        let key = Self::serialize(wrap::<R>(key, self.serialization_config())?)?;
+        let value = Self::serialize(record, self.serialization_config())?;
         writes.push((key, value));
 
         Ok(writes)
@@ -245,7 +248,7 @@ impl<M: Manifest> DatabaseTransaction<M> {
         &self,
         record: &R,
         key: &R::Key,
-    ) -> Result<Vec<Vec<u8>>, SerializationError>
+    ) -> Result<Vec<D>, SerializationError>
     where
         R::Key: RecordKey<Record = R>,
     {
@@ -266,5 +269,15 @@ impl<M: Manifest> DatabaseTransaction<M> {
         deletes.push(key);
 
         Ok(deletes)
+    }
+
+    fn serialize(data: impl Serialize) -> Result<D, SerializationError> {
+        todo!();
+        Ok(data)
+    }
+
+    fn join(a: &mut D, b: D) {
+        todo!();
+        a
     }
 }

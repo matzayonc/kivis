@@ -1,6 +1,8 @@
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
+use bincode::config::Configuration;
 use core::{fmt::Display, ops::Range};
+use serde::{de::DeserializeOwned, Serialize};
 
 use super::Debug;
 
@@ -9,7 +11,7 @@ use super::Debug;
 /// The storage backend is responsible for storing and retrieving records and their associated indexes.
 /// It defines methods for inserting, getting, removing, and iterating over keys in the storage.
 /// All storage operations are defined over `Vec<u8>` keys and values.
-pub trait Storage {
+pub trait BinaryStorage {
     /// Error type returned by storage operations.
     type StoreError: Debug + Display + Eq + PartialEq;
 
@@ -42,4 +44,105 @@ pub trait Storage {
     ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError>
     where
         Self: Sized;
+}
+
+pub trait Storage {
+    type StoreError: Debug + Display + Eq + PartialEq;
+
+    fn insert(
+        &mut self,
+        key: impl Serialize + Sized,
+        value: impl Serialize + Sized,
+    ) -> Result<(), Self::StoreError>;
+
+    fn get<V: DeserializeOwned + Sized>(
+        &self,
+        key: impl Serialize + Sized,
+    ) -> Result<Option<V>, Self::StoreError>;
+
+    fn remove<V: DeserializeOwned + Sized>(
+        &mut self,
+        key: impl Serialize + Sized,
+    ) -> Result<Option<V>, Self::StoreError>;
+
+    fn iter_keys<V: DeserializeOwned + Sized>(
+        &self,
+        range: Range<impl Serialize + Sized>,
+    ) -> Result<impl Iterator<Item = Result<V, Self::StoreError>>, Self::StoreError>
+    where
+        Self: Sized;
+}
+
+impl<T> Storage for T
+where
+    T: BinaryStorage,
+    T::StoreError: From<bincode::error::EncodeError> + From<bincode::error::DecodeError>,
+{
+    type StoreError = T::StoreError;
+
+    fn insert(
+        &mut self,
+        key: impl Serialize,
+        value: impl Serialize,
+    ) -> Result<(), Self::StoreError> {
+        let key = bincode::serde::encode_to_vec::<_, Configuration>(key, Configuration::default())?;
+        let value =
+            bincode::serde::encode_to_vec::<_, Configuration>(value, Configuration::default())?;
+        <Self as BinaryStorage>::insert(self, key, value)
+    }
+
+    fn get<V: DeserializeOwned>(&self, key: impl Serialize) -> Result<Option<V>, Self::StoreError> {
+        let key = bincode::serde::encode_to_vec::<_, Configuration>(key, Configuration::default())?;
+        let Some(value) = <Self as BinaryStorage>::get(self, key)? else {
+            return Ok(None);
+        };
+        let (deserialized, _rem) = bincode::serde::decode_from_slice::<_, Configuration>(
+            &value,
+            Configuration::default(),
+        )?;
+
+        Ok(Some(deserialized))
+    }
+
+    fn remove<V: DeserializeOwned>(
+        &mut self,
+        key: impl Serialize,
+    ) -> Result<Option<V>, Self::StoreError> {
+        let key = bincode::serde::encode_to_vec::<_, Configuration>(key, Configuration::default())?;
+        let Some(value) = <Self as BinaryStorage>::remove(self, key)? else {
+            return Ok(None);
+        };
+        let (deserialized, _rem) = bincode::serde::decode_from_slice::<_, Configuration>(
+            &value,
+            Configuration::default(),
+        )?;
+
+        Ok(Some(deserialized))
+    }
+
+    fn iter_keys<V: DeserializeOwned>(
+        &self,
+        range: Range<impl Serialize>,
+    ) -> Result<impl Iterator<Item = Result<V, Self::StoreError>>, Self::StoreError>
+    where
+        Self: Sized,
+    {
+        let start = bincode::serde::encode_to_vec::<_, Configuration>(
+            range.start,
+            Configuration::default(),
+        )?;
+        let end =
+            bincode::serde::encode_to_vec::<_, Configuration>(range.end, Configuration::default())?;
+        let iter = <Self as BinaryStorage>::iter_keys(self, start..end)?;
+
+        Ok(iter.map(|res| {
+            res.and_then(|value| {
+                let (deserialized, _rem) = bincode::serde::decode_from_slice::<_, Configuration>(
+                    &value,
+                    Configuration::default(),
+                )?;
+                Ok(deserialized)
+            })
+        }))
+    }
 }

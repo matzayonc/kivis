@@ -6,7 +6,7 @@ mod tests {
 
     use serde::{Deserialize, Serialize};
 
-    use kivis::{manifest, AtomicStorage, Database, DatabaseTransaction, Record, Storage};
+    use kivis::{manifest, AtomicStorage, Database, DatabaseTransaction, Record, BinaryStorage};
 
     #[derive(Debug, Record, PartialEq, Eq, Serialize, Deserialize)]
     pub struct MockRecord(#[key] u8, char);
@@ -26,7 +26,7 @@ mod tests {
         }
     }
 
-    impl Storage for MockAtomicStorage {
+    impl BinaryStorage for MockAtomicStorage {
         type StoreError = String;
 
         fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {

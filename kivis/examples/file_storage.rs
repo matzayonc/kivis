@@ -1,4 +1,4 @@
-use kivis::{manifest, Database, DatabaseError, Record, Storage};
+use kivis::{manifest, Database, DatabaseError, Record, BinaryStorage};
 use std::fs;
 use std::path::PathBuf;
 
@@ -42,7 +42,7 @@ impl FileStore {
     }
 }
 
-impl Storage for FileStore {
+impl BinaryStorage for FileStore {
     type StoreError = kivis::MemoryStorageError;
 
     fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {

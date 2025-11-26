@@ -87,7 +87,7 @@ pub(crate) struct Wrap<R> {
 pub(crate) fn wrap<R: DatabaseEntry>(
     item_key: &R::Key,
     config: Configuration,
-) -> Result<Vec<u8>, SerializationError> {
+) -> Result<Wrap<R::Key>, SerializationError> {
     let wrapped = Wrap {
         prelude: WrapPrelude {
             scope: R::SCOPE,
@@ -95,7 +95,8 @@ pub(crate) fn wrap<R: DatabaseEntry>(
         },
         key: item_key.clone(),
     };
-    encode_to_vec(wrapped, config)
+    // encode_to_vec(wrapped, config)
+    Ok(wrapped)
 }
 
 pub(crate) fn empty_wrap<R: DatabaseEntry>(

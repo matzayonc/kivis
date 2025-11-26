@@ -1,6 +1,6 @@
 use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
-use crate::traits::Storage;
+use crate::traits::BinaryStorage;
 
 /// A memory-based storage implementation using a [`BTreeMap`].
 ///
@@ -19,7 +19,7 @@ impl Display for MemoryStorageError {
     }
 }
 
-impl Storage for MemoryStorage {
+impl BinaryStorage for MemoryStorage {
     type StoreError = MemoryStorageError;
 
     fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {

@@ -3,22 +3,22 @@ use bincode::serde::decode_from_slice;
 use serde::de::DeserializeOwned;
 
 use crate::errors::DatabaseError;
-use crate::traits::{DatabaseEntry, Index, Storage};
+use crate::traits::{BinaryStorage, DatabaseEntry, Index};
 use crate::transaction::DatabaseTransaction;
 use crate::wrap::{decode_value, empty_wrap, wrap, Subtable, Wrap, WrapPrelude};
-use crate::{DeriveKey, Incrementable, Manifest, Manifests, RecordKey};
+use crate::{DeriveKey, Incrementable, Manifest, Manifests, RecordKey, Storage};
 use core::ops::Range;
 
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, vec::Vec};
 
 type DatabaseIteratorItem<R, S> =
-    Result<<R as DatabaseEntry>::Key, DatabaseError<<S as Storage>::StoreError>>;
+    Result<<R as DatabaseEntry>::Key, DatabaseError<<S as BinaryStorage>::StoreError>>;
 
 /// The `kivis` database type. All interactions with the database are done through this type.
 pub struct Database<S: Storage, M: Manifest> {
     pub(crate) store: S,
-    fallback: Option<Box<dyn Storage<StoreError = S::StoreError>>>,
+    // fallback: Option<Box<dyn BinaryStorage<StoreError = S::StoreError>>>,
     pub(crate) manifest: M,
     serialization_config: Configuration,
 }
@@ -32,7 +32,7 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     pub fn new(store: S) -> Result<Self, DatabaseError<<S as Storage>::StoreError>> {
         let mut db = Database {
             store,
-            fallback: None,
+            // fallback: None,
             manifest: M::default(),
             serialization_config: Configuration::default(),
         };
@@ -48,8 +48,8 @@ impl<S: Storage, M: Manifest> Database<S, M> {
 
     /// Sets a fallback storage that will be used if the main storage does not contain the requested record.
     /// The current storage then becomes the cache for the fallback storage.
-    pub fn set_fallback(&mut self, fallback: Box<dyn Storage<StoreError = S::StoreError>>) {
-        self.fallback = Some(fallback);
+    pub fn set_fallback(&mut self, fallback: Box<dyn BinaryStorage<StoreError = S::StoreError>>) {
+        // self.fallback = Some(fallback);
     }
 
     /// Add a record with autoincremented key into the database, together with all related index entries.
@@ -109,18 +109,18 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     ) -> Result<(), DatabaseError<S::StoreError>> {
         let (writes, deletes) = transaction.consume();
         for (key, value) in writes {
-            if let Some(fallback) = &mut self.fallback {
-                fallback
-                    .insert(key.clone(), value.clone())
-                    .map_err(DatabaseError::Io)?;
-            }
+            // if let Some(fallback) = &mut self.fallback {
+            //     fallback
+            //         .insert(key.clone(), value.clone())
+            //         .map_err(DatabaseError::Io)?;
+            // }
             self.store.insert(key, value).map_err(DatabaseError::Io)?;
         }
 
         for key in deletes {
-            if let Some(fallback) = &mut self.fallback {
-                fallback.remove(key.clone()).map_err(DatabaseError::Io)?;
-            }
+            // if let Some(fallback) = &mut self.fallback {
+            //     fallback.remove(key.clone()).map_err(DatabaseError::Io)?;
+            // }
             self.store.remove(key).map_err(DatabaseError::Io)?;
         }
 
@@ -149,19 +149,20 @@ impl<S: Storage, M: Manifest> Database<S, M> {
             if let Some(value) = self.store.get(serialized_key).map_err(DatabaseError::Io)? {
                 value
             } else {
-                let Some(fallback) = &self.fallback else {
-                    return Ok(None);
-                };
-                let key = wrap::<K::Record>(key, self.serialization_config)
-                    .map_err(DatabaseError::Serialization)?;
-                let Some(value) = fallback.get(key).map_err(DatabaseError::Io)? else {
-                    return Ok(None);
-                };
-                value
+                // let Some(fallback) = &self.fallback else {
+                //     return Ok(None);
+                // };
+                // let key = wrap::<K::Record>(key, self.serialization_config)
+                //     .map_err(DatabaseError::Serialization)?;
+                // let Some(value) = fallback.get(key).map_err(DatabaseError::Io)? else {
+                return Ok(None);
+                // };
+                // value
             };
         Ok(Some(
-            decode_value(&value, self.serialization_config)
-                .map_err(DatabaseError::Deserialization)?,
+            // decode_value(&value, self.serialization_config)
+            //     .map_err(DatabaseError::Deserialization)?,
+            value,
         ))
     }
 
@@ -221,7 +222,7 @@ impl<S: Storage, M: Manifest> Database<S, M> {
             .map_err(DatabaseError::Io)?;
 
         Ok(
-            raw_iter.map(|elem: Result<Vec<u8>, <S as Storage>::StoreError>| {
+            raw_iter.map(|elem: Result<Vec<u8>, <S as BinaryStorage>::StoreError>| {
                 let value = match elem {
                     Ok(value) => value,
                     Err(e) => return Err(DatabaseError::Io(e)),

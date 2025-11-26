@@ -2,7 +2,7 @@ use anyhow::Context;
 use std::{collections::BTreeMap, fmt::Display, ops::Range};
 
 use kivis::{
-    Database, DatabaseEntry, DeriveKey, Incrementable, Index, KeyBytes, RecordKey, Scope, Storage,
+    Database, DatabaseEntry, DeriveKey, Incrementable, Index, KeyBytes, RecordKey, Scope, BinaryStorage,
 };
 
 // Define a record type for an User.
@@ -88,7 +88,7 @@ impl kivis::Manifest for Manifest {
         vec![User::SCOPE, Pet::SCOPE]
     }
 
-    fn load<S: Storage>(
+    fn load<S: BinaryStorage>(
         &mut self,
         db: &mut Database<S, Self>,
     ) -> Result<(), kivis::DatabaseError<S::StoreError>> {
@@ -123,7 +123,7 @@ impl Display for NoError {
     }
 }
 
-impl kivis::Storage for ManualStorage {
+impl kivis::BinaryStorage for ManualStorage {
     type StoreError = NoError;
 
     fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {

@@ -3,7 +3,7 @@
 
 #[cfg(feature = "atomic")]
 fn atomic_storage_example() -> anyhow::Result<()> {
-    use kivis::{AtomicStorage, Storage};
+    use kivis::{AtomicStorage, BinaryStorage};
     use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
     // Define a custom error type
@@ -30,7 +30,7 @@ fn atomic_storage_example() -> anyhow::Result<()> {
     }
 
     // First implement the basic Storage trait
-    impl Storage for MyAtomicStorage {
+    impl BinaryStorage for MyAtomicStorage {
         type StoreError = MyError;
 
         fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
