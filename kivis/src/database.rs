@@ -1,5 +1,5 @@
 use bincode::config::Configuration;
-use bincode::serde::decode_from_slice;
+use bincode::serde::{decode_from_slice, encode_to_vec};
 use serde::de::DeserializeOwned;
 
 use crate::errors::DatabaseError;
@@ -308,8 +308,8 @@ impl<S: Storage, M: Manifest> Database<S, M> {
         let index_prelude = WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX));
         let mut start = index_prelude.to_bytes(self.serialization_config)?;
         let mut end = start.clone();
-        start.extend(range.start.to_bytes(self.serialization_config)?);
-        end.extend(range.end.to_bytes(self.serialization_config)?);
+        start.extend(encode_to_vec(&range.start, self.serialization_config())?);
+        end.extend(encode_to_vec(&range.end, self.serialization_config())?);
         let raw_iter = self
             .store
             .iter_keys(start..end)
@@ -337,7 +337,7 @@ impl<S: Storage, M: Manifest> Database<S, M> {
         let mut start = index_prelude.to_bytes(self.serialization_config)?;
         let mut end = index_prelude.to_bytes(self.serialization_config)?;
 
-        let start_bytes = index_key.to_bytes(self.serialization_config)?;
+        let start_bytes = encode_to_vec(index_key, self.serialization_config())?;
         let end_bytes = {
             let mut end_bytes = start_bytes.clone();
             bytes_next(&mut end_bytes);

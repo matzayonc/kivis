@@ -1,5 +1,6 @@
 use anyhow::Context;
-use kivis::{manifest, Database, DatabaseEntry, Index, KeyBytes, MemoryStorage, Record};
+use bincode::serde::encode_to_vec;
+use kivis::{manifest, Database, DatabaseEntry, Index, MemoryStorage, Record, SimpleIndexer};
 
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
@@ -90,17 +91,14 @@ fn test_index() -> anyhow::Result<()> {
 
     let user_key = store.put(&user)?;
 
-    let index_keys = user.index_keys();
+    let mut indexer = SimpleIndexer::new(bincode::config::standard());
+    user.index_keys(&mut indexer);
+    let index_keys = indexer.into_index_keys();
     assert_eq!(index_keys.len(), 1);
     assert_eq!(index_keys[0].0, UserNameIndex::INDEX);
     assert_eq!(
-        index_keys[0]
-            .1
-            .to_bytes(bincode::config::standard())
-            .context("Missing")?,
-        user.name
-            .to_bytes(bincode::config::standard())
-            .context("Missing")?
+        index_keys[0].1,
+        encode_to_vec(&user.name, bincode::config::standard()).context("Missing")?
     );
 
     let retrieved = store.get(&user_key)?.context("Missing")?;

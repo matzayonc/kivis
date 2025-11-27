@@ -1,8 +1,10 @@
 use anyhow::Context;
+use bincode::serde::encode_to_vec;
 use std::{collections::BTreeMap, fmt::Display, ops::Range};
 
 use kivis::{
-    Database, DatabaseEntry, DeriveKey, Incrementable, Index, KeyBytes, RecordKey, Scope, Storage,
+    Database, DatabaseEntry, DeriveKey, Incrementable, Index, RecordKey, Scope, SimpleIndexer,
+    Storage,
 };
 
 // Define a record type for an User.
@@ -25,9 +27,9 @@ impl Scope for User {
 }
 impl kivis::DatabaseEntry for User {
     type Key = UserKey;
-
-    fn index_keys(&self) -> Vec<(u8, &dyn KeyBytes)> {
-        vec![(UserNameIndex::INDEX, &self.name)]
+    const INDEX_COUNT_HINT: usize = 1;
+    fn index_keys(&self, indexer: &mut impl kivis::Indexer) {
+        indexer.add(1, &self.name);
     }
 }
 
@@ -223,17 +225,14 @@ fn test_index() -> anyhow::Result<()> {
 
     let _user_key = database.insert(&user)?;
 
-    let index_keys = user.index_keys();
+    let mut indexer = SimpleIndexer::new(bincode::config::standard());
+    user.index_keys(&mut indexer);
+    let index_keys = indexer.into_index_keys();
     assert_eq!(index_keys.len(), 1);
     assert_eq!(index_keys[0].0, 1);
     assert_eq!(
-        index_keys[0]
-            .1
-            .to_bytes(bincode::config::standard())
-            .context("Missing")?,
-        user.name
-            .to_bytes(bincode::config::standard())
-            .context("Missing")?,
+        index_keys[0].1,
+        encode_to_vec(&user.name, bincode::config::standard()).context("Missing")?,
     );
 
     let retrieved = database.get(&UserKey(user.id))?.context("Missing")?;
