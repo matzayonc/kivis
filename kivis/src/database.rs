@@ -6,21 +6,22 @@ use crate::errors::DatabaseError;
 use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
 use crate::wrap::{decode_value, empty_wrap, wrap, Subtable, Wrap, WrapPrelude};
-use crate::{DeriveKey, Incrementable, Manifest, Manifests, RecordKey};
+use crate::{
+    DeriveKey, Incrementable, Manifest, Manifests, RecordKey, StorageInner, Unifier, UnifierData,
+};
 use core::ops::Range;
 
 #[cfg(not(feature = "std"))]
 use alloc::{boxed::Box, vec::Vec};
 
-type DatabaseIteratorItem<R, S> =
-    Result<<R as DatabaseEntry>::Key, DatabaseError<<S as Storage>::StoreError>>;
+type DatabaseIteratorItem<R, S> = Result<<R as DatabaseEntry>::Key, DatabaseError<S>>;
 
 /// The `kivis` database type. All interactions with the database are done through this type.
 pub struct Database<S: Storage, M: Manifest> {
     pub(crate) store: S,
-    fallback: Option<Box<dyn Storage<StoreError = S::StoreError>>>,
+    fallback: Option<Box<dyn StorageInner<StoreError = S::StoreError>>>,
     pub(crate) manifest: M,
-    serialization_config: Configuration,
+    serialization_config: <S as Storage>::Serializer,
 }
 
 impl<S: Storage, M: Manifest> Database<S, M> {
@@ -29,12 +30,12 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if the manifest fails to load during initialization.
-    pub fn new(store: S) -> Result<Self, DatabaseError<<S as Storage>::StoreError>> {
+    pub fn new(store: S) -> Result<Self, DatabaseError<<S as StorageInner>::StoreError>> {
         let mut db = Database {
             store,
             fallback: None,
             manifest: M::default(),
-            serialization_config: Configuration::default(),
+            serialization_config: S::Serializer::default(),
         };
         let mut manifest = M::default();
         manifest.load(&mut db)?;
@@ -42,13 +43,13 @@ impl<S: Storage, M: Manifest> Database<S, M> {
         Ok(db)
     }
 
-    pub fn with_serialization_config(&mut self, config: Configuration) {
+    pub fn with_serialization_config(&mut self, config: <S as Storage>::Serializer) {
         self.serialization_config = config;
     }
 
     /// Sets a fallback storage that will be used if the main storage does not contain the requested record.
     /// The current storage then becomes the cache for the fallback storage.
-    pub fn set_fallback(&mut self, fallback: Box<dyn Storage<StoreError = S::StoreError>>) {
+    pub fn set_fallback(&mut self, fallback: Box<dyn StorageInner<StoreError = S::StoreError>>) {
         self.fallback = Some(fallback);
     }
 
@@ -63,7 +64,7 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     pub fn put<R: DatabaseEntry>(
         &mut self,
         record: &R,
-    ) -> Result<R::Key, DatabaseError<<S as Storage>::StoreError>>
+    ) -> Result<R::Key, DatabaseError<<S as StorageInner>::StoreError>>
     where
         R::Key: RecordKey<Record = R> + Incrementable + Ord,
         M: Manifests<R>,
@@ -85,7 +86,7 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     pub fn insert<K: RecordKey<Record = R>, R>(
         &mut self,
         record: &R,
-    ) -> Result<K, DatabaseError<<S as Storage>::StoreError>>
+    ) -> Result<K, DatabaseError<<S as StorageInner>::StoreError>>
     where
         R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
         M: Manifests<R>,
@@ -96,7 +97,7 @@ impl<S: Storage, M: Manifest> Database<S, M> {
         Ok(inserted_key)
     }
 
-    pub fn create_transaction(&self) -> DatabaseTransaction<M> {
+    pub fn create_transaction(&self) -> DatabaseTransaction<M, S::Serializer> {
         DatabaseTransaction::new(self)
     }
 
@@ -105,7 +106,7 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     /// Returns a [`DatabaseError`] if writing to the underlying storage fails.
     pub fn commit(
         &mut self,
-        transaction: DatabaseTransaction<M>,
+        transaction: DatabaseTransaction<M, S::Serializer>,
     ) -> Result<(), DatabaseError<S::StoreError>> {
         let (writes, deletes) = transaction.consume();
         for (key, value) in writes {
@@ -177,7 +178,7 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     pub fn remove<K: RecordKey<Record = R>, R>(
         &mut self,
         key: &K,
-    ) -> Result<(), DatabaseError<<S as Storage>::StoreError>>
+    ) -> Result<(), DatabaseError<<S as StorageInner>::StoreError>>
     where
         R: DatabaseEntry<Key = K>,
         R::Key: RecordKey<Record = R>,
@@ -221,7 +222,7 @@ impl<S: Storage, M: Manifest> Database<S, M> {
             .map_err(DatabaseError::Io)?;
 
         Ok(
-            raw_iter.map(|elem: Result<Vec<u8>, <S as Storage>::StoreError>| {
+            raw_iter.map(|elem: Result<Vec<u8>, <S as StorageInner>::StoreError>| {
                 let value = match elem {
                     Ok(value) => value,
                     Err(e) => return Err(DatabaseError::Io(e)),
@@ -260,7 +261,7 @@ impl<S: Storage, M: Manifest> Database<S, M> {
             .map_err(DatabaseError::Io)?;
 
         Ok(
-            raw_iter.map(|elem: Result<Vec<u8>, <S as Storage>::StoreError>| {
+            raw_iter.map(|elem: Result<Vec<u8>, <S as StorageInner>::StoreError>| {
                 let value = match elem {
                     Ok(value) => value,
                     Err(e) => return Err(DatabaseError::Io(e)),
@@ -331,20 +332,26 @@ impl<S: Storage, M: Manifest> Database<S, M> {
         index_key: &I,
     ) -> Result<
         impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S, M>,
-        DatabaseError<S::StoreError>,
+        DatabaseError<S>,
     > {
         let index_prelude = WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX));
-        let mut start = index_prelude.to_bytes(self.serialization_config)?;
-        let mut end = index_prelude.to_bytes(self.serialization_config)?;
+        let mut start = self
+            .serialization_config
+            .serialize(index_prelude)
+            .map_err(DatabaseError::Serialization)?;
+        let mut end = start.clone();
 
-        let start_bytes = encode_to_vec(index_key, self.serialization_config())?;
+        let start_bytes = self
+            .serialization_config
+            .serialize(index_key)
+            .map_err(DatabaseError::Serialization)?;
         let end_bytes = {
             let mut end_bytes = start_bytes.clone();
-            bytes_next(&mut end_bytes);
+            end_bytes.next();
             end_bytes
         };
-        start.extend(start_bytes);
-        end.extend(end_bytes);
+        start.combine(start_bytes);
+        end.combine(end_bytes);
 
         let raw_iter = self
             .store
@@ -360,15 +367,15 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     }
 
     /// Returns the current [`Configuration`] used by the database.
-    pub fn serialization_config(&self) -> Configuration {
-        self.serialization_config
+    pub fn serialization_config(&self) -> &S::Serializer {
+        &self.serialization_config
     }
 
     /// Helper function to process iterator results and get deserialized values
     fn process_iter_result<T: DeserializeOwned>(
         &self,
         result: Result<Vec<u8>, S::StoreError>,
-    ) -> Result<T, DatabaseError<S::StoreError>> {
+    ) -> Result<T, DatabaseError<S>> {
         let key = result.map_err(DatabaseError::Io)?;
         let value: Vec<u8> = match self.store.get(key) {
             Ok(Some(data)) => data,
@@ -380,23 +387,10 @@ impl<S: Storage, M: Manifest> Database<S, M> {
             Err(e) => return Err(DatabaseError::Io(e)),
         };
 
-        decode_from_slice(&value, self.serialization_config)
+        self.serialization_config
+            .deserialize(&value)
             .map_err(DatabaseError::Deserialization)
-            .map(|(v, _)| v)
     }
 }
 
-fn bytes_next(bytes: &mut Vec<u8>) {
-    for i in (0..bytes.len()).rev() {
-        // Add one if possible
-        if bytes[i] < 255 {
-            bytes[i] += 1;
-            return;
-        }
-        // Otherwise, set to zero and carry over
-        bytes[i] = 0;
-    }
-
-    // If all bytes were 255, we need to add a new byte
-    bytes.push(0);
-}
+fn bytes_next(bytes: &mut Vec<u8>) {}

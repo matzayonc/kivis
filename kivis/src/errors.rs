@@ -3,21 +3,24 @@ use core::{
     fmt::{self, Debug, Display},
 };
 
-use crate::traits::{DeserializationError, SerializationError};
+use bincode::config::Configuration;
+use serde::Serializer;
+
+use crate::{Storage, StorageInner, Unifier};
 
 /// Errors that can occur while interacting with the database.
 ///
 /// These errors can be caused by issues with the storage backend, serialization/deserialization problems, or internal database logic errors.
 #[derive(Debug)]
-pub enum DatabaseError<S: Debug + Display> {
+pub enum DatabaseError<S: Storage> {
     /// Errors that occur during serialization of records.
-    Serialization(SerializationError),
+    Serialization(<<S as Storage>::Serializer as Unifier>::SerError),
     /// Errors that occur during deserialization of records.
-    Deserialization(DeserializationError),
+    Deserialization(<<S as Storage>::Serializer as Unifier>::DeError),
     /// IO errors that occur while interacting with the storage backend.
-    Io(S),
+    Io(S::StoreError),
     /// Storage errors that occur during atomic operations.
-    Storage(S),
+    Storage(S::StoreError),
     /// Errors that occur when trying to increment a key.
     FailedToIncrement,
     /// Internal errors that should never occur during normal operation of the database.
@@ -36,9 +39,9 @@ pub enum InternalDatabaseError {
     /// Internal error caused by a missing index entry.
     MissingIndexEntry,
     /// Internal serialization error, should never occur.
-    Serialization(SerializationError),
+    Serialization(<Configuration as Unifier>::SerError),
     /// Internal deserialization error, most likely caused by database corruption.
-    Deserialization(SerializationError),
+    Deserialization(<Configuration as Unifier>::DeError),
 }
 
 impl<S: Debug + Display + Eq + PartialEq> From<InternalDatabaseError> for DatabaseError<S> {

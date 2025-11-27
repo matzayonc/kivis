@@ -2,14 +2,20 @@
 use alloc::vec::Vec;
 use core::{fmt::Display, ops::Range};
 
+use crate::Unifier;
+
 use super::Debug;
+
+pub trait Storage: StorageInner {
+    type Serializer: Unifier + Default;
+}
 
 /// A trait defining a storage backend for the database.
 ///
 /// The storage backend is responsible for storing and retrieving records and their associated indexes.
 /// It defines methods for inserting, getting, removing, and iterating over keys in the storage.
 /// All storage operations are defined over `Vec<u8>` keys and values.
-pub trait Storage {
+pub trait StorageInner {
     /// Error type returned by storage operations.
     type StoreError: Debug + Display + Eq + PartialEq;
 

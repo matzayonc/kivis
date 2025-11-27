@@ -1,4 +1,7 @@
-use bincode::{error::EncodeError, serde::encode_to_vec};
+use bincode::{
+    error::{DecodeError, EncodeError},
+    serde::{decode_from_slice, encode_to_vec},
+};
 
 pub use super::*;
 
@@ -48,21 +51,58 @@ pub trait Indexer {
     fn add(&mut self, discriminator: u8, value: &impl Serialize) -> Result<(), Self::Error>;
 }
 
-pub trait Unifier {
-    type D;
-    type Error;
+pub trait UnifierData {
+    fn combine(&mut self, other: Self);
+    fn next(&mut self);
+}
 
+impl UnifierData for Vec<u8> {
+    fn combine(&mut self, other: Self) {
+        self.extend(other);
+    }
+    fn next(&mut self) {
+        for i in (0..self.len()).rev() {
+            // Add one if possible
+            if self[i] < 255 {
+                self[i] += 1;
+                return;
+            }
+            // Otherwise, set to zero and carry over
+            self[i] = 0;
+        }
+
+        // If all bytes were 255, we need to add a new byte
+        self.push(0);
+    }
+}
+
+pub trait Unifier {
+    type D: UnifierData + Clone;
+    type SerError: Debug;
+    type DeError: Debug;
+
+    /// Serializes the given data.
     /// # Errors
     ///
     /// Returns an error if serialization fails.
-    fn serialize(&self, data: impl Serialize) -> Result<Self::D, Self::Error>;
+    fn serialize(&self, data: impl Serialize) -> Result<Self::D, Self::SerError>;
+
+    /// Deserializes the given data into the specified type.
+    /// # Errors
+    ///
+    /// Returns an error if deserialization fails.
+    fn deserialize<'de, T: DeserializeOwned>(&self, data: &'de [u8]) -> Result<T, Self::DeError>;
 }
 
 impl Unifier for Configuration {
     type D = Vec<u8>;
-    type Error = EncodeError;
-    fn serialize(&self, data: impl Serialize) -> Result<Self::D, Self::Error> {
+    type SerError = EncodeError;
+    type DeError = DecodeError;
+    fn serialize(&self, data: impl Serialize) -> Result<Self::D, Self::SerError> {
         encode_to_vec(data, Self::default())
+    }
+    fn deserialize<'de, T: DeserializeOwned>(&self, data: &'de [u8]) -> Result<T, Self::DeError> {
+        Ok(decode_from_slice(data, Self::default())?.0)
     }
 }
 

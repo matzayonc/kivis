@@ -7,7 +7,7 @@ use bincode::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{DatabaseEntry, DeserializationError, SerializationError};
+use crate::{DatabaseEntry, DeserializationError, SerializationError, Unifier};
 
 /// Internal enum representing different subtables within a database scope.
 #[derive(Debug)]
@@ -84,10 +84,10 @@ pub(crate) struct Wrap<R> {
 }
 
 /// Wraps a database entry key with scope and subtable information for storage.
-pub(crate) fn wrap<R: DatabaseEntry>(
+pub(crate) fn wrap<R: DatabaseEntry, U: Unifier>(
     item_key: &R::Key,
-    config: Configuration,
-) -> Result<Vec<u8>, SerializationError> {
+    unifier: &U,
+) -> Result<U::D, U::SerError> {
     let wrapped = Wrap {
         prelude: WrapPrelude {
             scope: R::SCOPE,
@@ -95,7 +95,7 @@ pub(crate) fn wrap<R: DatabaseEntry>(
         },
         key: item_key.clone(),
     };
-    encode_to_vec(wrapped, config)
+    unifier.serialize(wrapped)
 }
 
 pub(crate) fn empty_wrap<R: DatabaseEntry>(
