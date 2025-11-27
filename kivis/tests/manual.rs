@@ -28,8 +28,9 @@ impl Scope for User {
 impl kivis::DatabaseEntry for User {
     type Key = UserKey;
     const INDEX_COUNT_HINT: usize = 1;
-    fn index_keys(&self, indexer: &mut impl kivis::Indexer) {
-        indexer.add(1, &self.name);
+    fn index_keys<I: kivis::Indexer>(&self, indexer: &mut I) -> Result<(), I::Error> {
+        indexer.add(1, &self.name)?;
+        Ok(())
     }
 }
 
@@ -226,7 +227,7 @@ fn test_index() -> anyhow::Result<()> {
     let _user_key = database.insert(&user)?;
 
     let mut indexer = SimpleIndexer::new(bincode::config::standard());
-    user.index_keys(&mut indexer);
+    user.index_keys(&mut indexer)?;
     let index_keys = indexer.into_index_keys();
     assert_eq!(index_keys.len(), 1);
     assert_eq!(index_keys[0].0, 1);

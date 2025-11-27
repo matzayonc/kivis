@@ -221,7 +221,7 @@ impl<M: Manifest> DatabaseTransaction<M> {
         let mut writes = Vec::with_capacity(R::INDEX_COUNT_HINT + 1);
 
         let mut indexer = SimpleIndexer::new(self.serialization_config());
-        record.index_keys(&mut indexer);
+        record.index_keys(&mut indexer)?;
 
         for (discriminator, index_key) in indexer.into_index_keys() {
             let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator))
@@ -254,7 +254,7 @@ impl<M: Manifest> DatabaseTransaction<M> {
         let mut deletes = Vec::with_capacity(R::INDEX_COUNT_HINT + 1);
 
         let mut indexer = SimpleIndexer::new(self.serialization_config());
-        record.index_keys(&mut indexer);
+        record.index_keys(&mut indexer)?;
 
         for (discriminator, index_key) in indexer.into_index_keys() {
             let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator))
