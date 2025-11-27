@@ -1,3 +1,5 @@
+use bincode::{error::EncodeError, serde::encode_to_vec};
+
 pub use super::*;
 
 /// A trait defining that the implementing type is a key of some record.
@@ -39,23 +41,46 @@ pub trait Index: Serialize + Debug {
 }
 
 pub trait Indexer {
-    fn add(&mut self, discriminator: u8, value: &impl Serialize);
+    type Error;
+    /// # Errors
+    ///
+    /// Returns an error if serialization fails.
+    fn add(&mut self, discriminator: u8, value: &impl Serialize) -> Result<(), Self::Error>;
 }
 
-pub struct SimpleIndexer(Vec<(u8, Vec<u8>)>, Configuration);
-impl SimpleIndexer {
-    pub fn new(config: Configuration) -> Self {
-        Self(Vec::new(), config)
+pub trait Unifier {
+    type D;
+    type Error;
+
+    /// # Errors
+    ///
+    /// Returns an error if serialization fails.
+    fn serialize(&self, data: impl Serialize) -> Result<Self::D, Self::Error>;
+}
+
+impl Unifier for Configuration {
+    type D = Vec<u8>;
+    type Error = EncodeError;
+    fn serialize(&self, data: impl Serialize) -> Result<Self::D, Self::Error> {
+        encode_to_vec(data, Self::default())
+    }
+}
+
+pub struct SimpleIndexer<U: Unifier>(Vec<(u8, Vec<u8>)>, U);
+impl<U: Unifier> SimpleIndexer<U> {
+    pub fn new(serializer: U) -> Self {
+        Self(Vec::new(), serializer)
     }
 
     pub fn into_index_keys(self) -> Vec<(u8, Vec<u8>)> {
         self.0
     }
 }
-impl Indexer for SimpleIndexer {
-    fn add(&mut self, discriminator: u8, index: &impl Serialize) {
-        let bytes = bincode::serde::encode_to_vec(index, self.1)
-            .expect("Serialization failed in SimpleIndexer");
-        self.0.push((discriminator, bytes));
+impl Indexer for SimpleIndexer<Configuration> {
+    type Error = EncodeError;
+    fn add(&mut self, discriminator: u8, index: &impl Serialize) -> Result<(), Self::Error> {
+        let data = self.1.serialize(index)?;
+        self.0.push((discriminator, data));
+        Ok(())
     }
 }

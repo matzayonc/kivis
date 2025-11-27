@@ -33,7 +33,11 @@ pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {
 
     /// Returns the index keys for this entry.
     /// Each tuple contains the index discriminator and the key bytes.
-    fn index_keys(&self, indexer: &mut impl Indexer) {}
+    /// # Errors
+    /// Returns an error if serializing any of the index keys fails.
+    fn index_keys<I: Indexer>(&self, indexer: &mut I) -> Result<(), I::Error> {
+        Ok(())
+    }
 }
 
 pub trait Manifests<T: Scope + DatabaseEntry> {
