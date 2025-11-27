@@ -1,11 +1,11 @@
-use bincode::config::Configuration;
+use bincode::{config::Configuration, serde::encode_to_vec};
 
 #[cfg(feature = "atomic")]
 use crate::traits::AtomicStorage;
 use crate::{
     wrap::{encode_value, wrap, Subtable, WrapPrelude},
-    Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, KeyBytes, Manifest,
-    Manifests, RecordKey, SerializationError, Storage,
+    Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, Manifest, Manifests,
+    RecordKey, SerializationError, SimpleIndexer, Storage,
 };
 
 #[cfg(not(feature = "std"))]
@@ -218,17 +218,19 @@ impl<M: Manifest> DatabaseTransaction<M> {
     where
         R::Key: RecordKey<Record = R>,
     {
-        let index_keys = record.index_keys();
-        let mut writes = Vec::with_capacity(1 + index_keys.len());
+        let mut writes = Vec::with_capacity(R::INDEX_COUNT_HINT + 1);
 
-        for (discriminator, index_key) in record.index_keys() {
+        let mut indexer = SimpleIndexer::new(self.serialization_config());
+        record.index_keys(&mut indexer);
+
+        for (discriminator, index_key) in indexer.into_index_keys() {
             let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator))
                 .to_bytes(self.serialization_config())?;
-            entry.extend_from_slice(&index_key.to_bytes(self.serialization_config())?);
+            entry.extend_from_slice(&index_key);
 
             // Indexes might be repeated, so we need to ensure that the key is unique.
             // TODO: Add a way to declare as unique and deduplicate by provided hash.
-            let key_bytes = key.to_bytes(self.serialization_config())?;
+            let key_bytes = encode_to_vec(key, self.serialization_config())?;
             entry.extend_from_slice(&key_bytes);
 
             writes.push((entry.clone(), key_bytes.clone()));
@@ -249,14 +251,16 @@ impl<M: Manifest> DatabaseTransaction<M> {
     where
         R::Key: RecordKey<Record = R>,
     {
-        let index_keys = record.index_keys();
-        let mut deletes = Vec::with_capacity(1 + index_keys.len());
+        let mut deletes = Vec::with_capacity(R::INDEX_COUNT_HINT + 1);
 
-        for (discriminator, index_key) in record.index_keys() {
+        let mut indexer = SimpleIndexer::new(self.serialization_config());
+        record.index_keys(&mut indexer);
+
+        for (discriminator, index_key) in indexer.into_index_keys() {
             let mut entry = WrapPrelude::new::<R>(Subtable::Index(discriminator))
                 .to_bytes(self.serialization_config())?;
-            entry.extend_from_slice(&index_key.to_bytes(self.serialization_config())?);
-            let key_bytes = key.to_bytes(self.serialization_config())?;
+            entry.extend_from_slice(&index_key);
+            let key_bytes = encode_to_vec(key, self.serialization_config())?;
             entry.extend_from_slice(&key_bytes);
 
             deletes.push(entry.clone());

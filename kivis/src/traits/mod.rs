@@ -1,6 +1,5 @@
 mod incrementable_types;
 mod schema;
-mod serialization;
 mod storage;
 
 #[cfg(feature = "atomic")]
@@ -8,12 +7,12 @@ mod atomic;
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
+use bincode::config::Configuration;
 use core::fmt::Debug;
 
 use serde::{de::DeserializeOwned, Serialize};
 
 pub use schema::*;
-pub use serialization::*;
 pub use storage::*;
 
 /// Error type for serialization operations, re-exported from the [`bincode`] crate.
@@ -26,15 +25,15 @@ pub use atomic::*;
 use crate::{Database, DatabaseError};
 
 /// The main trait of the crate, defines a database entry that can be stored with its indexes.
+#[allow(unused_variables)] // Defalt implementation may not use all variables.
 pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {
     /// The primary key type for this database entry.
     type Key: RecordKey;
+    const INDEX_COUNT_HINT: usize = 0;
 
     /// Returns the index keys for this entry.
     /// Each tuple contains the index discriminator and the key bytes.
-    fn index_keys(&self) -> Vec<(u8, &dyn KeyBytes)> {
-        Vec::new()
-    }
+    fn index_keys(&self, indexer: &mut impl Indexer) {}
 }
 
 pub trait Manifests<T: Scope + DatabaseEntry> {

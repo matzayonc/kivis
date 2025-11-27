@@ -29,11 +29,33 @@ pub trait Incrementable: Default + Sized {
 ///
 /// An index is a way to efficiently look up records in the database by a specific key.
 /// It defines a table, primary key type, and an unique prefix for the index.
-pub trait Index: KeyBytes + Debug {
+pub trait Index: Serialize + Debug {
     /// The key type used by this index.
-    type Key: KeyBytes + DeserializeOwned + Clone + Eq + Debug;
+    type Key: Serialize + DeserializeOwned + Clone + Eq + Debug;
     /// The record type that this index applies to.
     type Record: DatabaseEntry;
     /// Unique identifier for this index within the record type.
     const INDEX: u8;
+}
+
+pub trait Indexer {
+    fn add(&mut self, discriminator: u8, value: &impl Serialize);
+}
+
+pub struct SimpleIndexer(Vec<(u8, Vec<u8>)>, Configuration);
+impl SimpleIndexer {
+    pub fn new(config: Configuration) -> Self {
+        Self(Vec::new(), config)
+    }
+
+    pub fn into_index_keys(self) -> Vec<(u8, Vec<u8>)> {
+        self.0
+    }
+}
+impl Indexer for SimpleIndexer {
+    fn add(&mut self, discriminator: u8, index: &impl Serialize) {
+        let bytes = bincode::serde::encode_to_vec(index, self.1)
+            .expect("Serialization failed in SimpleIndexer");
+        self.0.push((discriminator, bytes));
+    }
 }

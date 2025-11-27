@@ -160,11 +160,11 @@ impl Generator {
             // Generate field access based on field identifier type
             let field_access = match &index.field_id {
                 FieldIdentifier::Named(field_name) => {
-                    quote! { (&self.#field_name) as &dyn ::kivis::KeyBytes }
+                    quote! { &self.#field_name }
                 }
                 FieldIdentifier::Indexed(idx) => {
                     let index = syn::Index::from(*idx);
-                    quote! { (&self.#index) as &dyn ::kivis::KeyBytes }
+                    quote! { &self.#index }
                 }
             };
 
@@ -184,6 +184,8 @@ impl Generator {
         let name = &self.0.name;
         let (impl_generics, ty_generics, where_clause) = self.0.generics.split_for_impl();
 
+        let index_count = index_values.len();
+
         quote! {
             impl #impl_generics ::kivis::RecordKey for #key_type #ty_generics #where_clause {
                 type Record = #name;
@@ -191,13 +193,12 @@ impl Generator {
 
             impl #impl_generics ::kivis::DatabaseEntry for #name #ty_generics #where_clause {
                 type Key = #key_type;
+                const INDEX_COUNT_HINT: usize = #index_count;
 
-                fn index_keys(&self) -> ::kivis::alloc::vec::Vec<(u8, &dyn ::kivis::KeyBytes)> {
-                    let mut _v = ::kivis::alloc::vec::Vec::new();
+                fn index_keys(&self, indexer: &mut impl ::kivis::Indexer) {
                     #(
-                        _v.push(#index_values as (u8, &dyn ::kivis::KeyBytes));
+                        indexer.add(#index_values.0, #index_values.1);
                     )*
-                    _v
                 }
             }
         }
