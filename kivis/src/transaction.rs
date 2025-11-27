@@ -5,7 +5,7 @@ use crate::traits::AtomicStorage;
 use crate::{
     wrap::{encode_value, wrap, Subtable, WrapPrelude},
     Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, Manifest, Manifests,
-    RecordKey, SerializationError, SimpleIndexer, Storage,
+    RecordKey, SimpleIndexer, Storage, StorageInner, Unifier,
 };
 
 #[cfg(not(feature = "std"))]
@@ -17,30 +17,31 @@ type Write = (Vec<u8>, Vec<u8>);
 /// without immediately applying them to storage.
 ///
 /// This struct is always available, but the `commit` method is only available when the "atomic" feature is enabled.
-pub struct DatabaseTransaction<Manifest> {
+pub struct DatabaseTransaction<Manifest, U: Unifier> {
     /// Pending write operations: (key, value) pairs
     pending_writes: Vec<Write>,
     /// Pending delete operations: keys to delete
     pending_deletes: Vec<Vec<u8>>,
     /// Serialization configuration
-    serialization_config: Configuration,
+    serialization_config: U,
     _marker: PhantomData<Manifest>,
 }
 
-impl<M: Manifest> DatabaseTransaction<M> {
+impl<M: Manifest, U: Unifier + Clone> DatabaseTransaction<M, U> {
     /// Creates a new empty transaction. Should be used by [`Database::create_transaction`].
-    pub fn new<S: Storage>(database: &Database<S, M>) -> Self {
+    pub fn new<S: Storage<Serializer = U>>(database: &Database<S, M>) -> Self {
         Self {
             pending_writes: Vec::new(),
             pending_deletes: Vec::new(),
-            serialization_config: database.serialization_config(),
+            // TODO: Consider referencing, instead of cloning.
+            serialization_config: database.serialization_config().clone(),
             _marker: PhantomData,
         }
     }
 
     /// Creates a new empty transaction with the specified serialization configuration.
     #[must_use]
-    pub fn new_with_serialization_config(serialization_config: Configuration) -> Self {
+    pub fn new_with_serialization_config(serialization_config: U) -> Self {
         Self {
             pending_writes: Vec::new(),
             pending_deletes: Vec::new(),
@@ -51,11 +52,8 @@ impl<M: Manifest> DatabaseTransaction<M> {
 
     /// # Errors
     ///
-    /// Returns a [`SerializationError`] if serializing keys or values fails while preparing the writes.
-    pub fn insert<K: RecordKey<Record = R>, R>(
-        &mut self,
-        record: &R,
-    ) -> Result<K, SerializationError>
+    /// Returns a [`U::SerError`] if serializing keys or values fails while preparing the writes.
+    pub fn insert<K: RecordKey<Record = R>, R>(&mut self, record: &R) -> Result<K, U::SerError>
     where
         R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
         M: Manifests<R>,
@@ -98,12 +96,8 @@ impl<M: Manifest> DatabaseTransaction<M> {
 
     /// # Errors
     ///
-    /// Returns a [`SerializationError`] if serializing keys to delete fails.
-    pub fn remove<R: DatabaseEntry>(
-        &mut self,
-        key: &R::Key,
-        record: &R,
-    ) -> Result<(), SerializationError>
+    /// Returns a [`U::SerError`] if serializing keys to delete fails.
+    pub fn remove<R: DatabaseEntry>(&mut self, key: &R::Key, record: &R) -> Result<(), U::SerError>
     where
         R::Key: RecordKey<Record = R>,
         M: Manifests<R>,
@@ -214,7 +208,7 @@ impl<M: Manifest> DatabaseTransaction<M> {
         &self,
         record: &R,
         key: &R::Key,
-    ) -> Result<Vec<Write>, SerializationError>
+    ) -> Result<Vec<Write>, U::SerError>
     where
         R::Key: RecordKey<Record = R>,
     {
@@ -247,7 +241,7 @@ impl<M: Manifest> DatabaseTransaction<M> {
         &self,
         record: &R,
         key: &R::Key,
-    ) -> Result<Vec<Vec<u8>>, SerializationError>
+    ) -> Result<Vec<Vec<u8>>, U::SerError>
     where
         R::Key: RecordKey<Record = R>,
     {
@@ -266,7 +260,7 @@ impl<M: Manifest> DatabaseTransaction<M> {
             deletes.push(entry.clone());
         }
 
-        let key = wrap::<R>(key, self.serialization_config())?;
+        let key = wrap::<R, _>(key, self.serialization_config())?;
         deletes.push(key);
 
         Ok(deletes)

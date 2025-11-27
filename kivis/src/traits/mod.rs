@@ -16,8 +16,8 @@ pub use schema::*;
 pub use storage::*;
 
 /// Error type for serialization operations, re-exported from the [`bincode`] crate.
-pub type SerializationError = bincode::error::EncodeError;
-pub type DeserializationError = bincode::error::DecodeError;
+// pub type SerializationError = bincode::error::EncodeError;
+// pub type DeserializationError = bincode::error::DecodeError;
 
 #[cfg(feature = "atomic")]
 pub use atomic::*;
@@ -50,10 +50,7 @@ pub trait Manifest: Default {
     ///
     /// Returns a [`DatabaseError`] if loading manifests requires access to the
     /// underlying storage and that operation fails.
-    fn load<S: Storage>(
-        &mut self,
-        db: &mut Database<S, Self>,
-    ) -> Result<(), DatabaseError<S::StoreError>>
+    fn load<S: Storage>(&mut self, db: &mut Database<S, Self>) -> Result<(), DatabaseError<S>>
     where
         Self: Sized;
 }
