@@ -4,9 +4,8 @@ use core::{
 };
 
 use bincode::config::Configuration;
-use serde::Serializer;
 
-use crate::{Storage, StorageInner, Unifier};
+use crate::{Storage, Unifier};
 
 /// Errors that can occur while interacting with the database.
 ///
@@ -44,17 +43,23 @@ pub enum InternalDatabaseError {
     Deserialization(<Configuration as Unifier>::DeError),
 }
 
-impl<S: Debug + Display + Eq + PartialEq> From<InternalDatabaseError> for DatabaseError<S> {
+impl<S: Storage> From<InternalDatabaseError> for DatabaseError<S>
+where
+    S::StoreError: Debug + Display + Eq + PartialEq,
+{
     fn from(e: InternalDatabaseError) -> Self {
         DatabaseError::Internal(e)
     }
 }
 
-impl<S: Debug + Display + Eq + PartialEq> fmt::Display for DatabaseError<S> {
+impl<S: Storage> fmt::Display for DatabaseError<S>
+where
+    S::StoreError: Debug + Display + Eq + PartialEq,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Self::Serialization(ref e) => write!(f, "Serialization error: {e}"),
-            Self::Deserialization(ref e) => write!(f, "Deserialization error: {e}"),
+            Self::Serialization(ref e) => write!(f, "Serialization error: {e:?}"),
+            Self::Deserialization(ref e) => write!(f, "Deserialization error: {e:?}"),
             Self::Io(ref s) => write!(f, "IO error: {s}"),
             Self::Storage(ref s) => write!(f, "Storage error: {s}"),
             Self::FailedToIncrement => write!(f, "Failed to increment key value"),
@@ -75,10 +80,7 @@ impl fmt::Display for InternalDatabaseError {
     }
 }
 
-impl<S: Debug + Display + Eq + PartialEq> From<SerializationError> for DatabaseError<S> {
-    fn from(e: SerializationError) -> Self {
-        DatabaseError::Serialization(e)
-    }
+impl<S: Storage + Debug> Error for DatabaseError<S> where
+    S::StoreError: Debug + Display + Eq + PartialEq
+{
 }
-
-impl<S> Error for DatabaseError<S> where S: Debug + Display + Eq + PartialEq {}

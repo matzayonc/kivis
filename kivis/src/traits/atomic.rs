@@ -26,9 +26,9 @@ pub trait AtomicStorage: Storage {
     ///
     /// # Errors
     /// Returns an error if any of the insert or remove operations fail.
-    fn batch_mixed(
+    fn batch_mixed<D>(
         &mut self,
-        inserts: Vec<(Vec<u8>, Vec<u8>)>,
-        removes: Vec<Vec<u8>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::StoreError>;
+        inserts: Vec<(D, D)>,
+        removes: Vec<D>,
+    ) -> Result<Vec<Option<D>>, Self::StoreError>;
 }
