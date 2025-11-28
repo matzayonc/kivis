@@ -1,13 +1,12 @@
-use bincode::config::Configuration;
-use bincode::serde::{decode_from_slice, encode_to_vec};
 use serde::de::DeserializeOwned;
 
 use crate::errors::DatabaseError;
 use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
-use crate::wrap::{decode_value, empty_wrap, wrap, Subtable, Wrap, WrapPrelude};
+use crate::wrap::{empty_wrap, wrap, Subtable, Wrap, WrapPrelude};
 use crate::{
-    DeriveKey, Incrementable, Manifest, Manifests, RecordKey, StorageInner, Unifier, UnifierData,
+    DeriveKey, Incrementable, Indexer, Manifest, Manifests, RecordKey, SimpleIndexer, StorageInner,
+    Unifier, UnifierData,
 };
 use core::ops::Range;
 
@@ -19,21 +18,25 @@ type DatabaseIteratorItem<R, S> = Result<<R as DatabaseEntry>::Key, DatabaseErro
 /// The `kivis` database type. All interactions with the database are done through this type.
 pub struct Database<S: Storage, M: Manifest> {
     pub(crate) store: S,
-    fallback: Option<Box<dyn StorageInner<StoreError = S::StoreError>>>,
+    // fallback: Option<Box<dyn StorageInner<StoreError = S::StoreError>>>,
     pub(crate) manifest: M,
-    serialization_config: <S as Storage>::Serializer,
+    pub(crate) serialization_config: <S as Storage>::Serializer,
 }
 
-impl<S: Storage, M: Manifest> Database<S, M> {
+impl<S: Storage, M: Manifest> Database<S, M>
+where
+    S::Serializer: Unifier + Copy,
+    SimpleIndexer<S::Serializer>: Indexer<Error = <S::Serializer as Unifier>::SerError>,
+{
     /// Creates a new [`Database`] instance over any storage backend.
     /// One of the key features of `kivis` is that it can work with any storage backend that implements the [`Storage`] trait.
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if the manifest fails to load during initialization.
-    pub fn new(store: S) -> Result<Self, DatabaseError<<S as StorageInner>::StoreError>> {
+    pub fn new(store: S) -> Result<Self, DatabaseError<S>> {
         let mut db = Database {
             store,
-            fallback: None,
+            // fallback: None,
             manifest: M::default(),
             serialization_config: S::Serializer::default(),
         };
@@ -49,8 +52,8 @@ impl<S: Storage, M: Manifest> Database<S, M> {
 
     /// Sets a fallback storage that will be used if the main storage does not contain the requested record.
     /// The current storage then becomes the cache for the fallback storage.
-    pub fn set_fallback(&mut self, fallback: Box<dyn StorageInner<StoreError = S::StoreError>>) {
-        self.fallback = Some(fallback);
+    pub fn set_fallback(&mut self, _fallback: Box<dyn StorageInner<StoreError = S::StoreError>>) {
+        // self.fallback = Some(fallback);
     }
 
     /// Add a record with autoincremented key into the database, together with all related index entries.
@@ -61,10 +64,7 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if serializing or writing the record fails.
-    pub fn put<R: DatabaseEntry>(
-        &mut self,
-        record: &R,
-    ) -> Result<R::Key, DatabaseError<<S as StorageInner>::StoreError>>
+    pub fn put<R: DatabaseEntry>(&mut self, record: &R) -> Result<R::Key, DatabaseError<S>>
     where
         R::Key: RecordKey<Record = R> + Incrementable + Ord,
         M: Manifests<R>,
@@ -83,16 +83,15 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if serializing or writing the record fails.
-    pub fn insert<K: RecordKey<Record = R>, R>(
-        &mut self,
-        record: &R,
-    ) -> Result<K, DatabaseError<<S as StorageInner>::StoreError>>
+    pub fn insert<K: RecordKey<Record = R>, R>(&mut self, record: &R) -> Result<K, DatabaseError<S>>
     where
         R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
         M: Manifests<R>,
     {
         let mut transaction = DatabaseTransaction::new(self);
-        let inserted_key = transaction.insert::<K, R>(record)?;
+        let inserted_key = transaction
+            .insert::<K, R>(record)
+            .map_err(DatabaseError::Serialization)?;
         self.commit(transaction)?;
         Ok(inserted_key)
     }
@@ -107,21 +106,21 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     pub fn commit(
         &mut self,
         transaction: DatabaseTransaction<M, S::Serializer>,
-    ) -> Result<(), DatabaseError<S::StoreError>> {
+    ) -> Result<(), DatabaseError<S>> {
         let (writes, deletes) = transaction.consume();
         for (key, value) in writes {
-            if let Some(fallback) = &mut self.fallback {
-                fallback
-                    .insert(key.clone(), value.clone())
-                    .map_err(DatabaseError::Io)?;
-            }
+            // if let Some(fallback) = &mut self.fallback {
+            //     fallback
+            //         .insert(key.clone(), value.clone())
+            //         .map_err(DatabaseError::Io)?;
+            // }
             self.store.insert(key, value).map_err(DatabaseError::Io)?;
         }
 
         for key in deletes {
-            if let Some(fallback) = &mut self.fallback {
-                fallback.remove(key.clone()).map_err(DatabaseError::Io)?;
-            }
+            // if let Some(fallback) = &mut self.fallback {
+            //     fallback.remove(key.clone()).map_err(DatabaseError::Io)?;
+            // }
             self.store.remove(key).map_err(DatabaseError::Io)?;
         }
 
@@ -136,32 +135,31 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     ///
     /// Returns a [`DatabaseError`] if the key cannot be serialized, if IO fails,
     /// or if deserializing the result fails.
-    pub fn get<K: RecordKey>(
-        &self,
-        key: &K,
-    ) -> Result<Option<K::Record>, DatabaseError<S::StoreError>>
+    pub fn get<K: RecordKey>(&self, key: &K) -> Result<Option<K::Record>, DatabaseError<S>>
     where
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
     {
-        let serialized_key = wrap::<K::Record>(key, self.serialization_config)
+        let serialized_key = wrap::<K::Record, S::Serializer>(key, &self.serialization_config)
             .map_err(DatabaseError::Serialization)?;
         let value =
             if let Some(value) = self.store.get(serialized_key).map_err(DatabaseError::Io)? {
                 value
             } else {
-                let Some(fallback) = &self.fallback else {
-                    return Ok(None);
-                };
-                let key = wrap::<K::Record>(key, self.serialization_config)
-                    .map_err(DatabaseError::Serialization)?;
-                let Some(value) = fallback.get(key).map_err(DatabaseError::Io)? else {
-                    return Ok(None);
-                };
-                value
+                // let Some(fallback) = &self.fallback else {
+                //     return Ok(None);
+                // };
+                // let key = wrap::<K::Record, S::Serializer>(key, &self.serialization_config)
+                //     .map_err(DatabaseError::Serialization)?;
+                // let Some(value) = fallback.get(key).map_err(DatabaseError::Io)? else {
+                //     return Ok(None);
+                // };
+                // value
+                return Ok(None);
             };
         Ok(Some(
-            decode_value(&value, self.serialization_config)
+            self.serialization_config
+                .deserialize(&value)
                 .map_err(DatabaseError::Deserialization)?,
         ))
     }
@@ -175,10 +173,7 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     ///
     /// Returns a [`DatabaseError`] if the key cannot be serialized or if the underlying
     /// storage reports an error while removing or retrieving records.
-    pub fn remove<K: RecordKey<Record = R>, R>(
-        &mut self,
-        key: &K,
-    ) -> Result<(), DatabaseError<<S as StorageInner>::StoreError>>
+    pub fn remove<K: RecordKey<Record = R>, R>(&mut self, key: &K) -> Result<(), DatabaseError<S>>
     where
         R: DatabaseEntry<Key = K>,
         R::Key: RecordKey<Record = R>,
@@ -188,7 +183,9 @@ impl<S: Storage, M: Manifest> Database<S, M> {
             return Ok(());
         };
         let mut transaction = DatabaseTransaction::new(self);
-        transaction.remove(key, &record)?;
+        transaction
+            .remove(key, &record)
+            .map_err(DatabaseError::Serialization)?;
         self.commit(transaction)?;
         Ok(())
     }
@@ -206,37 +203,34 @@ impl<S: Storage, M: Manifest> Database<S, M> {
         range: Range<K>,
     ) -> Result<
         impl Iterator<Item = DatabaseIteratorItem<K::Record, S>> + use<'_, K, S, M>,
-        DatabaseError<S::StoreError>,
+        DatabaseError<S>,
     >
     where
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
     {
-        let start = wrap::<K::Record>(&range.start, self.serialization_config)
+        let start = wrap::<K::Record, S::Serializer>(&range.start, &self.serialization_config)
             .map_err(DatabaseError::Serialization)?;
-        let end = wrap::<K::Record>(&range.end, self.serialization_config)
+        let end = wrap::<K::Record, S::Serializer>(&range.end, &self.serialization_config)
             .map_err(DatabaseError::Serialization)?;
         let raw_iter = self
             .store
             .iter_keys(start..end)
             .map_err(DatabaseError::Io)?;
 
-        Ok(
-            raw_iter.map(|elem: Result<Vec<u8>, <S as StorageInner>::StoreError>| {
-                let value = match elem {
-                    Ok(value) => value,
-                    Err(e) => return Err(DatabaseError::Io(e)),
-                };
+        Ok(raw_iter.map(|elem| {
+            let value = match elem {
+                Ok(value) => value,
+                Err(e) => return Err(DatabaseError::Io(e)),
+            };
 
-                let deserialized: Wrap<K> =
-                    match decode_from_slice(&value, self.serialization_config) {
-                        Ok((deserialized, _)) => deserialized,
-                        Err(e) => return Err(DatabaseError::Deserialization(e)),
-                    };
+            let deserialized: Wrap<K> = match self.serialization_config.deserialize(&value) {
+                Ok(deserialized) => deserialized,
+                Err(e) => return Err(DatabaseError::Deserialization(e)),
+            };
 
-                Ok(deserialized.key)
-            }),
-        )
+            Ok(deserialized.key)
+        }))
     }
 
     /// # Errors
@@ -247,41 +241,39 @@ impl<S: Storage, M: Manifest> Database<S, M> {
         &self,
     ) -> Result<
         impl Iterator<Item = DatabaseIteratorItem<K::Record, S>> + use<'_, K, S, M>,
-        DatabaseError<S::StoreError>,
+        DatabaseError<S>,
     >
     where
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
+        S: StorageInner<<<S as Storage>::Serializer as Unifier>::D>,
     {
-        let (start, end) = empty_wrap::<K::Record>(self.serialization_config)
+        let (start, end) = empty_wrap::<K::Record, S::Serializer>(&self.serialization_config)
             .map_err(DatabaseError::Serialization)?;
         let raw_iter = self
             .store
             .iter_keys(start..end)
             .map_err(DatabaseError::Io)?;
 
-        Ok(
-            raw_iter.map(|elem: Result<Vec<u8>, <S as StorageInner>::StoreError>| {
-                let value = match elem {
-                    Ok(value) => value,
-                    Err(e) => return Err(DatabaseError::Io(e)),
-                };
+        Ok(raw_iter.map(|elem| {
+            let value = match elem {
+                Ok(value) => value,
+                Err(e) => return Err(DatabaseError::Io(e)),
+            };
 
-                let deserialized: Wrap<K> =
-                    match decode_from_slice(&value, self.serialization_config) {
-                        Ok((deserialized, _)) => deserialized,
-                        Err(e) => return Err(DatabaseError::Deserialization(e)),
-                    };
+            let deserialized: Wrap<K> = match self.serialization_config.deserialize(&value) {
+                Ok(deserialized) => deserialized,
+                Err(e) => return Err(DatabaseError::Deserialization(e)),
+            };
 
-                Ok(deserialized.key)
-            }),
-        )
+            Ok(deserialized.key)
+        }))
     }
 
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if retrieving keys from the underlying storage fails.
-    pub fn last_id<K: RecordKey + Ord + Default>(&self) -> Result<K, DatabaseError<S::StoreError>>
+    pub fn last_id<K: RecordKey + Ord + Default>(&self) -> Result<K, DatabaseError<S>>
     where
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
@@ -295,7 +287,7 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     ///
     /// The range is inclusive of the start and exclusive of the end.
     /// The index must implement the [`Index`] trait.
-    /// The returned iterator yields items of type `Result<Index::Record, DatabaseError<S::StoreError>>`.
+    /// The returned iterator yields items of type `Result<Index::Record, DatabaseError<S>>`.
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if the underlying storage iterator encounters an error.
@@ -304,13 +296,23 @@ impl<S: Storage, M: Manifest> Database<S, M> {
         range: Range<I>,
     ) -> Result<
         impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S, M>,
-        DatabaseError<S::StoreError>,
+        DatabaseError<S>,
     > {
-        let index_prelude = WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX));
-        let mut start = index_prelude.to_bytes(self.serialization_config)?;
+        let mut start = self
+            .serialization_config
+            .serialize(WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX)))
+            .map_err(DatabaseError::Serialization)?;
         let mut end = start.clone();
-        start.extend(encode_to_vec(&range.start, self.serialization_config())?);
-        end.extend(encode_to_vec(&range.end, self.serialization_config())?);
+        start.combine(
+            self.serialization_config()
+                .serialize(&range.start)
+                .map_err(DatabaseError::Serialization)?,
+        );
+        end.combine(
+            self.serialization_config()
+                .serialize(&range.end)
+                .map_err(DatabaseError::Serialization)?,
+        );
         let raw_iter = self
             .store
             .iter_keys(start..end)
@@ -323,7 +325,7 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     ///
     /// This function outputs multiple results since multiple records can share the same index key.
     /// The index must implement the [`Index`] trait.
-    /// The returned iterator yields items of type `Result<Index::Record, DatabaseError<S::StoreError>>`.
+    /// The returned iterator yields items of type `Result<Index::Record, DatabaseError<S>>`.
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if the underlying storage iterator encounters an error.
@@ -374,10 +376,10 @@ impl<S: Storage, M: Manifest> Database<S, M> {
     /// Helper function to process iterator results and get deserialized values
     fn process_iter_result<T: DeserializeOwned>(
         &self,
-        result: Result<Vec<u8>, S::StoreError>,
+        result: Result<<S::Serializer as Unifier>::D, S::StoreError>,
     ) -> Result<T, DatabaseError<S>> {
         let key = result.map_err(DatabaseError::Io)?;
-        let value: Vec<u8> = match self.store.get(key) {
+        let value = match self.store.get(key) {
             Ok(Some(data)) => data,
             Ok(None) => {
                 return Err(DatabaseError::Internal(
@@ -392,5 +394,3 @@ impl<S: Storage, M: Manifest> Database<S, M> {
             .map_err(DatabaseError::Deserialization)
     }
 }
-
-fn bytes_next(bytes: &mut Vec<u8>) {}

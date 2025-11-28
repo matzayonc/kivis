@@ -1,13 +1,8 @@
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-use bincode::{
-    config::{Config, Configuration},
-    error::EncodeError,
-    serde::{decode_from_slice, encode_to_vec},
-};
 use serde::{Deserialize, Serialize};
 
-use crate::{DatabaseEntry, DeserializationError, SerializationError, Unifier};
+use crate::{DatabaseEntry, Unifier};
 
 /// Internal enum representing different subtables within a database scope.
 #[derive(Debug)]
@@ -69,11 +64,6 @@ impl WrapPrelude {
             subtable,
         }
     }
-
-    /// Converts the wrap prelude to bytes for storage key prefixing.
-    pub fn to_bytes(&self, config: Configuration) -> Result<Vec<u8>, EncodeError> {
-        encode_to_vec(self, config)
-    }
 }
 
 /// Internal wrapper structure that combines prelude and key for storage.
@@ -98,9 +88,9 @@ pub(crate) fn wrap<R: DatabaseEntry, U: Unifier>(
     unifier.serialize(wrapped)
 }
 
-pub(crate) fn empty_wrap<R: DatabaseEntry>(
-    config: Configuration,
-) -> Result<(Vec<u8>, Vec<u8>), SerializationError> {
+pub(crate) fn empty_wrap<R: DatabaseEntry, U: Unifier>(
+    config: &U,
+) -> Result<(U::D, U::D), U::SerError> {
     let start = Wrap {
         prelude: WrapPrelude {
             scope: R::SCOPE,
@@ -117,21 +107,5 @@ pub(crate) fn empty_wrap<R: DatabaseEntry>(
         key: (),
     };
 
-    Ok((encode_to_vec(start, config)?, encode_to_vec(end, config)?))
-}
-
-/// Encodes a database entry record to bytes for storage.
-pub(crate) fn encode_value<R: DatabaseEntry>(
-    record: &R,
-    config: impl Config,
-) -> Result<Vec<u8>, SerializationError> {
-    encode_to_vec(record, config)
-}
-
-/// Decodes bytes back to a database entry record.
-pub(crate) fn decode_value<R: DatabaseEntry>(
-    data: &[u8],
-    config: impl Config,
-) -> Result<R, DeserializationError> {
-    decode_from_slice(data, config).map(|(record, _)| record)
+    Ok((config.serialize(start)?, config.serialize(end)?))
 }

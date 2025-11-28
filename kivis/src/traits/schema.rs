@@ -77,7 +77,7 @@ impl UnifierData for Vec<u8> {
 }
 
 pub trait Unifier {
-    type D: UnifierData + Clone;
+    type D: UnifierData + Clone + PartialEq + Eq;
     type SerError: Debug;
     type DeError: Debug;
 
@@ -91,7 +91,8 @@ pub trait Unifier {
     /// # Errors
     ///
     /// Returns an error if deserialization fails.
-    fn deserialize<'de, T: DeserializeOwned>(&self, data: &'de [u8]) -> Result<T, Self::DeError>;
+    fn deserialize<'de, T: DeserializeOwned>(&self, data: &'de Self::D)
+        -> Result<T, Self::DeError>;
 }
 
 impl Unifier for Configuration {
@@ -101,18 +102,21 @@ impl Unifier for Configuration {
     fn serialize(&self, data: impl Serialize) -> Result<Self::D, Self::SerError> {
         encode_to_vec(data, Self::default())
     }
-    fn deserialize<'de, T: DeserializeOwned>(&self, data: &'de [u8]) -> Result<T, Self::DeError> {
+    fn deserialize<'de, T: DeserializeOwned>(
+        &self,
+        data: &'de Self::D,
+    ) -> Result<T, Self::DeError> {
         Ok(decode_from_slice(data, Self::default())?.0)
     }
 }
 
-pub struct SimpleIndexer<U: Unifier>(Vec<(u8, Vec<u8>)>, U);
+pub struct SimpleIndexer<U: Unifier>(Vec<(u8, U::D)>, U);
 impl<U: Unifier> SimpleIndexer<U> {
     pub fn new(serializer: U) -> Self {
         Self(Vec::new(), serializer)
     }
 
-    pub fn into_index_keys(self) -> Vec<(u8, Vec<u8>)> {
+    pub fn into_index_keys(self) -> Vec<(u8, U::D)> {
         self.0
     }
 }
