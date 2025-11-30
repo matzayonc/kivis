@@ -2,14 +2,39 @@
 #[cfg(feature = "atomic")]
 #[cfg(test)]
 mod tests {
-    use std::{cmp::Reverse, collections::BTreeMap, ops::Range};
+    use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
-    use bincode::config::Configuration;
+    use bincode::{config::Configuration, error::{DecodeError, EncodeError}};
     use serde::{Deserialize, Serialize};
 
-    use kivis::{
-        manifest, AtomicStorage, Database, DatabaseTransaction, Record, Storage,
-    };
+    use kivis::{manifest, AtomicStorage, Database, DatabaseTransaction, Record, Storage};
+
+    #[derive(Debug, PartialEq, Eq)]
+    pub enum MockError {
+        Serialization,
+        Deserialization,
+    }
+
+    impl Display for MockError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Self::Serialization => write!(f, "Serialization error"),
+                Self::Deserialization => write!(f, "Deserialization error"),
+            }
+        }
+    }
+
+    impl From<EncodeError> for MockError {
+        fn from(_: EncodeError) -> Self {
+            Self::Serialization
+        }
+    }
+
+    impl From<DecodeError> for MockError {
+        fn from(_: DecodeError) -> Self {
+            Self::Deserialization
+        }
+    }
 
     #[derive(Debug, Record, PartialEq, Eq, Serialize, Deserialize)]
     pub struct MockRecord(#[key] u8, char);
@@ -32,7 +57,7 @@ mod tests {
 
     impl Storage for MockAtomicStorage {
         type Serializer = Configuration;
-        type StoreError = String;
+        type StoreError = MockError;
 
         fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
             self.data.insert(Reverse(key), value);

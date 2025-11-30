@@ -2,19 +2,40 @@
 #[cfg(feature = "atomic")]
 #[cfg(test)]
 mod atomic_storage_example {
-    use bincode::config::Configuration;
+    use bincode::{config::Configuration, error::{DecodeError, EncodeError}};
     use kivis::{AtomicStorage, Storage};
     use std::{cmp::Reverse, collections::BTreeMap, error::Error, fmt::Display, ops::Range};
 
     // Example error type for our mock atomic storage
     #[derive(Debug, PartialEq, Eq)]
-    pub struct MockAtomicError(String);
+    pub enum MockAtomicError {
+        Storage(String),
+        Serialization,
+        Deserialization,
+    }
 
     impl Display for MockAtomicError {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "MockAtomicError: {}", self.0)
+            match self {
+                Self::Storage(s) => write!(f, "MockAtomicError: {s}"),
+                Self::Serialization => write!(f, "Serialization error"),
+                Self::Deserialization => write!(f, "Deserialization error"),
+            }
         }
     }
+    
+    impl From<EncodeError> for MockAtomicError {
+        fn from(_: EncodeError) -> Self {
+            Self::Serialization
+        }
+    }
+    
+    impl From<DecodeError> for MockAtomicError {
+        fn from(_: DecodeError) -> Self {
+            Self::Deserialization
+        }
+    }
+    
     impl Error for MockAtomicError {}
 
     // Mock atomic storage implementation
@@ -43,7 +64,7 @@ mod atomic_storage_example {
         fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
             if self.fail_next {
                 self.fail_next = false;
-                return Err(MockAtomicError("Simulated failure".to_string()));
+                return Err(MockAtomicError::Storage("Simulated failure".to_string()));
             }
             self.data.insert(Reverse(key), value);
             Ok(())
@@ -56,7 +77,7 @@ mod atomic_storage_example {
         fn remove(&mut self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
             if self.fail_next {
                 self.fail_next = false;
-                return Err(MockAtomicError("Simulated failure".to_string()));
+                return Err(MockAtomicError::Storage("Simulated failure".to_string()));
             }
             Ok(self.data.remove(&Reverse(key)))
         }
@@ -79,7 +100,7 @@ mod atomic_storage_example {
             removes: Vec<Vec<u8>>,
         ) -> Result<Vec<Option<Vec<u8>>>, Self::StoreError> {
             if self.fail_next {
-                return Err(MockAtomicError("Batch mixed operation failed".to_string()));
+                return Err(MockAtomicError::Storage("Batch mixed operation failed".to_string()));
             }
 
             // In a real implementation, this would be atomic
@@ -193,7 +214,7 @@ mod atomic_storage_example {
         assert!(result.is_err());
         assert_eq!(
             result,
-            Err(MockAtomicError("Batch mixed operation failed".to_string()))
+            Err(MockAtomicError::Storage("Batch mixed operation failed".to_string()))
         );
         Ok(())
     }

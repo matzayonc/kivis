@@ -90,7 +90,7 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
 
         let writes = self
             .prepare_writes::<R>(record, &new_key)
-            .map_err(DatabaseError::Serialization)?;
+            .map_err(|e| DatabaseError::Storage(e.into()))?;
         for (k, v) in writes {
             self.write(k, v);
         }

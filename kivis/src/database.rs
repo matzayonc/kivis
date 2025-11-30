@@ -5,8 +5,8 @@ use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
 use crate::wrap::{empty_wrap, wrap, Subtable, Wrap, WrapPrelude};
 use crate::{
-    DeriveKey, Incrementable, Indexer, Manifest, Manifests, RecordKey, SimpleIndexer,
-    Unifier, UnifierData,
+    DeriveKey, Incrementable, Indexer, Manifest, Manifests, RecordKey, SimpleIndexer, Unifier,
+    UnifierData,
 };
 use core::ops::Range;
 
@@ -52,7 +52,10 @@ where
 
     /// Sets a fallback storage that will be used if the main storage does not contain the requested record.
     /// The current storage then becomes the cache for the fallback storage.
-    pub fn set_fallback(&mut self, _fallback: Box<dyn Storage<Serializer = S::Serializer, StoreError = S::StoreError>>) {
+    pub fn set_fallback(
+        &mut self,
+        _fallback: Box<dyn Storage<Serializer = S::Serializer, StoreError = S::StoreError>>,
+    ) {
         // self.fallback = Some(fallback);
     }
 
@@ -91,7 +94,7 @@ where
         let mut transaction = DatabaseTransaction::new(self);
         let inserted_key = transaction
             .insert::<K, R>(record)
-            .map_err(DatabaseError::Serialization)?;
+            .map_err(|e| DatabaseError::Storage(e.into()))?;
         self.commit(transaction)?;
         Ok(inserted_key)
     }
@@ -112,16 +115,18 @@ where
             // if let Some(fallback) = &mut self.fallback {
             //     fallback
             //         .insert(key.clone(), value.clone())
-            //         .map_err(DatabaseError::Io)?;
+            //         .map_err(DatabaseError::Storage)?;
             // }
-            self.store.insert(key, value).map_err(DatabaseError::Io)?;
+            self.store
+                .insert(key, value)
+                .map_err(DatabaseError::Storage)?;
         }
 
         for key in deletes {
             // if let Some(fallback) = &mut self.fallback {
-            //     fallback.remove(key.clone()).map_err(DatabaseError::Io)?;
+            //     fallback.remove(key.clone()).map_err(DatabaseError::Storage)?;
             // }
-            self.store.remove(key).map_err(DatabaseError::Io)?;
+            self.store.remove(key).map_err(DatabaseError::Storage)?;
         }
 
         Ok(())
@@ -141,14 +146,18 @@ where
         M: Manifests<K::Record>,
     {
         let serialized_key = wrap::<K::Record, S::Serializer>(key, &self.serialization_config)
-            .map_err(DatabaseError::Serialization)?;
-        let Some(value) = self.store.get(serialized_key).map_err(DatabaseError::Io)? else {
+            .map_err(|e| DatabaseError::Storage(e.into()))?;
+        let Some(value) = self
+            .store
+            .get(serialized_key)
+            .map_err(DatabaseError::Storage)?
+        else {
             // let Some(fallback) = &self.fallback else {
             //     return Ok(None);
             // };
             // let key = wrap::<K::Record, S::Serializer>(key, &self.serialization_config)
-            //     .map_err(DatabaseError::Serialization)?;
-            // let Some(value) = fallback.get(key).map_err(DatabaseError::Io)? else {
+            //     .map_err(|e| DatabaseError::Storage(e.into()))?;
+            // let Some(value) = fallback.get(key).map_err(DatabaseError::Storage)? else {
             //     return Ok(None);
             // };
             // value
@@ -157,7 +166,7 @@ where
         Ok(Some(
             self.serialization_config
                 .deserialize(&value)
-                .map_err(DatabaseError::Deserialization)?,
+                .map_err(|e| DatabaseError::Storage(e.into()))?,
         ))
     }
 
@@ -182,7 +191,7 @@ where
         let mut transaction = DatabaseTransaction::new(self);
         transaction
             .remove(key, &record)
-            .map_err(DatabaseError::Serialization)?;
+            .map_err(|e| DatabaseError::Storage(e.into()))?;
         self.commit(transaction)?;
         Ok(())
     }
@@ -207,23 +216,23 @@ where
         M: Manifests<K::Record>,
     {
         let start = wrap::<K::Record, S::Serializer>(&range.start, &self.serialization_config)
-            .map_err(DatabaseError::Serialization)?;
+            .map_err(|e| DatabaseError::Storage(e.into()))?;
         let end = wrap::<K::Record, S::Serializer>(&range.end, &self.serialization_config)
-            .map_err(DatabaseError::Serialization)?;
+            .map_err(|e| DatabaseError::Storage(e.into()))?;
         let raw_iter = self
             .store
             .iter_keys(start..end)
-            .map_err(DatabaseError::Io)?;
+            .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| {
             let value = match elem {
                 Ok(value) => value,
-                Err(e) => return Err(DatabaseError::Io(e)),
+                Err(e) => return Err(DatabaseError::Storage(e)),
             };
 
             let deserialized: Wrap<K> = match self.serialization_config.deserialize(&value) {
                 Ok(deserialized) => deserialized,
-                Err(e) => return Err(DatabaseError::Deserialization(e)),
+                Err(e) => return Err(DatabaseError::Storage(e.into())),
             };
 
             Ok(deserialized.key)
@@ -245,21 +254,21 @@ where
         M: Manifests<K::Record>,
     {
         let (start, end) = empty_wrap::<K::Record, S::Serializer>(&self.serialization_config)
-            .map_err(DatabaseError::Serialization)?;
+            .map_err(|e| DatabaseError::Storage(e.into()))?;
         let raw_iter = self
             .store
             .iter_keys(start..end)
-            .map_err(DatabaseError::Io)?;
+            .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| {
             let value = match elem {
                 Ok(value) => value,
-                Err(e) => return Err(DatabaseError::Io(e)),
+                Err(e) => return Err(DatabaseError::Storage(e)),
             };
 
             let deserialized: Wrap<K> = match self.serialization_config.deserialize(&value) {
                 Ok(deserialized) => deserialized,
-                Err(e) => return Err(DatabaseError::Deserialization(e)),
+                Err(e) => return Err(DatabaseError::Storage(e.into())),
             };
 
             Ok(deserialized.key)
@@ -297,22 +306,22 @@ where
         let mut start = self
             .serialization_config
             .serialize(WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX)))
-            .map_err(DatabaseError::Serialization)?;
+            .map_err(|e| DatabaseError::Storage(e.into()))?;
         let mut end = start.clone();
         start.combine(
             self.serialization_config()
                 .serialize(&range.start)
-                .map_err(DatabaseError::Serialization)?,
+                .map_err(|e| DatabaseError::Storage(e.into()))?,
         );
         end.combine(
             self.serialization_config()
                 .serialize(&range.end)
-                .map_err(DatabaseError::Serialization)?,
+                .map_err(|e| DatabaseError::Storage(e.into()))?,
         );
         let raw_iter = self
             .store
             .iter_keys(start..end)
-            .map_err(DatabaseError::Io)?;
+            .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| self.process_iter_result(elem)))
     }
@@ -336,13 +345,13 @@ where
         let mut start = self
             .serialization_config
             .serialize(index_prelude)
-            .map_err(DatabaseError::Serialization)?;
+            .map_err(|e| DatabaseError::Storage(e.into()))?;
         let mut end = start.clone();
 
         let start_bytes = self
             .serialization_config
             .serialize(index_key)
-            .map_err(DatabaseError::Serialization)?;
+            .map_err(|e| DatabaseError::Storage(e.into()))?;
         let end_bytes = {
             let mut end_bytes = start_bytes.clone();
             end_bytes.next();
@@ -354,7 +363,7 @@ where
         let raw_iter = self
             .store
             .iter_keys(start..end)
-            .map_err(DatabaseError::Io)?;
+            .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| self.process_iter_result(elem)))
     }
@@ -374,7 +383,7 @@ where
         &self,
         result: Result<<S::Serializer as Unifier>::D, S::StoreError>,
     ) -> Result<T, DatabaseError<S>> {
-        let key = result.map_err(DatabaseError::Io)?;
+        let key = result.map_err(DatabaseError::Storage)?;
         let value = match self.store.get(key) {
             Ok(Some(data)) => data,
             Ok(None) => {
@@ -382,11 +391,11 @@ where
                     crate::InternalDatabaseError::MissingIndexEntry,
                 ));
             }
-            Err(e) => return Err(DatabaseError::Io(e)),
+            Err(e) => return Err(DatabaseError::Storage(e)),
         };
 
         self.serialization_config
             .deserialize(&value)
-            .map_err(DatabaseError::Deserialization)
+            .map_err(|e| DatabaseError::Storage(e.into()))
     }
 }

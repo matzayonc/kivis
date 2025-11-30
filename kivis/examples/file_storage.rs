@@ -1,7 +1,36 @@
-use bincode::config::Configuration;
+use bincode::{config::Configuration, error::{DecodeError, EncodeError}};
 use kivis::{manifest, Database, DatabaseError, Record, Storage};
-use std::fs;
+use std::{fmt::Display, fs};
 use std::path::PathBuf;
+
+#[derive(Debug, PartialEq, Eq)]
+enum FileStoreError {
+    Io,
+    Serialization,
+    Deserialization,
+}
+
+impl Display for FileStoreError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io => write!(f, "IO error"),
+            Self::Serialization => write!(f, "Serialization error"),
+            Self::Deserialization => write!(f, "Deserialization error"),
+        }
+    }
+}
+
+impl From<EncodeError> for FileStoreError {
+    fn from(_: EncodeError) -> Self {
+        Self::Serialization
+    }
+}
+
+impl From<DecodeError> for FileStoreError {
+    fn from(_: DecodeError) -> Self {
+        Self::Deserialization
+    }
+}
 
 /// A user record with an indexed name field
 #[derive(
@@ -46,11 +75,11 @@ impl FileStore {
 
 impl Storage for FileStore {
     type Serializer = Configuration;
-    type StoreError = kivis::MemoryStorageError;
+    type StoreError = FileStoreError;
 
     fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
         let file_path = self.key_to_filename(&key);
-        fs::write(file_path, value).map_err(|_| kivis::MemoryStorageError)?;
+        fs::write(file_path, value).map_err(|_| FileStoreError::Io)?;
         Ok(())
     }
 
@@ -59,7 +88,7 @@ impl Storage for FileStore {
         match fs::read(file_path) {
             Ok(data) => Ok(Some(data)),
             Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(_) => Err(kivis::MemoryStorageError),
+            Err(_) => Err(FileStoreError::Io),
         }
     }
 
@@ -67,11 +96,11 @@ impl Storage for FileStore {
         let file_path = self.key_to_filename(&key);
         match fs::read(&file_path) {
             Ok(data) => {
-                fs::remove_file(file_path).map_err(|_| kivis::MemoryStorageError)?;
+                fs::remove_file(file_path).map_err(|_| FileStoreError::Io)?;
                 Ok(Some(data))
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(_) => Err(kivis::MemoryStorageError),
+            Err(_) => Err(FileStoreError::Io),
         }
     }
 
@@ -79,7 +108,7 @@ impl Storage for FileStore {
         &self,
         range: std::ops::Range<Vec<u8>>,
     ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError> {
-        let entries = fs::read_dir(&self.data_dir).map_err(|_| kivis::MemoryStorageError)?;
+        let entries = fs::read_dir(&self.data_dir).map_err(|_| FileStoreError::Io)?;
 
         let mut keys: Vec<Vec<u8>> = Vec::new();
         for entry in entries.flatten() {

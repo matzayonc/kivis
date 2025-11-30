@@ -1,5 +1,5 @@
 use anyhow::Context;
-use bincode::{config::Configuration, serde::encode_to_vec};
+use bincode::{config::Configuration, error::{DecodeError, EncodeError}, serde::encode_to_vec};
 use std::{collections::BTreeMap, fmt::Display, ops::Range};
 
 use kivis::{
@@ -118,11 +118,42 @@ impl kivis::Manifests<Pet> for Manifest {
 struct ManualStorage {
     data: BTreeMap<Vec<u8>, Vec<u8>>,
 }
-#[derive(Debug, PartialEq, Eq)]
-struct NoError;
+#[derive(Debug)]
+enum NoError {
+    Serialization(EncodeError),
+    Deserialization(DecodeError),
+}
+
 impl Display for NoError {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(())
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Serialization(e) => write!(f, "Serialization error: {e:?}"),
+            Self::Deserialization(e) => write!(f, "Deserialization error: {e:?}"),
+        }
+    }
+}
+
+impl PartialEq for NoError {
+    fn eq(&self, other: &Self) -> bool {
+        matches!(
+            (self, other),
+            (Self::Serialization(_), Self::Serialization(_))
+                | (Self::Deserialization(_), Self::Deserialization(_))
+        )
+    }
+}
+
+impl Eq for NoError {}
+
+impl From<EncodeError> for NoError {
+    fn from(e: EncodeError) -> Self {
+        Self::Serialization(e)
+    }
+}
+
+impl From<DecodeError> for NoError {
+    fn from(e: DecodeError) -> Self {
+        Self::Deserialization(e)
     }
 }
 
