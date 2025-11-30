@@ -76,6 +76,26 @@ impl UnifierData for Vec<u8> {
     }
 }
 
+#[cfg(feature = "std")]
+impl UnifierData for alloc::string::String {
+    fn combine(&mut self, other: Self) {
+        self.push_str(&other);
+    }
+    fn next(&mut self) {
+        let mut bytes = self.as_bytes().to_vec();
+        for i in (0..bytes.len()).rev() {
+            if bytes[i] < 255 {
+                bytes[i] += 1;
+                *self = alloc::string::String::from_utf8_lossy(&bytes).into_owned();
+                return;
+            }
+            bytes[i] = 0;
+        }
+        bytes.push(0);
+        *self = alloc::string::String::from_utf8_lossy(&bytes).into_owned();
+    }
+}
+
 pub trait Unifier {
     type D: UnifierData + Clone + PartialEq + Eq;
     type SerError: Debug;

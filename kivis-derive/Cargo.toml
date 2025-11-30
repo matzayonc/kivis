@@ -15,8 +15,8 @@ authors = ["Mateusz Zając <matzayonc@gmail.com>"]
 proc-macro = true
 
 [dependencies]
-syn = { version = "2.0", features = ["full"] }
-quote = "1.0"
-proc-macro2 = "1.0"
-serde = { version = "1.0.219", features = ["derive"] }
-convert_case = { version = "0.8.0" }
+syn = { workspace = true }
+quote = { workspace = true }
+proc-macro2 = { workspace = true }
+serde = { workspace = true }
+convert_case = { workspace = true }
