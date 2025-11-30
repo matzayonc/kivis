@@ -1,7 +1,10 @@
-use bincode::{config::Configuration, error::{DecodeError, EncodeError}};
+use bincode::{
+    config::Configuration,
+    error::{DecodeError, EncodeError},
+};
 use kivis::{manifest, Database, DatabaseError, Record, Storage};
-use std::{fmt::Display, fs};
 use std::path::PathBuf;
+use std::{fmt::Display, fs};
 
 #[derive(Debug, PartialEq, Eq)]
 enum FileStoreError {

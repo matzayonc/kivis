@@ -165,7 +165,7 @@ where
         };
         Ok(Some(
             self.serialization_config
-                .deserialize(&value)
+                .deserialize_value(&value)
                 .map_err(|e| DatabaseError::Storage(e.into()))?,
         ))
     }
@@ -230,7 +230,7 @@ where
                 Err(e) => return Err(DatabaseError::Storage(e)),
             };
 
-            let deserialized: Wrap<K> = match self.serialization_config.deserialize(&value) {
+            let deserialized: Wrap<K> = match self.serialization_config.deserialize_key(&value) {
                 Ok(deserialized) => deserialized,
                 Err(e) => return Err(DatabaseError::Storage(e.into())),
             };
@@ -266,7 +266,7 @@ where
                 Err(e) => return Err(DatabaseError::Storage(e)),
             };
 
-            let deserialized: Wrap<K> = match self.serialization_config.deserialize(&value) {
+            let deserialized: Wrap<K> = match self.serialization_config.deserialize_key(&value) {
                 Ok(deserialized) => deserialized,
                 Err(e) => return Err(DatabaseError::Storage(e.into())),
             };
@@ -305,17 +305,17 @@ where
     > {
         let mut start = self
             .serialization_config
-            .serialize(WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX)))
+            .serialize_key(WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX)))
             .map_err(|e| DatabaseError::Storage(e.into()))?;
         let mut end = start.clone();
         start.combine(
             self.serialization_config()
-                .serialize(&range.start)
+                .serialize_key(&range.start)
                 .map_err(|e| DatabaseError::Storage(e.into()))?,
         );
         end.combine(
             self.serialization_config()
-                .serialize(&range.end)
+                .serialize_key(&range.end)
                 .map_err(|e| DatabaseError::Storage(e.into()))?,
         );
         let raw_iter = self
@@ -344,13 +344,13 @@ where
         let index_prelude = WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX));
         let mut start = self
             .serialization_config
-            .serialize(index_prelude)
+            .serialize_key(index_prelude)
             .map_err(|e| DatabaseError::Storage(e.into()))?;
         let mut end = start.clone();
 
         let start_bytes = self
             .serialization_config
-            .serialize(index_key)
+            .serialize_key(index_key)
             .map_err(|e| DatabaseError::Storage(e.into()))?;
         let end_bytes = {
             let mut end_bytes = start_bytes.clone();
@@ -395,7 +395,7 @@ where
         };
 
         self.serialization_config
-            .deserialize(&value)
+            .deserialize_value(&value)
             .map_err(|e| DatabaseError::Storage(e.into()))
     }
 }

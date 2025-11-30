@@ -81,27 +81,45 @@ pub trait Unifier {
     type SerError: Debug;
     type DeError: Debug;
 
-    /// Serializes the given data.
+    /// Serializes a key.
     /// # Errors
     ///
     /// Returns an error if serialization fails.
-    fn serialize(&self, data: impl Serialize) -> Result<Self::D, Self::SerError>;
+    fn serialize_key(&self, data: impl Serialize) -> Result<Self::D, Self::SerError>;
 
-    /// Deserializes the given data into the specified type.
+    /// Serializes a value. By default, uses the same serialization as keys.
+    /// # Errors
+    ///
+    /// Returns an error if serialization fails.
+    fn serialize_value(&self, data: impl Serialize) -> Result<Self::D, Self::SerError> {
+        self.serialize_key(data)
+    }
+
+    /// Deserializes a key from the given data.
     /// # Errors
     ///
     /// Returns an error if deserialization fails.
-    fn deserialize<T: DeserializeOwned>(&self, data: &Self::D) -> Result<T, Self::DeError>;
+    fn deserialize_key<T: DeserializeOwned>(&self, data: &Self::D) -> Result<T, Self::DeError>;
+
+    /// Deserializes a value from the given data. By default, uses the same deserialization as keys.
+    /// # Errors
+    ///
+    /// Returns an error if deserialization fails.
+    fn deserialize_value<T: DeserializeOwned>(&self, data: &Self::D) -> Result<T, Self::DeError> {
+        self.deserialize_key(data)
+    }
 }
 
 impl Unifier for Configuration {
     type D = Vec<u8>;
     type SerError = EncodeError;
     type DeError = DecodeError;
-    fn serialize(&self, data: impl Serialize) -> Result<Self::D, Self::SerError> {
+
+    fn serialize_key(&self, data: impl Serialize) -> Result<Self::D, Self::SerError> {
         encode_to_vec(data, Self::default())
     }
-    fn deserialize<T: DeserializeOwned>(&self, data: &Self::D) -> Result<T, Self::DeError> {
+
+    fn deserialize_key<T: DeserializeOwned>(&self, data: &Self::D) -> Result<T, Self::DeError> {
         Ok(decode_from_slice(data, Self::default())?.0)
     }
 }
@@ -119,7 +137,7 @@ impl<U: Unifier> SimpleIndexer<U> {
 impl<U: Unifier> Indexer for SimpleIndexer<U> {
     type Error = U::SerError;
     fn add(&mut self, discriminator: u8, index: &impl Serialize) -> Result<(), Self::Error> {
-        let data = self.1.serialize(index)?;
+        let data = self.1.serialize_key(index)?;
         self.0.push((discriminator, data));
         Ok(())
     }

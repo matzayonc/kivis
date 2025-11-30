@@ -4,7 +4,10 @@
 mod tests {
     use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
-    use bincode::{config::Configuration, error::{DecodeError, EncodeError}};
+    use bincode::{
+        config::Configuration,
+        error::{DecodeError, EncodeError},
+    };
     use serde::{Deserialize, Serialize};
 
     use kivis::{manifest, AtomicStorage, Database, DatabaseTransaction, Record, Storage};

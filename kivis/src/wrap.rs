@@ -85,7 +85,7 @@ pub(crate) fn wrap<R: DatabaseEntry, U: Unifier>(
         },
         key: item_key.clone(),
     };
-    unifier.serialize(wrapped)
+    unifier.serialize_key(wrapped)
 }
 
 pub(crate) fn empty_wrap<R: DatabaseEntry, U: Unifier>(
@@ -107,5 +107,5 @@ pub(crate) fn empty_wrap<R: DatabaseEntry, U: Unifier>(
         key: (),
     };
 
-    Ok((config.serialize(start)?, config.serialize(end)?))
+    Ok((config.serialize_key(start)?, config.serialize_key(end)?))
 }
