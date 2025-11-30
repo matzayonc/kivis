@@ -1,4 +1,4 @@
-use kivis::{manifest, Scope};
+use kivis::manifest;
 
 struct User;
 struct Post;

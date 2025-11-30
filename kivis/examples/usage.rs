@@ -41,7 +41,7 @@ enum ToyKind {
 
 manifest![Pets: User, Pet, Toy];
 
-fn main() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
+fn main() -> Result<(), DatabaseError<kivis::MemoryStorage>> {
     // Create a new in-memory database instance
     let mut store: Database<_, Pets> = Database::new(MemoryStorage::new()).unwrap();
 

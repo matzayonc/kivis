@@ -1,6 +1,8 @@
 use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
-use crate::StorageInner;
+use bincode::config::Configuration;
+
+use crate::{Storage, StorageInner};
 
 /// A memory-based storage implementation using a [`BTreeMap`].
 ///
@@ -17,6 +19,10 @@ impl Display for MemoryStorageError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Memory storage operations do not fail")
     }
+}
+
+impl Storage for MemoryStorage {
+    type Serializer = Configuration;
 }
 
 impl StorageInner for MemoryStorage {

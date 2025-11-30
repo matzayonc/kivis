@@ -15,10 +15,6 @@ use serde::{de::DeserializeOwned, Serialize};
 pub use schema::*;
 pub use storage::*;
 
-/// Error type for serialization operations, re-exported from the [`bincode`] crate.
-// pub type SerializationError = bincode::error::EncodeError;
-// pub type DeserializationError = bincode::error::DecodeError;
-
 #[cfg(feature = "atomic")]
 pub use atomic::*;
 
@@ -153,7 +149,7 @@ macro_rules! manifest {
                 $crate::generate_member_scopes!(0; $($ty),+)
             }
 
-            fn load<S: $crate::Storage>(&mut self, db: &mut $crate::Database<S, Self>) -> ::core::result::Result<(), $crate::DatabaseError<S::StoreError>> {
+            fn load<S: $crate::Storage>(&mut self, db: &mut $crate::Database<S, Self>) -> ::core::result::Result<(), $crate::DatabaseError<S>> {
                 $crate::paste! {
                     $(
                         self.[<last_ $ty:snake>] = ::core::option::Option::Some(db.last_id()?);

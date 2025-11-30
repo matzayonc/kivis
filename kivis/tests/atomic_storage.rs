@@ -2,7 +2,8 @@
 #[cfg(feature = "atomic")]
 #[cfg(test)]
 mod atomic_storage_example {
-    use kivis::{AtomicStorage, Storage};
+    use bincode::config::Configuration;
+    use kivis::{AtomicStorage, Storage, StorageInner};
     use std::{cmp::Reverse, collections::BTreeMap, error::Error, fmt::Display, ops::Range};
 
     // Example error type for our mock atomic storage
@@ -36,6 +37,10 @@ mod atomic_storage_example {
     }
 
     impl Storage for MockAtomicStorage {
+        type Serializer = Configuration;
+    }
+
+    impl StorageInner for MockAtomicStorage {
         type StoreError = MockAtomicError;
 
         fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {

@@ -142,21 +142,18 @@ where
     {
         let serialized_key = wrap::<K::Record, S::Serializer>(key, &self.serialization_config)
             .map_err(DatabaseError::Serialization)?;
-        let value =
-            if let Some(value) = self.store.get(serialized_key).map_err(DatabaseError::Io)? {
-                value
-            } else {
-                // let Some(fallback) = &self.fallback else {
-                //     return Ok(None);
-                // };
-                // let key = wrap::<K::Record, S::Serializer>(key, &self.serialization_config)
-                //     .map_err(DatabaseError::Serialization)?;
-                // let Some(value) = fallback.get(key).map_err(DatabaseError::Io)? else {
-                //     return Ok(None);
-                // };
-                // value
-                return Ok(None);
-            };
+        let Some(value) = self.store.get(serialized_key).map_err(DatabaseError::Io)? else {
+            // let Some(fallback) = &self.fallback else {
+            //     return Ok(None);
+            // };
+            // let key = wrap::<K::Record, S::Serializer>(key, &self.serialization_config)
+            //     .map_err(DatabaseError::Serialization)?;
+            // let Some(value) = fallback.get(key).map_err(DatabaseError::Io)? else {
+            //     return Ok(None);
+            // };
+            // value
+            return Ok(None);
+        };
         Ok(Some(
             self.serialization_config
                 .deserialize(&value)
