@@ -7,7 +7,7 @@ use crate::Unifier;
 use super::Debug;
 
 pub trait Storage: StorageInner<<Self::Serializer as Unifier>::D> {
-    type Serializer: Unifier + Default;
+    type Serializer: Unifier + Default + Copy;
 }
 
 /// A trait defining a storage backend for the database.

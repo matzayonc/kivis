@@ -1,4 +1,10 @@
+#[cfg(feature = "atomic")]
+use crate::Unifier;
+
 use super::Storage;
+
+type Deletes<D> = Vec<Option<D>>;
+type Inserts<D> = Vec<(D, D)>;
 
 /// A trait defining atomic operations for storage backends.
 ///
@@ -26,9 +32,9 @@ pub trait AtomicStorage: Storage {
     ///
     /// # Errors
     /// Returns an error if any of the insert or remove operations fail.
-    fn batch_mixed<D>(
+    fn batch_mixed(
         &mut self,
-        inserts: Vec<(D, D)>,
-        removes: Vec<D>,
-    ) -> Result<Vec<Option<D>>, Self::StoreError>;
+        inserts: Inserts<<<Self as Storage>::Serializer as Unifier>::D>,
+        removes: Vec<<<Self as Storage>::Serializer as Unifier>::D>,
+    ) -> Result<Deletes<<<Self as Storage>::Serializer as Unifier>::D>, Self::StoreError>;
 }

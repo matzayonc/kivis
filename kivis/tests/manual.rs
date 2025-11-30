@@ -1,5 +1,5 @@
 use anyhow::Context;
-use bincode::serde::encode_to_vec;
+use bincode::{config::Configuration, serde::encode_to_vec};
 use std::{collections::BTreeMap, fmt::Display, ops::Range};
 
 use kivis::{
@@ -94,7 +94,7 @@ impl kivis::Manifest for Manifest {
     fn load<S: Storage>(
         &mut self,
         db: &mut Database<S, Self>,
-    ) -> Result<(), kivis::DatabaseError<S::StoreError>> {
+    ) -> Result<(), kivis::DatabaseError<S>> {
         *self = Self {
             last_user: None,
             last_pet: Some(db.last_id::<PetKey>()?),
@@ -126,7 +126,11 @@ impl Display for NoError {
     }
 }
 
-impl kivis::Storage for ManualStorage {
+impl Storage for ManualStorage {
+    type Serializer = Configuration;
+}
+
+impl kivis::StorageInner for ManualStorage {
     type StoreError = NoError;
 
     fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
