@@ -1,4 +1,5 @@
-use kivis::{manifest, Database, DatabaseError, Record, Storage};
+use bincode::config::Configuration;
+use kivis::{manifest, Database, DatabaseError, Record, Storage, StorageInner};
 use std::fs;
 use std::path::PathBuf;
 
@@ -25,6 +26,7 @@ struct Pet {
 
 manifest![Manifest: User, Pet];
 
+#[derive(Debug)]
 struct FileStore {
     data_dir: PathBuf,
 }
@@ -43,6 +45,10 @@ impl FileStore {
 }
 
 impl Storage for FileStore {
+    type Serializer = Configuration;
+}
+
+impl StorageInner for FileStore {
     type StoreError = kivis::MemoryStorageError;
 
     fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
@@ -97,7 +103,7 @@ impl Storage for FileStore {
     }
 }
 
-fn main() -> Result<(), DatabaseError<kivis::MemoryStorageError>> {
+fn main() -> Result<(), DatabaseError<FileStore>> {
     // Clean up any existing data for a fresh start
     let data_path = std::path::Path::new("./data/example");
     if data_path.exists() {

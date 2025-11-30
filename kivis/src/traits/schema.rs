@@ -91,8 +91,7 @@ pub trait Unifier {
     /// # Errors
     ///
     /// Returns an error if deserialization fails.
-    fn deserialize<'de, T: DeserializeOwned>(&self, data: &'de Self::D)
-        -> Result<T, Self::DeError>;
+    fn deserialize<T: DeserializeOwned>(&self, data: &Self::D) -> Result<T, Self::DeError>;
 }
 
 impl Unifier for Configuration {
@@ -102,10 +101,7 @@ impl Unifier for Configuration {
     fn serialize(&self, data: impl Serialize) -> Result<Self::D, Self::SerError> {
         encode_to_vec(data, Self::default())
     }
-    fn deserialize<'de, T: DeserializeOwned>(
-        &self,
-        data: &'de Self::D,
-    ) -> Result<T, Self::DeError> {
+    fn deserialize<T: DeserializeOwned>(&self, data: &Self::D) -> Result<T, Self::DeError> {
         Ok(decode_from_slice(data, Self::default())?.0)
     }
 }
@@ -120,8 +116,8 @@ impl<U: Unifier> SimpleIndexer<U> {
         self.0
     }
 }
-impl Indexer for SimpleIndexer<Configuration> {
-    type Error = EncodeError;
+impl<U: Unifier> Indexer for SimpleIndexer<U> {
+    type Error = U::SerError;
     fn add(&mut self, discriminator: u8, index: &impl Serialize) -> Result<(), Self::Error> {
         let data = self.1.serialize(index)?;
         self.0.push((discriminator, data));

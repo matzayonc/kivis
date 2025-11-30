@@ -4,9 +4,12 @@
 mod tests {
     use std::{cmp::Reverse, collections::BTreeMap, ops::Range};
 
+    use bincode::config::Configuration;
     use serde::{Deserialize, Serialize};
 
-    use kivis::{manifest, AtomicStorage, Database, DatabaseTransaction, Record, Storage};
+    use kivis::{
+        manifest, AtomicStorage, Database, DatabaseTransaction, Record, Storage, StorageInner,
+    };
 
     #[derive(Debug, Record, PartialEq, Eq, Serialize, Deserialize)]
     pub struct MockRecord(#[key] u8, char);
@@ -14,6 +17,7 @@ mod tests {
     manifest![Manifest: MockRecord];
 
     // Mock atomic storage implementation
+    #[derive(Debug)]
     pub struct MockAtomicStorage {
         data: BTreeMap<Reverse<Vec<u8>>, Vec<u8>>,
     }
@@ -27,6 +31,10 @@ mod tests {
     }
 
     impl Storage for MockAtomicStorage {
+        type Serializer = Configuration;
+    }
+
+    impl StorageInner<Vec<u8>> for MockAtomicStorage {
         type StoreError = String;
 
         fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
@@ -77,7 +85,9 @@ mod tests {
 
     #[test]
     fn test_transaction_new() -> anyhow::Result<()> {
-        let tx = DatabaseTransaction::<Manifest>::new_with_serialization_config(Default::default());
+        let tx = DatabaseTransaction::<Manifest, _>::new_with_serialization_config(
+            Configuration::default(),
+        );
         assert!(tx.is_empty());
         assert_eq!(tx.write_count(), 0);
         assert_eq!(tx.delete_count(), 0);
@@ -212,7 +222,8 @@ mod tests {
     #[test]
     fn test_empty_transaction_commit() -> anyhow::Result<()> {
         let mut storage = MockAtomicStorage::new();
-        let tx = DatabaseTransaction::<Manifest>::new_with_serialization_config(Default::default());
+        let tx =
+            DatabaseTransaction::<Manifest, _>::new_with_serialization_config(Default::default());
 
         // Empty transaction should succeed and return empty vector
         let result = tx.commit(&mut storage)?;

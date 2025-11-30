@@ -10,6 +10,9 @@ use crate::{
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
+type Writes<D> = Vec<(D, D)>;
+type Deletes<D> = Vec<Option<D>>;
+
 /// A database transaction that accumulates low-level byte operations (writes and deletes)
 /// without immediately applying them to storage.
 ///
@@ -178,7 +181,7 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     pub fn commit<S>(
         self,
         storage: &mut S,
-    ) -> Result<Vec<Option<<S::Serializer as Unifier>::D>>, DatabaseError<S>>
+    ) -> Result<Deletes<<S::Serializer as Unifier>::D>, DatabaseError<S>>
     where
         S: AtomicStorage,
         S: Storage<Serializer = U>,
@@ -219,7 +222,7 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
         &self,
         record: &R,
         key: &R::Key,
-    ) -> Result<Vec<(U::D, U::D)>, U::SerError>
+    ) -> Result<Writes<U::D>, U::SerError>
     where
         R::Key: RecordKey<Record = R>,
         SimpleIndexer<U>: crate::traits::Indexer<Error = U::SerError>,
