@@ -1,5 +1,5 @@
-use fs_store::FileStore;
-use kivis::{Database, DatabaseError, LexicographicString, Record, manifest};
+use kivis::{Database, LexicographicString, Record, manifest};
+use kivis_fs::FileStore;
 
 /// A user record with an indexed name field
 #[derive(
@@ -36,7 +36,7 @@ fn test_flow() -> anyhow::Result<()> {
 
     // Create a new file-based database instance
     let file_store = FileStore::new(PATH).expect("Failed to create file store");
-    let mut store: Database<_, Park> = Database::new(file_store);
+    let mut store: Database<_, Park> = Database::new(file_store)?;
 
     // Users can be added to the file store
     let alice = User {
@@ -48,8 +48,8 @@ fn test_flow() -> anyhow::Result<()> {
         email: "bob@example.com".into(),
     };
 
-    let alice_key = store.put(alice.clone())?;
-    let bob_key = store.put(bob.clone())?;
+    let alice_key = store.put(&alice)?;
+    let bob_key = store.put(&bob)?;
 
     // Pets can reference users as owners
     let fluffy = Pet {
@@ -63,12 +63,12 @@ fn test_flow() -> anyhow::Result<()> {
         cat: false,
     };
 
-    let fluffy_key = store.put(fluffy.clone())?;
-    let _rover_key = store.put(rover.clone())?;
+    let fluffy_key = store.put(&fluffy)?;
+    let _rover_key = store.put(&rover)?;
 
     // Retrieve records by key
-    let retrieved_alice = store.get(&alice_key)?.ok_or(())?;
-    let retrieved_fluffy = store.get(&fluffy_key)?.ok_or(())?;
+    let retrieved_alice = store.get(&alice_key)?.expect("Alice not found");
+    let retrieved_fluffy = store.get(&fluffy_key)?.expect("Fluffy not found");
 
     assert_eq!(retrieved_alice.name, "Alice");
     assert_eq!(retrieved_fluffy.name, "Fluffy");
