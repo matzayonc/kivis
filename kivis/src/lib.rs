@@ -25,8 +25,8 @@
 //! // Define the manifest for the database
 //! manifest![MyDatabase: User];
 //!
-//! # fn main() -> Result<(), kivis::DatabaseError<kivis::MemoryStorageError>> {
-//! let mut db = Database::<MemoryStorage, MyDatabase>::new(MemoryStorage::new());
+//! # fn main() -> Result<(), kivis::DatabaseError<kivis::MemoryStorage>> {
+//! let mut db = Database::<MemoryStorage, MyDatabase>::new(MemoryStorage::new())?;
 //! let user = User {
 //!     name: "Alice".to_string(),
 //!     email: "alice@example.com".to_string(),

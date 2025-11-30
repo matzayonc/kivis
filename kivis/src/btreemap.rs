@@ -2,7 +2,7 @@ use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
 use bincode::config::Configuration;
 
-use crate::{Storage, StorageInner};
+use crate::Storage;
 
 /// A memory-based storage implementation using a [`BTreeMap`].
 ///
@@ -23,9 +23,6 @@ impl Display for MemoryStorageError {
 
 impl Storage for MemoryStorage {
     type Serializer = Configuration;
-}
-
-impl StorageInner for MemoryStorage {
     type StoreError = MemoryStorageError;
 
     fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {

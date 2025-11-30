@@ -4,7 +4,7 @@
 #[cfg(feature = "atomic")]
 fn atomic_storage_example() -> anyhow::Result<()> {
     use bincode::config::Configuration;
-    use kivis::{AtomicStorage, Storage, StorageInner};
+    use kivis::{AtomicStorage, Storage};
     use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
     // Define a custom error type
@@ -30,11 +30,9 @@ fn atomic_storage_example() -> anyhow::Result<()> {
         }
     }
 
-    // First implement the basic Storage trait
+    // Implement the Storage trait
     impl Storage for MyAtomicStorage {
         type Serializer = Configuration;
-    }
-    impl StorageInner for MyAtomicStorage {
         type StoreError = MyError;
 
         fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {

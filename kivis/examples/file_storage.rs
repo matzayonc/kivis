@@ -1,5 +1,5 @@
 use bincode::config::Configuration;
-use kivis::{manifest, Database, DatabaseError, Record, Storage, StorageInner};
+use kivis::{manifest, Database, DatabaseError, Record, Storage};
 use std::fs;
 use std::path::PathBuf;
 
@@ -46,9 +46,6 @@ impl FileStore {
 
 impl Storage for FileStore {
     type Serializer = Configuration;
-}
-
-impl StorageInner for FileStore {
     type StoreError = kivis::MemoryStorageError;
 
     fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
