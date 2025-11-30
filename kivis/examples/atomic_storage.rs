@@ -3,7 +3,10 @@
 
 #[cfg(feature = "atomic")]
 fn atomic_storage_example() -> anyhow::Result<()> {
-    use bincode::{config::Configuration, error::{DecodeError, EncodeError}};
+    use bincode::{
+        config::Configuration,
+        error::{DecodeError, EncodeError},
+    };
     use kivis::{AtomicStorage, Storage};
     use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
