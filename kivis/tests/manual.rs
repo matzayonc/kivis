@@ -128,9 +128,6 @@ impl Display for NoError {
 
 impl Storage for ManualStorage {
     type Serializer = Configuration;
-}
-
-impl kivis::StorageInner for ManualStorage {
     type StoreError = NoError;
 
     fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {

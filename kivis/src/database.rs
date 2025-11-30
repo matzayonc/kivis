@@ -5,7 +5,7 @@ use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
 use crate::wrap::{empty_wrap, wrap, Subtable, Wrap, WrapPrelude};
 use crate::{
-    DeriveKey, Incrementable, Indexer, Manifest, Manifests, RecordKey, SimpleIndexer, StorageInner,
+    DeriveKey, Incrementable, Indexer, Manifest, Manifests, RecordKey, SimpleIndexer,
     Unifier, UnifierData,
 };
 use core::ops::Range;
@@ -52,7 +52,7 @@ where
 
     /// Sets a fallback storage that will be used if the main storage does not contain the requested record.
     /// The current storage then becomes the cache for the fallback storage.
-    pub fn set_fallback(&mut self, _fallback: Box<dyn StorageInner<StoreError = S::StoreError>>) {
+    pub fn set_fallback(&mut self, _fallback: Box<dyn Storage<Serializer = S::Serializer, StoreError = S::StoreError>>) {
         // self.fallback = Some(fallback);
     }
 
@@ -243,7 +243,6 @@ where
     where
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
-        S: StorageInner<<<S as Storage>::Serializer as Unifier>::D>,
     {
         let (start, end) = empty_wrap::<K::Record, S::Serializer>(&self.serialization_config)
             .map_err(DatabaseError::Serialization)?;
