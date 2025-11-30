@@ -3,17 +3,35 @@
 
 #[cfg(feature = "atomic")]
 fn atomic_storage_example() -> anyhow::Result<()> {
-    use bincode::config::Configuration;
+    use bincode::{config::Configuration, error::{DecodeError, EncodeError}};
     use kivis::{AtomicStorage, Storage};
     use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
     // Define a custom error type
     #[derive(Debug, PartialEq, Eq)]
-    struct MyError(String);
+    enum MyError {
+        Serialization,
+        Deserialization,
+    }
 
     impl Display for MyError {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "MyError: {}", self.0)
+            match self {
+                Self::Serialization => write!(f, "Serialization error"),
+                Self::Deserialization => write!(f, "Deserialization error"),
+            }
+        }
+    }
+
+    impl From<EncodeError> for MyError {
+        fn from(_: EncodeError) -> Self {
+            Self::Serialization
+        }
+    }
+
+    impl From<DecodeError> for MyError {
+        fn from(_: DecodeError) -> Self {
+            Self::Deserialization
         }
     }
 
