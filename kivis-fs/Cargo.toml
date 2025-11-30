@@ -1,12 +1,13 @@
 [package]
-name = "fs-store"
+name = "kivis-fs"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-kivis = { version = "0.3.0" }
+kivis = { workspace = true }
 serde = { workspace = true }
 hex = { workspace = true }
+csv = { workspace = true }
 
 [dev-dependencies]
-anyhow = "1.0.100"
+anyhow = { workspace = true }
