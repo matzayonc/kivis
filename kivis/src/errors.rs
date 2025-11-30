@@ -1,6 +1,6 @@
 use core::{
     error::Error,
-    fmt::{self, Debug, Display},
+    fmt::{self, Debug},
 };
 
 use bincode::config::Configuration;
@@ -9,16 +9,12 @@ use crate::{Storage, Unifier};
 
 /// Errors that can occur while interacting with the database.
 ///
-/// These errors can be caused by issues with the storage backend, serialization/deserialization problems, or internal database logic errors.
+/// These errors can be caused by issues with the storage backend (including serialization/deserialization)
+/// or internal database logic errors.
 #[derive(Debug)]
 pub enum DatabaseError<S: Storage> {
-    /// Errors that occur during serialization of records.
-    Serialization(<<S as Storage>::Serializer as Unifier>::SerError),
-    /// Errors that occur during deserialization of records.
-    Deserialization(<<S as Storage>::Serializer as Unifier>::DeError),
-    /// IO errors that occur while interacting with the storage backend.
-    Io(S::StoreError),
-    /// Storage errors that occur during atomic operations.
+    /// Storage errors that occur while interacting with the storage backend.
+    /// This includes IO errors, serialization errors, and deserialization errors.
     Storage(S::StoreError),
     /// Errors that occur when trying to increment a key.
     FailedToIncrement,
@@ -43,24 +39,15 @@ pub enum InternalDatabaseError {
     Deserialization(<Configuration as Unifier>::DeError),
 }
 
-impl<S: Storage> From<InternalDatabaseError> for DatabaseError<S>
-where
-    S::StoreError: Debug + Display + Eq + PartialEq,
-{
+impl<S: Storage> From<InternalDatabaseError> for DatabaseError<S> {
     fn from(e: InternalDatabaseError) -> Self {
         DatabaseError::Internal(e)
     }
 }
 
-impl<S: Storage> fmt::Display for DatabaseError<S>
-where
-    S::StoreError: Debug + Display + Eq + PartialEq,
-{
+impl<S: Storage> fmt::Display for DatabaseError<S> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Self::Serialization(ref e) => write!(f, "Serialization error: {e:?}"),
-            Self::Deserialization(ref e) => write!(f, "Deserialization error: {e:?}"),
-            Self::Io(ref s) => write!(f, "IO error: {s}"),
             Self::Storage(ref s) => write!(f, "Storage error: {s}"),
             Self::FailedToIncrement => write!(f, "Failed to increment key value"),
             Self::Internal(ref e) => write!(f, "Internal database error: {e}"),
@@ -80,7 +67,4 @@ impl fmt::Display for InternalDatabaseError {
     }
 }
 
-impl<S: Storage + Debug> Error for DatabaseError<S> where
-    S::StoreError: Debug + Display + Eq + PartialEq
-{
-}
+impl<S: Storage + Debug> Error for DatabaseError<S> {}

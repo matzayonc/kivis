@@ -1,6 +1,9 @@
 use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
-use bincode::config::Configuration;
+use bincode::{
+    config::Configuration,
+    error::{DecodeError, EncodeError},
+};
 
 use crate::Storage;
 
@@ -11,13 +14,45 @@ use crate::Storage;
 pub type MemoryStorage = BTreeMap<Reverse<Vec<u8>>, Vec<u8>>;
 
 /// Error type for [`MemoryStorage`] operations.
-///
-/// [`MemoryStorage`] operations don't actually fail, so this is an empty error type.
-#[derive(Debug, PartialEq, Eq)]
-pub struct MemoryStorageError;
+#[derive(Debug)]
+pub enum MemoryStorageError {
+    /// Serialization error
+    Serialization(EncodeError),
+    /// Deserialization error
+    Deserialization(DecodeError),
+}
+
 impl Display for MemoryStorageError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Memory storage operations do not fail")
+        match self {
+            Self::Serialization(e) => write!(f, "Serialization error: {e:?}"),
+            Self::Deserialization(e) => write!(f, "Deserialization error: {e:?}"),
+        }
+    }
+}
+
+impl PartialEq for MemoryStorageError {
+    fn eq(&self, other: &Self) -> bool {
+        // Compare based on variant only, not the actual error content
+        matches!(
+            (self, other),
+            (Self::Serialization(_), Self::Serialization(_))
+                | (Self::Deserialization(_), Self::Deserialization(_))
+        )
+    }
+}
+
+impl Eq for MemoryStorageError {}
+
+impl From<EncodeError> for MemoryStorageError {
+    fn from(e: EncodeError) -> Self {
+        Self::Serialization(e)
+    }
+}
+
+impl From<DecodeError> for MemoryStorageError {
+    fn from(e: DecodeError) -> Self {
+        Self::Deserialization(e)
     }
 }
 
