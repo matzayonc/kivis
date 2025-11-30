@@ -235,19 +235,19 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
         for (discriminator, index_key) in indexer.into_index_keys() {
             let mut entry = self
                 .serialization_config()
-                .serialize(WrapPrelude::new::<R>(Subtable::Index(discriminator)))?;
+                .serialize_key(WrapPrelude::new::<R>(Subtable::Index(discriminator)))?;
             entry.combine(index_key);
 
             // Indexes might be repeated, so we need to ensure that the key is unique.
             // TODO: Add a way to declare as unique and deduplicate by provided hash.
-            let key_bytes = self.serialization_config().serialize(key)?;
+            let key_bytes = self.serialization_config().serialize_key(key)?;
             entry.combine(key_bytes.clone());
 
             writes.push((entry, key_bytes));
         }
 
         let key = wrap::<R, U>(key, &self.serialization_config())?;
-        let value = self.serialization_config().serialize(record)?;
+        let value = self.serialization_config().serialize_value(record)?;
         writes.push((key, value));
 
         Ok(writes)
@@ -270,9 +270,9 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
         for (discriminator, index_key) in indexer.into_index_keys() {
             let mut entry = self
                 .serialization_config()
-                .serialize(WrapPrelude::new::<R>(Subtable::Index(discriminator)))?;
+                .serialize_key(WrapPrelude::new::<R>(Subtable::Index(discriminator)))?;
             entry.combine(index_key);
-            let key_bytes = self.serialization_config().serialize(key)?;
+            let key_bytes = self.serialization_config().serialize_key(key)?;
             entry.combine(key_bytes);
 
             deletes.push(entry.clone());

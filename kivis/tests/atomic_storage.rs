@@ -2,7 +2,10 @@
 #[cfg(feature = "atomic")]
 #[cfg(test)]
 mod atomic_storage_example {
-    use bincode::{config::Configuration, error::{DecodeError, EncodeError}};
+    use bincode::{
+        config::Configuration,
+        error::{DecodeError, EncodeError},
+    };
     use kivis::{AtomicStorage, Storage};
     use std::{cmp::Reverse, collections::BTreeMap, error::Error, fmt::Display, ops::Range};
 
@@ -23,19 +26,19 @@ mod atomic_storage_example {
             }
         }
     }
-    
+
     impl From<EncodeError> for MockAtomicError {
         fn from(_: EncodeError) -> Self {
             Self::Serialization
         }
     }
-    
+
     impl From<DecodeError> for MockAtomicError {
         fn from(_: DecodeError) -> Self {
             Self::Deserialization
         }
     }
-    
+
     impl Error for MockAtomicError {}
 
     // Mock atomic storage implementation
@@ -100,7 +103,9 @@ mod atomic_storage_example {
             removes: Vec<Vec<u8>>,
         ) -> Result<Vec<Option<Vec<u8>>>, Self::StoreError> {
             if self.fail_next {
-                return Err(MockAtomicError::Storage("Batch mixed operation failed".to_string()));
+                return Err(MockAtomicError::Storage(
+                    "Batch mixed operation failed".to_string(),
+                ));
             }
 
             // In a real implementation, this would be atomic
@@ -214,7 +219,9 @@ mod atomic_storage_example {
         assert!(result.is_err());
         assert_eq!(
             result,
-            Err(MockAtomicError::Storage("Batch mixed operation failed".to_string()))
+            Err(MockAtomicError::Storage(
+                "Batch mixed operation failed".to_string()
+            ))
         );
         Ok(())
     }

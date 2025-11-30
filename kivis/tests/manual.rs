@@ -1,5 +1,9 @@
 use anyhow::Context;
-use bincode::{config::Configuration, error::{DecodeError, EncodeError}, serde::encode_to_vec};
+use bincode::{
+    config::Configuration,
+    error::{DecodeError, EncodeError},
+    serde::encode_to_vec,
+};
 use std::{collections::BTreeMap, fmt::Display, ops::Range};
 
 use kivis::{
