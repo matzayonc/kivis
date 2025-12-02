@@ -1,17 +1,49 @@
-use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
+use std::{
+    cmp::Reverse,
+    collections::BTreeMap,
+    error::Error,
+    fmt::{Debug, Display},
+    ops::Range,
+};
 
 use bincode::{
     config::Configuration,
     error::{DecodeError, EncodeError},
+    serde::{decode_from_slice, encode_to_vec},
 };
+use serde::{de::DeserializeOwned, Serialize};
 
-use crate::Storage;
+use crate::{Storage, Unifier};
 
 /// A memory-based storage implementation using a [`BTreeMap`].
 ///
 /// This storage backend keeps all data in memory and uses reverse-ordered keys
 /// for efficient range queries. Implements the [`Storage`] trait to be used as a storage backend.
 pub type MemoryStorage = BTreeMap<Reverse<Vec<u8>>, Vec<u8>>;
+
+#[derive(Clone, Copy, Default)]
+pub struct BincodeSerializer(Configuration);
+
+// Manual `Debug` impl is necessary because `Configuration` does not implement `Debug`.
+impl Debug for BincodeSerializer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BincodeSerializer")
+    }
+}
+
+impl Unifier for BincodeSerializer {
+    type D = Vec<u8>;
+    type SerError = EncodeError;
+    type DeError = DecodeError;
+
+    fn serialize_key(&self, data: impl Serialize) -> Result<Self::D, Self::SerError> {
+        encode_to_vec(data, self.0)
+    }
+
+    fn deserialize_key<T: DeserializeOwned>(&self, data: &Self::D) -> Result<T, Self::DeError> {
+        Ok(decode_from_slice(data, self.0)?.0)
+    }
+}
 
 /// Error type for [`MemoryStorage`] operations.
 #[derive(Debug)]
@@ -30,6 +62,7 @@ impl Display for MemoryStorageError {
         }
     }
 }
+impl Error for MemoryStorageError {}
 
 impl PartialEq for MemoryStorageError {
     fn eq(&self, other: &Self) -> bool {
@@ -57,7 +90,7 @@ impl From<DecodeError> for MemoryStorageError {
 }
 
 impl Storage for MemoryStorage {
-    type Serializer = Configuration;
+    type Serializer = BincodeSerializer;
     type StoreError = MemoryStorageError;
 
     fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
@@ -73,7 +106,7 @@ impl Storage for MemoryStorage {
         Ok(self.remove(&Reverse(key)))
     }
 
-    fn iter_keys(
+    fn scan_keys(
         &self,
         range: Range<Vec<u8>>,
     ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError> {

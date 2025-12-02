@@ -1,15 +1,23 @@
+mod common;
+
 use anyhow::Context;
 use bincode::{
-    config::Configuration,
     error::{DecodeError, EncodeError},
     serde::encode_to_vec,
 };
-use std::{collections::BTreeMap, fmt::Display, ops::Range};
+use std::{
+    collections::BTreeMap,
+    error::Error,
+    fmt::{Debug, Display},
+    ops::Range,
+};
 
 use kivis::{
     Database, DatabaseEntry, DeriveKey, Incrementable, Index, RecordKey, Scope, SimpleIndexer,
     Storage,
 };
+
+use crate::common::BincodeSerializer;
 
 // Define a record type for an User.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
@@ -136,6 +144,7 @@ impl Display for NoError {
         }
     }
 }
+impl Error for NoError {}
 
 impl PartialEq for NoError {
     fn eq(&self, other: &Self) -> bool {
@@ -162,7 +171,7 @@ impl From<DecodeError> for NoError {
 }
 
 impl Storage for ManualStorage {
-    type Serializer = Configuration;
+    type Serializer = BincodeSerializer;
     type StoreError = NoError;
 
     fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
@@ -178,7 +187,7 @@ impl Storage for ManualStorage {
         Ok(self.data.remove(&key))
     }
 
-    fn iter_keys(
+    fn scan_keys(
         &self,
         range: Range<Vec<u8>>,
     ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError> {
@@ -262,7 +271,7 @@ fn test_index() -> anyhow::Result<()> {
 
     let _user_key = database.insert(&user)?;
 
-    let mut indexer = SimpleIndexer::new(bincode::config::standard());
+    let mut indexer = SimpleIndexer::new(BincodeSerializer::default());
     user.index_keys(&mut indexer)?;
     let index_keys = indexer.into_index_keys();
     assert_eq!(index_keys.len(), 1);
@@ -292,7 +301,7 @@ fn test_iter() -> anyhow::Result<()> {
     let pet_key = database.put(&pet)?;
 
     let retrieved = database
-        .iter_keys(PetKey(1)..PetKey(u64::MAX))?
+        .scan_keys(PetKey(1)..PetKey(u64::MAX))?
         .next()
         .context("Missing")??;
 
@@ -312,21 +321,21 @@ fn test_iter_index() -> anyhow::Result<()> {
 
     // Before inserting the user.
     let retrieved = database
-        .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))?
+        .scan_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))?
         .collect::<Vec<_>>();
     assert!(retrieved.is_empty());
 
     // After inserting the user.
     database.insert(&user)?;
     let retrieved = database
-        .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))?
+        .scan_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))?
         .collect::<Result<Vec<_>, _>>()?;
     assert_eq!(retrieved, vec![UserKey(42)]);
 
     // After inserting the same user again.
     database.insert(&user)?;
     let retrieved = database
-        .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))?
+        .scan_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))?
         .collect::<Result<Vec<_>, _>>()?;
     assert_eq!(retrieved, vec![UserKey(42)]);
     Ok(())

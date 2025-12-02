@@ -71,13 +71,13 @@ fn main() -> Result<(), DatabaseError<kivis::MemoryStorage>> {
 
     // Records can be retrieved by indexed name
     let users_named_bob = store
-        .iter_by_index(UserNameIndex("Bob".into())..UserNameIndex("Boba".into()))?
+        .scan_by_index(UserNameIndex("Bob".into())..UserNameIndex("Boba".into()))?
         .collect::<Result<Vec<_>, _>>()?;
     assert_eq!(users_named_bob, vec![bob_key]);
 
     // Pets by their favourite type of toy.
     let pet = store
-        .iter_by_index(
+        .scan_by_index(
             PetFavouriteToyIndex(ToyKey(ToyKind::Ball, 7))
                 ..PetFavouriteToyIndex(ToyKey(ToyKind::Ball, 8)),
         )?

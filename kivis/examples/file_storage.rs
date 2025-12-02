@@ -107,7 +107,7 @@ impl Storage for FileStore {
         }
     }
 
-    fn iter_keys(
+    fn scan_keys(
         &self,
         range: std::ops::Range<Vec<u8>>,
     ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError> {
@@ -181,7 +181,7 @@ fn main() -> Result<(), DatabaseError<FileStore>> {
 
     // Query by indexed fields
     let users_named_alice = store
-        .iter_by_index(UserNameIndex("Alice".into())..UserNameIndex("Alicf".into()))?
+        .scan_by_index(UserNameIndex("Alice".into())..UserNameIndex("Alicf".into()))?
         .collect::<Result<Vec<_>, _>>()?;
     assert_eq!(users_named_alice, vec![alice_key.clone()]);
 

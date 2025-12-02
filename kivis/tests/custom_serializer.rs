@@ -69,6 +69,7 @@ impl Display for CustomError {
         }
     }
 }
+impl std::error::Error for CustomError {}
 
 impl From<EncodeError> for CustomError {
     fn from(_: EncodeError) -> Self {
@@ -116,7 +117,7 @@ impl Storage for CustomStorage {
         Ok(self.data.remove(&Reverse(key)))
     }
 
-    fn iter_keys(
+    fn scan_keys(
         &self,
         range: Range<Vec<u8>>,
     ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError> {

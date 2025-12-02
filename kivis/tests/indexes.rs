@@ -1,6 +1,10 @@
+mod common;
+
 use anyhow::Context;
 use bincode::serde::encode_to_vec;
 use kivis::{manifest, Database, DatabaseEntry, Index, MemoryStorage, Record, SimpleIndexer};
+
+use crate::common::BincodeSerializer;
 
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
@@ -91,7 +95,7 @@ fn test_index() -> anyhow::Result<()> {
 
     let user_key = store.put(&user)?;
 
-    let mut indexer = SimpleIndexer::new(bincode::config::standard());
+    let mut indexer = SimpleIndexer::new(BincodeSerializer::default());
     user.index_keys(&mut indexer)?;
     let index_keys = indexer.into_index_keys();
     assert_eq!(index_keys.len(), 1);
@@ -120,7 +124,7 @@ fn test_keys_iter() -> anyhow::Result<()> {
     store.put(&pet)?;
 
     let retrieved = store
-        .iter_keys(PetKey(0)..PetKey(u64::MAX))?
+        .scan_keys(PetKey(0)..PetKey(u64::MAX))?
         .next()
         .context("Missing")??;
 
@@ -140,7 +144,7 @@ fn test_iter_index() -> anyhow::Result<()> {
     store.put(&user)?;
 
     let retrieved = store
-        .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))?
+        .scan_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))?
         .next()
         .transpose()?;
     let retrieved = retrieved.context("Missing")?;
@@ -166,7 +170,7 @@ fn test_iter_index_exact() -> anyhow::Result<()> {
     }
 
     let als = store
-        .iter_by_index_exact(&UserNameIndex("Al".into()))?
+        .scan_by_index_exact(&UserNameIndex("Al".into()))?
         .collect::<Result<Vec<_>, _>>()?;
 
     assert_eq!(als.len(), 2);

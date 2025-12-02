@@ -7,7 +7,6 @@ mod atomic;
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-use bincode::config::Configuration;
 use core::fmt::Debug;
 
 use serde::{de::DeserializeOwned, Serialize};

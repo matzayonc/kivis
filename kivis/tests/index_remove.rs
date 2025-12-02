@@ -37,7 +37,7 @@ fn test_index_after_remove() -> anyhow::Result<()> {
 
     let index_query = &PetNameIndex("Al".into());
     let als = store
-        .iter_by_index_exact(index_query)?
+        .scan_by_index_exact(index_query)?
         .collect::<Result<Vec<_>, _>>()?;
 
     // Verify created records.
@@ -55,7 +55,7 @@ fn test_index_after_remove() -> anyhow::Result<()> {
 
     // Verify that index value was removed, and only one record remains.
     let als_after_removal = store
-        .iter_by_index_exact(index_query)?
+        .scan_by_index_exact(index_query)?
         .collect::<Result<Vec<_>, _>>()?;
 
     assert_eq!(als_after_removal.len(), 1);

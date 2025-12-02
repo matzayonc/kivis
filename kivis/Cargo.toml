@@ -16,12 +16,12 @@ readme = "../readme.md"
 default = ["std", "atomic", "memory-storage"]
 std = []
 atomic = []
-memory-storage = ["std"]
+memory-storage = ["std", "dep:bincode"]
 
 [dependencies]
 kivis-derive = { workspace = true }
 serde = { workspace = true }
-bincode = { workspace = true }
+bincode = { workspace = true, optional = true }
 paste = { workspace = true }
 
 [dev-dependencies]

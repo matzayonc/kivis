@@ -1,16 +1,17 @@
+mod common;
+
 // Note: test functions return Result and avoid using `unwrap()`
 #[cfg(feature = "atomic")]
 #[cfg(test)]
 mod tests {
     use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
-    use bincode::{
-        config::Configuration,
-        error::{DecodeError, EncodeError},
-    };
+    use bincode::error::{DecodeError, EncodeError};
     use serde::{Deserialize, Serialize};
 
     use kivis::{manifest, AtomicStorage, Database, DatabaseTransaction, Record, Storage};
+
+    use crate::common::BincodeSerializer;
 
     #[derive(Debug, PartialEq, Eq)]
     pub enum MockError {
@@ -26,6 +27,7 @@ mod tests {
             }
         }
     }
+    impl std::error::Error for MockError {}
 
     impl From<EncodeError> for MockError {
         fn from(_: EncodeError) -> Self {
@@ -59,7 +61,7 @@ mod tests {
     }
 
     impl Storage for MockAtomicStorage {
-        type Serializer = Configuration;
+        type Serializer = BincodeSerializer;
         type StoreError = MockError;
 
         fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
@@ -75,7 +77,7 @@ mod tests {
             Ok(self.data.remove(&Reverse(key)))
         }
 
-        fn iter_keys(
+        fn scan_keys(
             &self,
             range: Range<Vec<u8>>,
         ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError>
@@ -111,7 +113,7 @@ mod tests {
     #[test]
     fn test_transaction_new() -> anyhow::Result<()> {
         let tx = DatabaseTransaction::<Manifest, _>::new_with_serialization_config(
-            Configuration::default(),
+            BincodeSerializer::default(),
         );
         assert!(tx.is_empty());
         assert_eq!(tx.write_count(), 0);

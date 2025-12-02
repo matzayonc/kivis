@@ -69,7 +69,7 @@ fn atomic_storage_example() -> anyhow::Result<()> {
             Ok(self.data.remove(&Reverse(key)))
         }
 
-        fn iter_keys(
+        fn scan_keys(
             &self,
             range: Range<Vec<u8>>,
         ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError>

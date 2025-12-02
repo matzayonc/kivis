@@ -207,7 +207,7 @@ where
     ///
     /// Returns a [`DatabaseError`] if serializing the range bounds fails or if the
     /// underlying storage iterator errors.
-    pub fn iter_keys<K: RecordKey + Ord>(
+    pub fn scan_keys<K: RecordKey + Ord>(
         &self,
         range: Range<K>,
     ) -> Result<
@@ -224,7 +224,7 @@ where
             .map_err(|e| DatabaseError::Storage(e.into()))?;
         let raw_iter = self
             .store
-            .iter_keys(start..end)
+            .scan_keys(start..end)
             .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| {
@@ -246,7 +246,7 @@ where
     ///
     /// Returns a [`DatabaseError`] if serializing the range bounds fails or if the
     /// underlying storage iterator errors.
-    pub fn iter_all_keys<K: RecordKey + Ord>(
+    pub fn scan_all_keys<K: RecordKey + Ord>(
         &self,
     ) -> Result<
         impl Iterator<Item = DatabaseIteratorItem<K::Record, S>> + use<'_, K, S, M>,
@@ -260,7 +260,7 @@ where
             .map_err(|e| DatabaseError::Storage(e.into()))?;
         let raw_iter = self
             .store
-            .iter_keys(start..end)
+            .scan_keys(start..end)
             .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| {
@@ -286,7 +286,7 @@ where
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
     {
-        let mut first = self.iter_all_keys::<K>()?;
+        let mut first = self.scan_all_keys::<K>()?;
 
         Ok(first.next().transpose()?.unwrap_or_default())
     }
@@ -299,7 +299,7 @@ where
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if the underlying storage iterator encounters an error.
-    pub fn iter_by_index<I: Index + Ord>(
+    pub fn scan_by_index<I: Index + Ord>(
         &self,
         range: Range<I>,
     ) -> Result<
@@ -323,7 +323,7 @@ where
         );
         let raw_iter = self
             .store
-            .iter_keys(start..end)
+            .scan_keys(start..end)
             .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| self.process_iter_result(elem)))
@@ -337,7 +337,7 @@ where
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if the underlying storage iterator encounters an error.
-    pub fn iter_by_index_exact<I: Index + Ord>(
+    pub fn scan_by_index_exact<I: Index + Ord>(
         &self,
         index_key: &I,
     ) -> Result<
@@ -365,7 +365,7 @@ where
 
         let raw_iter = self
             .store
-            .iter_keys(start..end)
+            .scan_keys(start..end)
             .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| self.process_iter_result(elem)))

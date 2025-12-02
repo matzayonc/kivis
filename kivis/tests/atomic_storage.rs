@@ -1,13 +1,14 @@
+mod common;
+
 // Example demonstrating the AtomicStorage trait
 #[cfg(feature = "atomic")]
 #[cfg(test)]
 mod atomic_storage_example {
-    use bincode::{
-        config::Configuration,
-        error::{DecodeError, EncodeError},
-    };
+    use bincode::error::{DecodeError, EncodeError};
     use kivis::{AtomicStorage, Storage};
     use std::{cmp::Reverse, collections::BTreeMap, error::Error, fmt::Display, ops::Range};
+
+    use crate::common::BincodeSerializer;
 
     // Example error type for our mock atomic storage
     #[derive(Debug, PartialEq, Eq)]
@@ -61,7 +62,7 @@ mod atomic_storage_example {
     }
 
     impl Storage for MockAtomicStorage {
-        type Serializer = Configuration;
+        type Serializer = BincodeSerializer;
         type StoreError = MockAtomicError;
 
         fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
@@ -85,7 +86,7 @@ mod atomic_storage_example {
             Ok(self.data.remove(&Reverse(key)))
         }
 
-        fn iter_keys(
+        fn scan_keys(
             &self,
             range: Range<Vec<u8>>,
         ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError>

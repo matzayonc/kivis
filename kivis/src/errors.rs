@@ -3,8 +3,6 @@ use core::{
     fmt::{self, Debug},
 };
 
-use bincode::config::Configuration;
-
 use crate::{Storage, Unifier};
 
 /// Errors that can occur while interacting with the database.
@@ -19,14 +17,14 @@ pub enum DatabaseError<S: Storage> {
     /// Errors that occur when trying to increment a key.
     FailedToIncrement,
     /// Internal errors that should never occur during normal operation of the database.
-    Internal(InternalDatabaseError),
+    Internal(InternalDatabaseError<S::Serializer>),
 }
 
 /// Internal errors that should never arise during normal operation of the database.
 ///
 /// These errors indicate a bug in the database implementation or database corruption.
 #[derive(Debug)]
-pub enum InternalDatabaseError {
+pub enum InternalDatabaseError<U: Unifier> {
     /// An entry from another table was found when iterating over another table.
     InvalidScope,
     /// An entry from another table was found when iterating over an index.
@@ -34,13 +32,13 @@ pub enum InternalDatabaseError {
     /// Internal error caused by a missing index entry.
     MissingIndexEntry,
     /// Internal serialization error, should never occur.
-    Serialization(<Configuration as Unifier>::SerError),
+    Serialization(U::SerError),
     /// Internal deserialization error, most likely caused by database corruption.
-    Deserialization(<Configuration as Unifier>::DeError),
+    Deserialization(U::DeError),
 }
 
-impl<S: Storage> From<InternalDatabaseError> for DatabaseError<S> {
-    fn from(e: InternalDatabaseError) -> Self {
+impl<S: Storage> From<InternalDatabaseError<S::Serializer>> for DatabaseError<S> {
+    fn from(e: InternalDatabaseError<S::Serializer>) -> Self {
         DatabaseError::Internal(e)
     }
 }
@@ -55,7 +53,7 @@ impl<S: Storage> fmt::Display for DatabaseError<S> {
     }
 }
 
-impl fmt::Display for InternalDatabaseError {
+impl<U: Unifier> fmt::Display for InternalDatabaseError<U> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Self::InvalidScope => write!(f, "Invalid scope"),

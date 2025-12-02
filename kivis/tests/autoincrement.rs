@@ -43,7 +43,7 @@ fn test_autoincrement_iter() -> anyhow::Result<()> {
     store.insert(&another)?;
 
     let iter = store
-        .iter_keys(UserRecordKey(0)..UserRecordKey(3))?
+        .scan_keys(UserRecordKey(0)..UserRecordKey(3))?
         .collect::<Result<Vec<_>, _>>()?;
     assert_eq!(iter, vec![UserRecordKey(2), UserRecordKey(1)]);
     Ok(())

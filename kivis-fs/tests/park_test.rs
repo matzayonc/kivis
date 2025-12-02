@@ -76,7 +76,7 @@ fn test_flow() -> anyhow::Result<()> {
 
     // Query by indexed fields
     let users_named_alice = store
-        .iter_by_index(UserNameIndex("Alice".into())..UserNameIndex("Bob".into()))?
+        .scan_by_index(UserNameIndex("Alice".into())..UserNameIndex("Bob".into()))?
         .collect::<Result<Vec<_>, _>>()?;
     assert_eq!(users_named_alice, vec![alice_key.clone()]);
 

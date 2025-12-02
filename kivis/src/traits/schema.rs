@@ -1,7 +1,4 @@
-use bincode::{
-    error::{DecodeError, EncodeError},
-    serde::{decode_from_slice, encode_to_vec},
-};
+use std::error::Error;
 
 pub use super::*;
 
@@ -98,8 +95,8 @@ impl UnifierData for alloc::string::String {
 
 pub trait Unifier {
     type D: UnifierData + Clone + PartialEq + Eq;
-    type SerError: Debug;
-    type DeError: Debug;
+    type SerError: Error;
+    type DeError: Error;
 
     /// Serializes a key.
     /// # Errors
@@ -127,20 +124,6 @@ pub trait Unifier {
     /// Returns an error if deserialization fails.
     fn deserialize_value<T: DeserializeOwned>(&self, data: &Self::D) -> Result<T, Self::DeError> {
         self.deserialize_key(data)
-    }
-}
-
-impl Unifier for Configuration {
-    type D = Vec<u8>;
-    type SerError = EncodeError;
-    type DeError = DecodeError;
-
-    fn serialize_key(&self, data: impl Serialize) -> Result<Self::D, Self::SerError> {
-        encode_to_vec(data, Self::default())
-    }
-
-    fn deserialize_key<T: DeserializeOwned>(&self, data: &Self::D) -> Result<T, Self::DeError> {
-        Ok(decode_from_slice(data, Self::default())?.0)
     }
 }
 

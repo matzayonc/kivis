@@ -1,6 +1,7 @@
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-use core::{fmt::Display, ops::Range};
+use core::ops::Range;
+use std::error::Error;
 
 use crate::Unifier;
 
@@ -16,14 +17,11 @@ type KeysIteratorItem<S> =
 /// All storage operations are defined over serialized byte data.
 pub trait Storage {
     /// Serializer type used to convert data to/from bytes.
-    type Serializer: Unifier + Default + Copy;
+    type Serializer: Unifier + Copy + Debug + Default;
 
     /// Error type returned by storage operations.
     /// Must be able to represent serialization and deserialization errors.
-    type StoreError: Debug
-        + Display
-        + Eq
-        + PartialEq
+    type StoreError: Error
         + From<<<Self as Storage>::Serializer as Unifier>::SerError>
         + From<<<Self as Storage>::Serializer as Unifier>::DeError>;
 
@@ -63,7 +61,7 @@ pub trait Storage {
     /// # Errors
     ///
     /// Returns an error if the underlying storages fails during iteration.
-    fn iter_keys(
+    fn scan_keys(
         &self,
         range: Range<<Self::Serializer as Unifier>::D>,
     ) -> Result<impl Iterator<Item = KeysIteratorItem<Self>>, Self::StoreError>
