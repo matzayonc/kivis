@@ -10,7 +10,6 @@ struct CacheTestRecord {
 manifest![Manifest: CacheTestRecord];
 
 #[test]
-#[ignore] // Cache is deprecated at this stage.
 fn test_layered_cache_architecture() -> anyhow::Result<()> {
     let fallback_storage = MemoryStorage::new();
 
