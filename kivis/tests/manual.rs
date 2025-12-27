@@ -198,7 +198,7 @@ fn test_user_record() -> anyhow::Result<()> {
         email: "alice@example.com".to_string(),
     };
 
-    database.insert(&user)?;
+    database.insert(user.clone())?;
 
     let retrieved = database.get(&UserKey(user.id))?.context("Missing")?;
     assert_eq!(retrieved, user);
@@ -215,7 +215,7 @@ fn test_pet_record() -> anyhow::Result<()> {
         owner: UserKey(1),
     };
 
-    let pet_key = database.put(&pet)?;
+    let pet_key = database.put(pet.clone())?;
 
     let retrieved: Option<Pet> = database.get(&pet_key)?;
     let retrieved = retrieved.context("Missing")?;
@@ -238,8 +238,8 @@ fn test_get_owner_of_pet() -> anyhow::Result<()> {
         owner: UserKey(user.id),
     };
 
-    user.id = database.insert(&user)?.0;
-    let pet_key = database.put(&pet)?;
+    user.id = database.insert(user.clone())?.0;
+    let pet_key = database.put(pet.clone())?;
 
     let retrieved = database.get(&pet_key)?.context("Missing")?;
     assert_eq!(retrieved, pet);
@@ -260,7 +260,7 @@ fn test_index() -> anyhow::Result<()> {
         email: "alice@example.com".to_string(),
     };
 
-    let _user_key = database.insert(&user)?;
+    let _user_key = database.insert(user.clone())?;
 
     let mut indexer = IndexBuilder::new(bincode::config::standard());
     user.index_keys(&mut indexer)?;
@@ -289,7 +289,7 @@ fn test_iter() -> anyhow::Result<()> {
         owner: UserKey(1),
     };
 
-    let pet_key = database.put(&pet)?;
+    let pet_key = database.put(pet)?;
 
     let retrieved = database
         .iter_keys(PetKey(1)..PetKey(u64::MAX))?
@@ -317,14 +317,14 @@ fn test_iter_index() -> anyhow::Result<()> {
     assert!(retrieved.is_empty());
 
     // After inserting the user.
-    database.insert(&user)?;
+    database.insert(user.clone())?;
     let retrieved = database
         .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))?
         .collect::<Result<Vec<_>, _>>()?;
     assert_eq!(retrieved, vec![UserKey(42)]);
 
     // After inserting the same user again.
-    database.insert(&user)?;
+    database.insert(user)?;
     let retrieved = database
         .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))?
         .collect::<Result<Vec<_>, _>>()?;

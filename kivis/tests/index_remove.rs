@@ -29,15 +29,15 @@ fn test_index_after_remove() -> anyhow::Result<()> {
         "Alice", // Alice for tradition
     ];
     for name in names {
-        store.put(&Pet {
+        store.put(Pet {
             name: LexicographicString::from(name),
             color: Color::Brown,
         })?;
     }
 
-    let index_query = &PetNameIndex("Al".into());
+    let index_query = PetNameIndex("Al".into());
     let als = store
-        .iter_by_index_exact(index_query)?
+        .iter_by_index_exact(index_query.clone())?
         .collect::<Result<Vec<_>, _>>()?;
 
     // Verify created records.

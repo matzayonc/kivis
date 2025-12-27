@@ -52,13 +52,13 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     /// # Errors
     ///
     /// Returns a [`U::SerError`] if serializing keys or values fails while preparing the writes.
-    pub fn insert<K: RecordKey<Record = R>, R>(&mut self, record: &R) -> Result<K, U::SerError>
+    pub fn insert<K: RecordKey<Record = R>, R>(&mut self, record: R) -> Result<K, U::SerError>
     where
         R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
         M: Manifests<R>,
         IndexBuilder<U>: Indexer<Error = U::SerError>,
     {
-        let original_key = R::key(record);
+        let original_key = R::key(&record);
         let writes = self.prepare_writes::<R>(record, &original_key)?;
         for (k, v) in writes {
             self.write(k, v);
@@ -72,7 +72,7 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     ///
     pub fn put<S: Storage<Serializer = U>, R: DatabaseEntry>(
         &mut self,
-        record: &R,
+        record: R,
         database: &mut Database<S, M>,
     ) -> Result<R::Key, DatabaseError<S>>
     where
@@ -218,7 +218,7 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
 
     fn prepare_writes<R: DatabaseEntry>(
         &self,
-        record: &R,
+        record: R,
         key: &R::Key,
     ) -> Result<Writes<U::K, U::V>, U::SerError>
     where
@@ -230,6 +230,9 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
         let mut indexer = IndexBuilder::new(self.serializer());
         record.index_keys(&mut indexer)?;
 
+        let key_hash = self.serializer().serialize_key_ref(key)?;
+        let key_value = self.serializer().serialize_value_ref(key)?;
+
         for (discriminator, index_key) in indexer.into_index_keys() {
             let mut entry = self
                 .serializer()
@@ -238,12 +241,10 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
 
             // Indexes might be repeated, so we need to ensure that the key is unique.
             // TODO: Add a way to declare as unique and deduplicate by provided hash.
-            let key_bytes = self.serializer().serialize_key(key)?;
-            entry.combine(key_bytes.clone());
+            entry.combine(key_hash.duplicate());
 
             // Index entries store the primary key as the value (serialized as a value type)
-            let value_bytes = self.serializer().serialize_value(key)?;
-            writes.push((entry, value_bytes));
+            writes.push((entry, key_value.duplicate()));
         }
 
         let key = wrap::<R, U>(key, &self.serializer())?;
@@ -272,10 +273,10 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
                 .serializer()
                 .serialize_key(WrapPrelude::new::<R>(Subtable::Index(discriminator)))?;
             entry.combine(index_key);
-            let key_bytes = self.serializer().serialize_key(key)?;
+            let key_bytes = self.serializer().serialize_key_ref(key)?;
             entry.combine(key_bytes);
 
-            deletes.push(entry.clone());
+            deletes.push(entry);
         }
 
         let key = wrap::<R, _>(key, &self.serializer())?;

@@ -30,7 +30,7 @@ fn test_user_record() -> anyhow::Result<()> {
         name: "Alice".to_string(),
         email: "alice@example.com".to_string(),
     };
-    let user_key = store.put(&user)?;
+    let user_key = store.put(user.clone())?;
 
     let retrieved = store.get(&user_key)?.context("Missing")?;
     assert_eq!(retrieved, user);
@@ -47,7 +47,7 @@ fn test_pet_record() -> anyhow::Result<()> {
         owner: UserKey(1),
     };
 
-    let pet_key = store.put(&pet)?;
+    let pet_key = store.put(pet.clone())?;
 
     let retrieved = store.get(&pet_key)?.context("Missing")?;
     assert_eq!(retrieved, pet);
@@ -62,12 +62,12 @@ fn test_get_owner_of_pet() -> anyhow::Result<()> {
         name: "Alice".to_string(),
         email: "alice@example.com".to_string(),
     };
-    let user_key = store.put(&user)?;
+    let user_key = store.put(user.clone())?;
     let pet = Pet {
         name: "Fido".to_string(),
         owner: user_key.clone(),
     };
-    let pet_key = store.put(&pet)?;
+    let pet_key = store.put(pet.clone())?;
 
     let userr = store.get(&user_key)?.context("Missing")?;
     assert_eq!(user, userr);
@@ -89,7 +89,7 @@ fn test_index() -> anyhow::Result<()> {
         email: "alice@example.com".to_string(),
     };
 
-    let user_key = store.put(&user)?;
+    let user_key = store.put(user.clone())?;
 
     let mut indexer = IndexBuilder::new(bincode::config::standard());
     user.index_keys(&mut indexer)?;
@@ -117,7 +117,7 @@ fn test_keys_iter() -> anyhow::Result<()> {
         owner: UserKey(1),
     };
 
-    store.put(&pet)?;
+    store.put(pet)?;
 
     let retrieved = store
         .iter_keys(PetKey(0)..PetKey(u64::MAX))?
@@ -137,7 +137,7 @@ fn test_iter_index() -> anyhow::Result<()> {
         email: "alice@example.com".to_string(),
     };
 
-    store.put(&user)?;
+    store.put(user)?;
 
     let retrieved = store
         .iter_by_index(UserNameIndex("A".to_string())..UserNameIndex("Bob".to_string()))?
@@ -159,14 +159,14 @@ fn test_iter_index_exact() -> anyhow::Result<()> {
         "Alice", // Alice for tradition
     ];
     for name in names {
-        store.put(&User {
+        store.put(User {
             name: name.to_string(),
             email: format!("{}@example.com", name.to_lowercase()),
         })?;
     }
 
     let als = store
-        .iter_by_index_exact(&UserNameIndex("Al".into()))?
+        .iter_by_index_exact(UserNameIndex("Al".into()))?
         .collect::<Result<Vec<_>, _>>()?;
 
     assert_eq!(als.len(), 2);

@@ -1,12 +1,10 @@
-use serde::de::DeserializeOwned;
-
 use crate::errors::DatabaseError;
 use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
 use crate::wrap::{Subtable, Wrap, WrapPrelude, empty_wrap, wrap};
 use crate::{
-    DeriveKey, Incrementable, IndexBuilder, Indexer, Manifest, Manifests, RecordKey, Unifier,
-    UnifierData,
+    DeriveKey, Incrementable, IndexBuilder, Indexer, Manifest, Manifests, RecordKey, Unifiable,
+    Unifier, UnifierData,
 };
 use core::ops::Range;
 
@@ -67,7 +65,7 @@ where
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if serializing or writing the record fails.
-    pub fn put<R: DatabaseEntry>(&mut self, record: &R) -> Result<R::Key, DatabaseError<S>>
+    pub fn put<R: DatabaseEntry>(&mut self, record: R) -> Result<R::Key, DatabaseError<S>>
     where
         R::Key: RecordKey<Record = R> + Incrementable + Ord,
         M: Manifests<R>,
@@ -86,7 +84,7 @@ where
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if serializing or writing the record fails.
-    pub fn insert<K: RecordKey<Record = R>, R>(&mut self, record: &R) -> Result<K, DatabaseError<S>>
+    pub fn insert<K: RecordKey<Record = R>, R>(&mut self, record: R) -> Result<K, DatabaseError<S>>
     where
         R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
         M: Manifests<R>,
@@ -307,15 +305,15 @@ where
             .serializer
             .serialize_key(WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX)))
             .map_err(|e| DatabaseError::Storage(e.into()))?;
-        let mut end = start.clone();
+        let mut end = start.duplicate();
         start.combine(
             self.serializer()
-                .serialize_key(&range.start)
+                .serialize_key(range.start)
                 .map_err(|e| DatabaseError::Storage(e.into()))?,
         );
         end.combine(
             self.serializer()
-                .serialize_key(&range.end)
+                .serialize_key(range.end)
                 .map_err(|e| DatabaseError::Storage(e.into()))?,
         );
         let raw_iter = self
@@ -336,7 +334,7 @@ where
     /// Returns a [`DatabaseError`] if the underlying storage iterator encounters an error.
     pub fn iter_by_index_exact<I: Index + Ord>(
         &self,
-        index_key: &I,
+        index_key: I,
     ) -> Result<
         impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S, M>,
         DatabaseError<S>,
@@ -346,14 +344,14 @@ where
             .serializer
             .serialize_key(index_prelude)
             .map_err(|e| DatabaseError::Storage(e.into()))?;
-        let mut end = start.clone();
+        let mut end = start.duplicate();
 
         let start_serialized = self
             .serializer
             .serialize_key(index_key)
             .map_err(|e| DatabaseError::Storage(e.into()))?;
         let end_serialized = {
-            let mut end_bytes = start_serialized.clone();
+            let mut end_bytes = start_serialized.duplicate();
             end_bytes.next();
             end_bytes
         };
@@ -379,7 +377,7 @@ where
     }
 
     /// Helper function to process iterator results and get deserialized values
-    fn process_iter_result<T: DeserializeOwned>(
+    fn process_iter_result<T: Unifiable>(
         &self,
         result: Result<<S::Serializer as Unifier>::K, S::StoreError>,
     ) -> Result<T, DatabaseError<S>> {

@@ -18,7 +18,7 @@ fn test_lifecycle() -> anyhow::Result<()> {
         id: 1,
         data: vec![1, 2, 3, 4],
     };
-    let key = store.insert(&user)?;
+    let key = store.insert(user.clone())?;
     assert_eq!(store.get(&key)?, Some(user.clone()));
     assert_eq!(key, UserRecordKey(1));
     store.remove(&key)?;
@@ -39,8 +39,8 @@ fn test_autoincrement_iter() -> anyhow::Result<()> {
         data: vec![5, 6, 7, 8],
     };
 
-    store.insert(&user)?;
-    store.insert(&another)?;
+    store.insert(user)?;
+    store.insert(another)?;
 
     let iter = store
         .iter_keys(UserRecordKey(0)..UserRecordKey(3))?
