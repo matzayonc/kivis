@@ -98,7 +98,8 @@ impl UnifierData for alloc::string::String {
 }
 
 pub trait Unifier {
-    type D: UnifierData + Clone + PartialEq + Eq;
+    type K: UnifierData + Clone + PartialEq + Eq;
+    type V: UnifierData + Clone + PartialEq + Eq;
     type SerError: Debug;
     type DeError: Debug;
 
@@ -106,52 +107,57 @@ pub trait Unifier {
     /// # Errors
     ///
     /// Returns an error if serialization fails.
-    fn serialize_key(&self, data: impl Serialize) -> Result<Self::D, Self::SerError>;
+    fn serialize_key(&self, data: impl Serialize) -> Result<Self::K, Self::SerError>;
 
-    /// Serializes a value. By default, uses the same serialization as keys.
+    /// Serializes a value.
     /// # Errors
     ///
     /// Returns an error if serialization fails.
-    fn serialize_value(&self, data: impl Serialize) -> Result<Self::D, Self::SerError> {
-        self.serialize_key(data)
-    }
+    fn serialize_value(&self, data: impl Serialize) -> Result<Self::V, Self::SerError>;
 
     /// Deserializes a key from the given data.
     /// # Errors
     ///
     /// Returns an error if deserialization fails.
-    fn deserialize_key<T: DeserializeOwned>(&self, data: &Self::D) -> Result<T, Self::DeError>;
+    fn deserialize_key<T: DeserializeOwned>(&self, data: &Self::K) -> Result<T, Self::DeError>;
 
-    /// Deserializes a value from the given data. By default, uses the same deserialization as keys.
+    /// Deserializes a value from the given data.
     /// # Errors
     ///
     /// Returns an error if deserialization fails.
-    fn deserialize_value<T: DeserializeOwned>(&self, data: &Self::D) -> Result<T, Self::DeError> {
-        self.deserialize_key(data)
-    }
+    fn deserialize_value<T: DeserializeOwned>(&self, data: &Self::V) -> Result<T, Self::DeError>;
 }
 
 impl Unifier for Configuration {
-    type D = Vec<u8>;
+    type K = Vec<u8>;
+    type V = Vec<u8>;
     type SerError = EncodeError;
     type DeError = DecodeError;
 
-    fn serialize_key(&self, data: impl Serialize) -> Result<Self::D, Self::SerError> {
+    fn serialize_key(&self, data: impl Serialize) -> Result<Self::K, Self::SerError> {
         encode_to_vec(data, Self::default())
     }
 
-    fn deserialize_key<T: DeserializeOwned>(&self, data: &Self::D) -> Result<T, Self::DeError> {
+    fn serialize_value(&self, data: impl Serialize) -> Result<Self::V, Self::SerError> {
+        encode_to_vec(data, Self::default())
+    }
+
+    fn deserialize_key<T: DeserializeOwned>(&self, data: &Self::K) -> Result<T, Self::DeError> {
+        Ok(decode_from_slice(data, Self::default())?.0)
+    }
+
+    fn deserialize_value<T: DeserializeOwned>(&self, data: &Self::V) -> Result<T, Self::DeError> {
         Ok(decode_from_slice(data, Self::default())?.0)
     }
 }
 
-pub struct IndexBuilder<U: Unifier>(Vec<(u8, U::D)>, U);
+pub struct IndexBuilder<U: Unifier>(Vec<(u8, U::K)>, U);
 impl<U: Unifier> IndexBuilder<U> {
     pub fn new(serializer: U) -> Self {
         Self(Vec::new(), serializer)
     }
 
-    pub fn into_index_keys(self) -> Vec<(u8, U::D)> {
+    pub fn into_index_keys(self) -> Vec<(u8, U::K)> {
         self.0
     }
 }
