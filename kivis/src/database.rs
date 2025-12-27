@@ -5,7 +5,7 @@ use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
 use crate::wrap::{empty_wrap, wrap, Subtable, Wrap, WrapPrelude};
 use crate::{
-    DeriveKey, Incrementable, Indexer, Manifest, Manifests, RecordKey, SimpleIndexer, Unifier,
+    DeriveKey, Incrementable, IndexBuilder, Indexer, Manifest, Manifests, RecordKey, Unifier,
     UnifierData,
 };
 use core::ops::Range;
@@ -20,13 +20,13 @@ pub struct Database<S: Storage, M: Manifest> {
     pub(crate) store: S,
     // fallback: Option<Box<dyn StorageInner<StoreError = S::StoreError>>>,
     pub(crate) manifest: M,
-    pub(crate) serialization_config: <S as Storage>::Serializer,
+    pub(crate) serializer: <S as Storage>::Serializer,
 }
 
 impl<S: Storage, M: Manifest> Database<S, M>
 where
     S::Serializer: Unifier + Copy,
-    SimpleIndexer<S::Serializer>: Indexer<Error = <S::Serializer as Unifier>::SerError>,
+    IndexBuilder<S::Serializer>: Indexer<Error = <S::Serializer as Unifier>::SerError>,
 {
     /// Creates a new [`Database`] instance over any storage backend.
     /// One of the key features of `kivis` is that it can work with any storage backend that implements the [`Storage`] trait.
@@ -38,7 +38,7 @@ where
             store,
             // fallback: None,
             manifest: M::default(),
-            serialization_config: S::Serializer::default(),
+            serializer: S::Serializer::default(),
         };
         let mut manifest = M::default();
         manifest.load(&mut db)?;
@@ -46,8 +46,8 @@ where
         Ok(db)
     }
 
-    pub fn with_serialization_config(&mut self, config: <S as Storage>::Serializer) {
-        self.serialization_config = config;
+    pub fn with_serializer(&mut self, config: <S as Storage>::Serializer) {
+        self.serializer = config;
     }
 
     /// Sets a fallback storage that will be used if the main storage does not contain the requested record.
@@ -145,7 +145,7 @@ where
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
     {
-        let serialized_key = wrap::<K::Record, S::Serializer>(key, &self.serialization_config)
+        let serialized_key = wrap::<K::Record, S::Serializer>(key, &self.serializer)
             .map_err(|e| DatabaseError::Storage(e.into()))?;
         let Some(value) = self
             .store
@@ -155,7 +155,7 @@ where
             // let Some(fallback) = &self.fallback else {
             //     return Ok(None);
             // };
-            // let key = wrap::<K::Record, S::Serializer>(key, &self.serialization_config)
+            // let key = wrap::<K::Record, S::Serializer>(key, &self.serializer)
             //     .map_err(|e| DatabaseError::Storage(e.into()))?;
             // let Some(value) = fallback.get(key).map_err(DatabaseError::Storage)? else {
             //     return Ok(None);
@@ -164,7 +164,7 @@ where
             return Ok(None);
         };
         Ok(Some(
-            self.serialization_config
+            self.serializer
                 .deserialize_value(&value)
                 .map_err(|e| DatabaseError::Storage(e.into()))?,
         ))
@@ -215,9 +215,9 @@ where
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
     {
-        let start = wrap::<K::Record, S::Serializer>(&range.start, &self.serialization_config)
+        let start = wrap::<K::Record, S::Serializer>(&range.start, &self.serializer)
             .map_err(|e| DatabaseError::Storage(e.into()))?;
-        let end = wrap::<K::Record, S::Serializer>(&range.end, &self.serialization_config)
+        let end = wrap::<K::Record, S::Serializer>(&range.end, &self.serializer)
             .map_err(|e| DatabaseError::Storage(e.into()))?;
         let raw_iter = self
             .store
@@ -230,7 +230,7 @@ where
                 Err(e) => return Err(DatabaseError::Storage(e)),
             };
 
-            let deserialized: Wrap<K> = match self.serialization_config.deserialize_key(&value) {
+            let deserialized: Wrap<K> = match self.serializer.deserialize_key(&value) {
                 Ok(deserialized) => deserialized,
                 Err(e) => return Err(DatabaseError::Storage(e.into())),
             };
@@ -253,7 +253,7 @@ where
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
     {
-        let (start, end) = empty_wrap::<K::Record, S::Serializer>(&self.serialization_config)
+        let (start, end) = empty_wrap::<K::Record, S::Serializer>(&self.serializer)
             .map_err(|e| DatabaseError::Storage(e.into()))?;
         let raw_iter = self
             .store
@@ -266,7 +266,7 @@ where
                 Err(e) => return Err(DatabaseError::Storage(e)),
             };
 
-            let deserialized: Wrap<K> = match self.serialization_config.deserialize_key(&value) {
+            let deserialized: Wrap<K> = match self.serializer.deserialize_key(&value) {
                 Ok(deserialized) => deserialized,
                 Err(e) => return Err(DatabaseError::Storage(e.into())),
             };
@@ -304,17 +304,17 @@ where
         DatabaseError<S>,
     > {
         let mut start = self
-            .serialization_config
+            .serializer
             .serialize_key(WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX)))
             .map_err(|e| DatabaseError::Storage(e.into()))?;
         let mut end = start.clone();
         start.combine(
-            self.serialization_config()
+            self.serializer()
                 .serialize_key(&range.start)
                 .map_err(|e| DatabaseError::Storage(e.into()))?,
         );
         end.combine(
-            self.serialization_config()
+            self.serializer()
                 .serialize_key(&range.end)
                 .map_err(|e| DatabaseError::Storage(e.into()))?,
         );
@@ -343,22 +343,22 @@ where
     > {
         let index_prelude = WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX));
         let mut start = self
-            .serialization_config
+            .serializer
             .serialize_key(index_prelude)
             .map_err(|e| DatabaseError::Storage(e.into()))?;
         let mut end = start.clone();
 
-        let start_bytes = self
-            .serialization_config
+        let start_serialized = self
+            .serializer
             .serialize_key(index_key)
             .map_err(|e| DatabaseError::Storage(e.into()))?;
-        let end_bytes = {
-            let mut end_bytes = start_bytes.clone();
+        let end_serialized = {
+            let mut end_bytes = start_serialized.clone();
             end_bytes.next();
             end_bytes
         };
-        start.combine(start_bytes);
-        end.combine(end_bytes);
+        start.combine(start_serialized);
+        end.combine(end_serialized);
 
         let raw_iter = self
             .store
@@ -374,8 +374,8 @@ where
     }
 
     /// Returns the current [`S::Serializer`] used by the database.
-    pub fn serialization_config(&self) -> &S::Serializer {
-        &self.serialization_config
+    pub fn serializer(&self) -> &S::Serializer {
+        &self.serializer
     }
 
     /// Helper function to process iterator results and get deserialized values
@@ -394,7 +394,7 @@ where
             Err(e) => return Err(DatabaseError::Storage(e)),
         };
 
-        self.serialization_config
+        self.serializer
             .deserialize_value(&value)
             .map_err(|e| DatabaseError::Storage(e.into()))
     }

@@ -7,7 +7,7 @@ use bincode::{
 use std::{collections::BTreeMap, fmt::Display, ops::Range};
 
 use kivis::{
-    Database, DatabaseEntry, DeriveKey, Incrementable, Index, RecordKey, Scope, SimpleIndexer,
+    Database, DatabaseEntry, DeriveKey, Incrementable, Index, IndexBuilder, RecordKey, Scope,
     Storage,
 };
 
@@ -262,7 +262,7 @@ fn test_index() -> anyhow::Result<()> {
 
     let _user_key = database.insert(&user)?;
 
-    let mut indexer = SimpleIndexer::new(bincode::config::standard());
+    let mut indexer = IndexBuilder::new(bincode::config::standard());
     user.index_keys(&mut indexer)?;
     let index_keys = indexer.into_index_keys();
     assert_eq!(index_keys.len(), 1);

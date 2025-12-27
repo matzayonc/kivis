@@ -33,12 +33,11 @@ impl Display for MemoryStorageError {
 
 impl PartialEq for MemoryStorageError {
     fn eq(&self, other: &Self) -> bool {
-        // Compare based on variant only, not the actual error content
-        matches!(
-            (self, other),
-            (Self::Serialization(_), Self::Serialization(_))
-                | (Self::Deserialization(_), Self::Deserialization(_))
-        )
+        match (self, other) {
+            (Self::Serialization(a), Self::Serialization(b)) => a.to_string() == b.to_string(),
+            (Self::Deserialization(a), Self::Deserialization(b)) => a.to_string() == b.to_string(),
+            _ => false,
+        }
     }
 }
 

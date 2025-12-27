@@ -81,6 +81,7 @@ impl UnifierData for alloc::string::String {
     fn combine(&mut self, other: Self) {
         self.push_str(&other);
     }
+
     fn next(&mut self) {
         let mut bytes = self.as_bytes().to_vec();
         for i in (0..bytes.len()).rev() {
@@ -144,8 +145,8 @@ impl Unifier for Configuration {
     }
 }
 
-pub struct SimpleIndexer<U: Unifier>(Vec<(u8, U::D)>, U);
-impl<U: Unifier> SimpleIndexer<U> {
+pub struct IndexBuilder<U: Unifier>(Vec<(u8, U::D)>, U);
+impl<U: Unifier> IndexBuilder<U> {
     pub fn new(serializer: U) -> Self {
         Self(Vec::new(), serializer)
     }
@@ -154,7 +155,7 @@ impl<U: Unifier> SimpleIndexer<U> {
         self.0
     }
 }
-impl<U: Unifier> Indexer for SimpleIndexer<U> {
+impl<U: Unifier> Indexer for IndexBuilder<U> {
     type Error = U::SerError;
     fn add(&mut self, discriminator: u8, index: &impl Serialize) -> Result<(), Self::Error> {
         let data = self.1.serialize_key(index)?;
