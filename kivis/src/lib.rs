@@ -31,7 +31,7 @@
 //!     name: "Alice".to_string(),
 //!     email: "alice@example.com".to_string(),
 //! };
-//! let user_key = db.put(&user)?;
+//! let user_key = db.put(user)?;
 //! # Ok(())
 //! # }
 //! ```

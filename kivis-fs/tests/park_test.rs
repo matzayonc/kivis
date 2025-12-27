@@ -48,8 +48,8 @@ fn test_flow() -> anyhow::Result<()> {
         email: "bob@example.com".into(),
     };
 
-    let alice_key = store.put(&alice)?;
-    let bob_key = store.put(&bob)?;
+    let alice_key = store.put(alice)?;
+    let bob_key = store.put(bob)?;
 
     // Pets can reference users as owners
     let fluffy = Pet {
@@ -63,8 +63,8 @@ fn test_flow() -> anyhow::Result<()> {
         cat: false,
     };
 
-    let fluffy_key = store.put(&fluffy)?;
-    let _rover_key = store.put(&rover)?;
+    let fluffy_key = store.put(fluffy)?;
+    let _rover_key = store.put(rover)?;
 
     // Retrieve records by key
     let retrieved_alice = store.get(&alice_key)?.expect("Alice not found");

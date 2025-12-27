@@ -143,7 +143,7 @@ fn test_custom_key_value_serialization() -> anyhow::Result<()> {
         value: 42,
     };
 
-    let key = db.put(&record)?;
+    let key = db.put(record.clone())?;
 
     // Verify we can retrieve the record correctly
     let retrieved = db.get(&key)?;
@@ -156,8 +156,8 @@ fn test_custom_key_value_serialization() -> anyhow::Result<()> {
     // We can verify the serializer behavior works by checking that serialization
     // produces different outputs for keys vs values
     let unifier = CustomUnifier;
-    let test_key = unifier.serialize_key("key_data").unwrap();
-    let test_val = unifier.serialize_value("val_data").unwrap();
+    let test_key = unifier.serialize_key("key_data".to_string()).unwrap();
+    let test_val = unifier.serialize_value("val_data".to_string()).unwrap();
 
     assert!(
         test_key.starts_with(b"KEY:"),

@@ -7,7 +7,7 @@ pub use super::*;
 
 /// A trait defining that the implementing type is a key of some record.
 /// Each type can be a key of only one record type, which is defined by the [`DatabaseEntry`] trait.
-pub trait RecordKey: Serialize + DeserializeOwned + Clone + Eq {
+pub trait RecordKey: Serialize + DeserializeOwned + Clone + Eq + UnifiableRef {
     /// The record type that this key identifies.
     type Record: DatabaseEntry;
 }
@@ -34,9 +34,9 @@ pub trait Incrementable: Default + Sized {
 ///
 /// An index is a way to efficiently look up records in the database by a specific key.
 /// It defines a table, primary key type, and an unique prefix for the index.
-pub trait Index: Serialize + Debug {
+pub trait Index: Unifiable + Debug {
     /// The key type used by this index.
-    type Key: Serialize + DeserializeOwned + Clone + Eq + Debug;
+    type Key: Unifiable + Clone + Eq + Debug;
     /// The record type that this index applies to.
     type Record: DatabaseEntry;
     /// Unique identifier for this index within the record type.
@@ -48,12 +48,20 @@ pub trait Indexer {
     /// # Errors
     ///
     /// Returns an error if serialization fails.
-    fn add(&mut self, discriminator: u8, value: &impl Serialize) -> Result<(), Self::Error>;
+    fn add(&mut self, discriminator: u8, value: &impl UnifiableRef) -> Result<(), Self::Error>;
 }
 
 pub trait UnifierData {
     fn combine(&mut self, other: Self);
     fn next(&mut self);
+
+    #[must_use]
+    fn duplicate(&self) -> Self
+    where
+        Self: Clone,
+    {
+        self.clone()
+    }
 }
 
 impl UnifierData for Vec<u8> {
@@ -97,6 +105,12 @@ impl UnifierData for alloc::string::String {
     }
 }
 
+pub trait Unifiable: Serialize + DeserializeOwned {}
+pub trait UnifiableRef: Unifiable + Clone {}
+
+impl<T: Serialize + DeserializeOwned> Unifiable for T {}
+impl<T: Serialize + DeserializeOwned + Clone> UnifiableRef for T {}
+
 pub trait Unifier {
     type K: UnifierData + Clone + PartialEq + Eq;
     type V: UnifierData + Clone + PartialEq + Eq;
@@ -107,25 +121,41 @@ pub trait Unifier {
     /// # Errors
     ///
     /// Returns an error if serialization fails.
-    fn serialize_key(&self, data: impl Serialize) -> Result<Self::K, Self::SerError>;
+    fn serialize_key(&self, data: impl Unifiable) -> Result<Self::K, Self::SerError>;
+
+    /// Serializes a borrowed key.
+    /// # Errors
+    ///
+    /// Returns an error if serialization fails.
+    fn serialize_key_ref<R: UnifiableRef>(&self, data: &R) -> Result<Self::K, Self::SerError> {
+        self.serialize_key(data.clone())
+    }
 
     /// Serializes a value.
     /// # Errors
     ///
     /// Returns an error if serialization fails.
-    fn serialize_value(&self, data: impl Serialize) -> Result<Self::V, Self::SerError>;
+    fn serialize_value(&self, data: impl Unifiable) -> Result<Self::V, Self::SerError>;
+
+    /// Serializes a borrowed value.
+    /// # Errors
+    ///
+    /// Returns an error if serialization fails.
+    fn serialize_value_ref<R: UnifiableRef>(&self, data: &R) -> Result<Self::V, Self::SerError> {
+        self.serialize_value(data.clone())
+    }
 
     /// Deserializes a key from the given data.
     /// # Errors
     ///
     /// Returns an error if deserialization fails.
-    fn deserialize_key<T: DeserializeOwned>(&self, data: &Self::K) -> Result<T, Self::DeError>;
+    fn deserialize_key<T: Unifiable>(&self, data: &Self::K) -> Result<T, Self::DeError>;
 
     /// Deserializes a value from the given data.
     /// # Errors
     ///
     /// Returns an error if deserialization fails.
-    fn deserialize_value<T: DeserializeOwned>(&self, data: &Self::V) -> Result<T, Self::DeError>;
+    fn deserialize_value<T: Unifiable>(&self, data: &Self::V) -> Result<T, Self::DeError>;
 }
 
 impl Unifier for Configuration {
@@ -163,8 +193,8 @@ impl<U: Unifier> IndexBuilder<U> {
 }
 impl<U: Unifier> Indexer for IndexBuilder<U> {
     type Error = U::SerError;
-    fn add(&mut self, discriminator: u8, index: &impl Serialize) -> Result<(), Self::Error> {
-        let data = self.1.serialize_key(index)?;
+    fn add(&mut self, discriminator: u8, index: &impl UnifiableRef) -> Result<(), Self::Error> {
+        let data = self.1.serialize_key_ref(index)?;
         self.0.push((discriminator, data));
         Ok(())
     }

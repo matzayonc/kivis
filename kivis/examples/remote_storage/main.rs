@@ -64,8 +64,8 @@ fn main() -> Result<(), DatabaseError<Client>> {
         email: "bob@example.com".to_string(),
     };
 
-    let alice_key = db.put(&alice)?;
-    let bob_key = db.put(&bob)?;
+    let alice_key = db.put(alice)?;
+    let bob_key = db.put(bob)?;
 
     // Create files
     let file1 = File {
@@ -81,9 +81,9 @@ fn main() -> Result<(), DatabaseError<Client>> {
         content: "Another file from Alice.".to_string(),
     };
 
-    let file1_key = db.put(&file1)?;
-    let _file2_key = db.put(&file2)?;
-    let file3_key = db.put(&file3)?;
+    let file1_key = db.put(file1.clone())?;
+    let _file2_key = db.put(file2.clone())?;
+    let file3_key = db.put(file3.clone())?;
 
     println!("✓ Created users and files");
 
@@ -109,7 +109,7 @@ fn main() -> Result<(), DatabaseError<Client>> {
     db.remove(&file1_key)?;
     let mut updated_file = file1.clone();
     updated_file.content = "Updated content from Alice!".to_string();
-    let updated_key = db.put(&updated_file)?;
+    let updated_key = db.put(updated_file)?;
 
     // Delete a file
     db.remove(&file3_key)?;

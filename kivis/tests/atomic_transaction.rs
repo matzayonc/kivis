@@ -122,8 +122,8 @@ mod tests {
         let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
         let mut tx = db.create_transaction();
 
-        tx.insert(&MockRecord(1, 'a'))?;
-        tx.insert(&MockRecord(2, 'b'))?;
+        tx.insert(MockRecord(1, 'a'))?;
+        tx.insert(MockRecord(2, 'b'))?;
 
         assert!(!tx.is_empty());
         assert_eq!(tx.write_count(), 2);
@@ -154,7 +154,7 @@ mod tests {
 
         // Delete first, then write
         tx.remove(&MockRecordKey(1), &MockRecord(1, 'a'))?;
-        tx.insert(&MockRecord(1, 'a'))?;
+        tx.insert(MockRecord(1, 'a'))?;
 
         // Write should override delete
         assert_eq!(tx.write_count(), 1);
@@ -169,7 +169,7 @@ mod tests {
         let mut tx = db.create_transaction();
 
         // Write first, then delete
-        tx.insert(&MockRecord(1, 'a'))?;
+        tx.insert(MockRecord(1, 'a'))?;
         tx.remove(&MockRecordKey(1), &MockRecord(1, 'a'))?;
 
         // Delete should be ignored since key is being written
@@ -183,9 +183,9 @@ mod tests {
         let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
         let mut tx = db.create_transaction();
 
-        tx.insert(&MockRecord(1, 'a'))?;
-        tx.insert(&MockRecord(1, 'b'))?;
-        tx.insert(&MockRecord(1, 'c'))?;
+        tx.insert(MockRecord(1, 'a'))?;
+        tx.insert(MockRecord(1, 'b'))?;
+        tx.insert(MockRecord(1, 'c'))?;
 
         // Should only have one write (last value)
         assert_eq!(tx.write_count(), 1);
@@ -194,7 +194,7 @@ mod tests {
         assert_eq!(writes.len(), 1);
 
         let mut tx_only_c = db.create_transaction();
-        tx_only_c.insert(&MockRecord(1, 'c'))?;
+        tx_only_c.insert(MockRecord(1, 'c'))?;
 
         if let Some(w) = tx_only_c.pending_writes().next() {
             assert_eq!(writes[0].1, w.1);
@@ -210,8 +210,8 @@ mod tests {
         let mut tx = db.create_transaction();
 
         // Add some operations
-        tx.insert(&MockRecord(1, 'a'))?;
-        tx.insert(&MockRecord(2, 'b'))?;
+        tx.insert(MockRecord(1, 'a'))?;
+        tx.insert(MockRecord(2, 'b'))?;
         tx.remove(&MockRecordKey(1), &MockRecord(1, 'a'))?;
 
         // Commit the transaction
@@ -229,7 +229,7 @@ mod tests {
         let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
         let mut tx = db.create_transaction();
 
-        tx.insert(&MockRecord(1, 'a'))?;
+        tx.insert(MockRecord(1, 'a'))?;
         tx.remove(&MockRecordKey(2), &MockRecord(2, 'b'))?;
 
         assert!(!tx.is_empty());

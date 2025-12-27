@@ -681,7 +681,6 @@ dependencies = [
  "hex",
  "kivis",
  "serde",
- "serde_json",
 ]
 
 [[package]]
