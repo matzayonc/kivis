@@ -5,14 +5,20 @@ use std::{fmt::Display, fs, path::PathBuf};
 #[derive(Debug)]
 pub enum FileStoreError {
     Io(std::io::Error),
-    Serialization(csv::Error),
+    CsvSerialization(csv::Error),
+    JsonSerialization(serde_json::Error),
 }
 
 impl PartialEq for FileStoreError {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Io(a), Self::Io(b)) => a.kind() == b.kind() && a.to_string() == b.to_string(),
-            (Self::Serialization(a), Self::Serialization(b)) => a.to_string() == b.to_string(),
+            (Self::CsvSerialization(a), Self::CsvSerialization(b)) => {
+                a.to_string() == b.to_string()
+            }
+            (Self::JsonSerialization(a), Self::JsonSerialization(b)) => {
+                a.to_string() == b.to_string()
+            }
             _ => false,
         }
     }
@@ -24,14 +30,21 @@ impl Display for FileStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Io(e) => write!(f, "IO error: {}", e),
-            Self::Serialization(e) => write!(f, "Serialization error: {}", e),
+            Self::CsvSerialization(e) => write!(f, "CSV serialization error: {}", e),
+            Self::JsonSerialization(e) => write!(f, "JSON serialization error: {}", e),
         }
     }
 }
 
 impl From<csv::Error> for FileStoreError {
     fn from(e: csv::Error) -> Self {
-        Self::Serialization(e)
+        Self::CsvSerialization(e)
+    }
+}
+
+impl From<serde_json::Error> for FileStoreError {
+    fn from(e: serde_json::Error) -> Self {
+        Self::JsonSerialization(e)
     }
 }
 
@@ -42,9 +55,9 @@ impl From<std::io::Error> for FileStoreError {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
-pub struct CsvSerializer;
+pub struct FsSerializer;
 
-impl CsvSerializer {
+impl FsSerializer {
     /// URL-encode a string to make it filesystem-safe while keeping it human-readable.
     /// Commas and other special characters are encoded as %XX.
     fn encode_for_filename(s: &str) -> String {
@@ -79,12 +92,13 @@ impl CsvSerializer {
     }
 }
 
-impl Unifier for CsvSerializer {
-    type D = String;
-    type SerError = csv::Error;
-    type DeError = csv::Error;
+impl Unifier for FsSerializer {
+    type K = String;
+    type V = String;
+    type SerError = FileStoreError;
+    type DeError = FileStoreError;
 
-    fn serialize_key(&self, data: impl Serialize) -> Result<Self::D, Self::SerError> {
+    fn serialize_key(&self, data: impl Serialize) -> Result<Self::K, Self::SerError> {
         let mut writer = csv::WriterBuilder::new()
             .has_headers(false)
             .quote_style(csv::QuoteStyle::Necessary)
@@ -101,29 +115,39 @@ impl Unifier for CsvSerializer {
         Ok(Self::encode_for_filename(&result))
     }
 
-    fn deserialize_key<T: DeserializeOwned>(&self, data: &Self::D) -> Result<T, Self::DeError> {
+    fn serialize_value(&self, data: impl Serialize) -> Result<Self::V, Self::SerError> {
+        Ok(serde_json::to_string(&data)?)
+    }
+
+    fn deserialize_key<T: DeserializeOwned>(&self, data: &Self::K) -> Result<T, Self::DeError> {
         let decoded = Self::decode_from_filename(data).ok_or_else(|| {
-            csv::Error::from(std::io::Error::new(
+            FileStoreError::CsvSerialization(csv::Error::from(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "invalid encoded key",
-            ))
+            )))
         })?;
 
         let mut reader = csv::ReaderBuilder::new()
             .has_headers(false)
             .from_reader(decoded.as_bytes());
         let mut iter = reader.deserialize();
-        iter.next().ok_or_else(|| {
-            csv::Error::from(std::io::Error::new(
-                std::io::ErrorKind::UnexpectedEof,
-                "no data",
-            ))
-        })?
+        iter.next()
+            .ok_or_else(|| {
+                FileStoreError::CsvSerialization(csv::Error::from(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "no data",
+                )))
+            })?
+            .map_err(FileStoreError::CsvSerialization)
+    }
+
+    fn deserialize_value<T: DeserializeOwned>(&self, data: &Self::V) -> Result<T, Self::DeError> {
+        Ok(serde_json::from_str(data)?)
     }
 }
 
 /// A file-based storage implementation that stores each key-value pair as a separate file.
-/// Uses CSV serialization with URL-encoded filenames for human-readable storage.
+/// Uses CSV serialization for keys (filenames) and JSON for values.
 #[derive(Debug)]
 pub struct FileStore {
     data_dir: PathBuf,
@@ -148,7 +172,7 @@ impl FileStore {
 }
 
 impl Storage for FileStore {
-    type Serializer = CsvSerializer;
+    type Serializer = FsSerializer;
     type StoreError = FileStoreError;
 
     fn insert(&mut self, key: String, value: String) -> Result<(), Self::StoreError> {

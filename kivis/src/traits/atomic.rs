@@ -3,8 +3,8 @@ use crate::Unifier;
 
 use super::Storage;
 
-type Deletes<D> = Vec<Option<D>>;
-type Inserts<D> = Vec<(D, D)>;
+type Deletes<V> = Vec<Option<V>>;
+type Inserts<K, V> = Vec<(K, V)>;
 
 /// A trait defining atomic operations for storage backends.
 ///
@@ -34,7 +34,10 @@ pub trait AtomicStorage: Storage {
     /// Returns an error if any of the insert or remove operations fail.
     fn batch_mixed(
         &mut self,
-        inserts: Inserts<<<Self as Storage>::Serializer as Unifier>::D>,
-        removes: Vec<<<Self as Storage>::Serializer as Unifier>::D>,
-    ) -> Result<Deletes<<<Self as Storage>::Serializer as Unifier>::D>, Self::StoreError>;
+        inserts: Inserts<
+            <<Self as Storage>::Serializer as Unifier>::K,
+            <<Self as Storage>::Serializer as Unifier>::V,
+        >,
+        removes: Vec<<<Self as Storage>::Serializer as Unifier>::K>,
+    ) -> Result<Deletes<<<Self as Storage>::Serializer as Unifier>::V>, Self::StoreError>;
 }

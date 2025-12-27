@@ -7,7 +7,7 @@ use crate::Unifier;
 use super::Debug;
 
 type KeysIteratorItem<S> =
-    Result<<<S as Storage>::Serializer as Unifier>::D, <S as Storage>::StoreError>;
+    Result<<<S as Storage>::Serializer as Unifier>::K, <S as Storage>::StoreError>;
 
 /// A trait defining a storage backend for the database.
 ///
@@ -34,8 +34,8 @@ pub trait Storage {
     /// Returns an error if the underlying storage fails to insert the key-value pair.
     fn insert(
         &mut self,
-        key: <Self::Serializer as Unifier>::D,
-        value: <Self::Serializer as Unifier>::D,
+        key: <Self::Serializer as Unifier>::K,
+        value: <Self::Serializer as Unifier>::V,
     ) -> Result<(), Self::StoreError>;
 
     /// Should retrieve the value associated with the given key from the storage.
@@ -45,8 +45,8 @@ pub trait Storage {
     /// Returns an error if the underlying storage fails while retrieving the value.
     fn get(
         &self,
-        key: <Self::Serializer as Unifier>::D,
-    ) -> Result<Option<<Self::Serializer as Unifier>::D>, Self::StoreError>;
+        key: <Self::Serializer as Unifier>::K,
+    ) -> Result<Option<<Self::Serializer as Unifier>::V>, Self::StoreError>;
 
     /// Should remove the value associated with the given key from the storage.
     ///
@@ -55,8 +55,8 @@ pub trait Storage {
     /// Returns an error if the underlying storage fails while removing the value.
     fn remove(
         &mut self,
-        key: <Self::Serializer as Unifier>::D,
-    ) -> Result<Option<<Self::Serializer as Unifier>::D>, Self::StoreError>;
+        key: <Self::Serializer as Unifier>::K,
+    ) -> Result<Option<<Self::Serializer as Unifier>::V>, Self::StoreError>;
 
     /// Should iterate over the keys in the storage that are in range.
     ///
@@ -65,7 +65,7 @@ pub trait Storage {
     /// Returns an error if the underlying storages fails during iteration.
     fn iter_keys(
         &self,
-        range: Range<<Self::Serializer as Unifier>::D>,
+        range: Range<<Self::Serializer as Unifier>::K>,
     ) -> Result<impl Iterator<Item = KeysIteratorItem<Self>>, Self::StoreError>
     where
         Self: Sized;

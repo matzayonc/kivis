@@ -10,8 +10,8 @@ use crate::{
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
-type Writes<D> = Vec<(D, D)>;
-type Deletes<D> = Vec<Option<D>>;
+type Writes<K, V> = Vec<(K, V)>;
+type Deletes<V> = Vec<Option<V>>;
 
 /// A database transaction that accumulates low-level byte operations (writes and deletes)
 /// without immediately applying them to storage.
@@ -19,9 +19,9 @@ type Deletes<D> = Vec<Option<D>>;
 /// This struct is always available, but the `commit` method is only available when the "atomic" feature is enabled.
 pub struct DatabaseTransaction<Manifest, U: Unifier> {
     /// Pending write operations: (key, value) pairs
-    pending_writes: Writes<U::D>,
+    pending_writes: Writes<U::K, U::V>,
     /// Pending delete operations: keys to delete
-    pending_deletes: Vec<U::D>,
+    pending_deletes: Vec<U::K>,
     /// Serialization configuration
     serializer: U,
     _marker: PhantomData<Manifest>,
@@ -117,7 +117,7 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     ///
     /// If the same key is written multiple times, only the last value is kept.
     /// If a key is both written and deleted, the write takes precedence.
-    fn write(&mut self, key: U::D, value: U::D) {
+    fn write(&mut self, key: U::K, value: U::V) {
         self.pending_writes.retain(|(k, _)| k != &key);
         self.pending_deletes.retain(|k| k != &key);
         // Remove from deletes if it was there
@@ -128,7 +128,7 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     ///
     /// If a key is both written and deleted, the write takes precedence
     /// (so this delete will be ignored if the key was already written).
-    fn delete(&mut self, key: U::D) {
+    fn delete(&mut self, key: U::K) {
         // Only add to deletes if it's not already being written
         if !self.pending_writes.iter().any(|(k, _)| k == &key) {
             self.pending_deletes.push(key);
@@ -154,12 +154,12 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     }
 
     /// Returns an iterator over the pending write operations.
-    pub fn pending_writes(&self) -> impl Iterator<Item = &(U::D, U::D)> {
+    pub fn pending_writes(&self) -> impl Iterator<Item = &(U::K, U::V)> {
         self.pending_writes.iter()
     }
 
     /// Returns an iterator over the pending delete keys.
-    pub fn pending_deletes(&self) -> impl Iterator<Item = &U::D> {
+    pub fn pending_deletes(&self) -> impl Iterator<Item = &U::K> {
         self.pending_deletes.iter()
     }
 
@@ -180,7 +180,7 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     pub fn commit<S>(
         self,
         storage: &mut S,
-    ) -> Result<Deletes<<S::Serializer as Unifier>::D>, DatabaseError<S>>
+    ) -> Result<Deletes<<S::Serializer as Unifier>::V>, DatabaseError<S>>
     where
         S: AtomicStorage + Storage<Serializer = U>,
     {
@@ -207,8 +207,8 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     pub fn consume(
         self,
     ) -> (
-        impl Iterator<Item = (U::D, U::D)>,
-        impl Iterator<Item = U::D>,
+        impl Iterator<Item = (U::K, U::V)>,
+        impl Iterator<Item = U::K>,
     ) {
         (
             self.pending_writes.into_iter(),
@@ -220,7 +220,7 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
         &self,
         record: &R,
         key: &R::Key,
-    ) -> Result<Writes<U::D>, U::SerError>
+    ) -> Result<Writes<U::K, U::V>, U::SerError>
     where
         R::Key: RecordKey<Record = R>,
         IndexBuilder<U>: Indexer<Error = U::SerError>,
@@ -241,7 +241,9 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
             let key_bytes = self.serializer().serialize_key(key)?;
             entry.combine(key_bytes.clone());
 
-            writes.push((entry, key_bytes));
+            // Index entries store the primary key as the value (serialized as a value type)
+            let value_bytes = self.serializer().serialize_value(key)?;
+            writes.push((entry, value_bytes));
         }
 
         let key = wrap::<R, U>(key, &self.serializer())?;
@@ -255,7 +257,7 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
         &self,
         record: &R,
         key: &R::Key,
-    ) -> Result<Vec<U::D>, U::SerError>
+    ) -> Result<Vec<U::K>, U::SerError>
     where
         R::Key: RecordKey<Record = R>,
         IndexBuilder<U>: Indexer<Error = U::SerError>,

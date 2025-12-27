@@ -77,7 +77,7 @@ pub(crate) struct Wrap<R> {
 pub(crate) fn wrap<R: DatabaseEntry, U: Unifier>(
     item_key: &R::Key,
     unifier: &U,
-) -> Result<U::D, U::SerError> {
+) -> Result<U::K, U::SerError> {
     let wrapped = Wrap {
         prelude: WrapPrelude {
             scope: R::SCOPE,
@@ -90,7 +90,7 @@ pub(crate) fn wrap<R: DatabaseEntry, U: Unifier>(
 
 pub(crate) fn empty_wrap<R: DatabaseEntry, U: Unifier>(
     config: &U,
-) -> Result<(U::D, U::D), U::SerError> {
+) -> Result<(U::K, U::K), U::SerError> {
     let start = Wrap {
         prelude: WrapPrelude {
             scope: R::SCOPE,

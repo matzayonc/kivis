@@ -381,7 +381,7 @@ where
     /// Helper function to process iterator results and get deserialized values
     fn process_iter_result<T: DeserializeOwned>(
         &self,
-        result: Result<<S::Serializer as Unifier>::D, S::StoreError>,
+        result: Result<<S::Serializer as Unifier>::K, S::StoreError>,
     ) -> Result<T, DatabaseError<S>> {
         let key = result.map_err(DatabaseError::Storage)?;
         let value = match self.store.get(key) {

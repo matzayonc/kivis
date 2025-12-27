@@ -10,11 +10,12 @@ use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 pub struct CustomUnifier;
 
 impl Unifier for CustomUnifier {
-    type D = Vec<u8>;
+    type K = Vec<u8>;
+    type V = Vec<u8>;
     type SerError = EncodeError;
     type DeError = DecodeError;
 
-    fn serialize_key(&self, data: impl Serialize) -> Result<Self::D, Self::SerError> {
+    fn serialize_key(&self, data: impl Serialize) -> Result<Self::K, Self::SerError> {
         // Keys are serialized with a "KEY:" prefix
         let mut result = b"KEY:".to_vec();
         let encoded = bincode::serde::encode_to_vec(data, bincode::config::standard())?;
@@ -22,7 +23,7 @@ impl Unifier for CustomUnifier {
         Ok(result)
     }
 
-    fn serialize_value(&self, data: impl Serialize) -> Result<Self::D, Self::SerError> {
+    fn serialize_value(&self, data: impl Serialize) -> Result<Self::V, Self::SerError> {
         // Values are serialized with a "VAL:" prefix
         let mut result = b"VAL:".to_vec();
         let encoded = bincode::serde::encode_to_vec(data, bincode::config::standard())?;
@@ -32,7 +33,7 @@ impl Unifier for CustomUnifier {
 
     fn deserialize_key<T: serde::de::DeserializeOwned>(
         &self,
-        data: &Self::D,
+        data: &Self::K,
     ) -> Result<T, Self::DeError> {
         // Strip the "KEY:" prefix and deserialize
         if !data.starts_with(b"KEY:") {
@@ -44,7 +45,7 @@ impl Unifier for CustomUnifier {
 
     fn deserialize_value<T: serde::de::DeserializeOwned>(
         &self,
-        data: &Self::D,
+        data: &Self::V,
     ) -> Result<T, Self::DeError> {
         // Strip the "VAL:" prefix and deserialize
         if !data.starts_with(b"VAL:") {
@@ -177,17 +178,29 @@ fn test_default_value_serialization_uses_key_serialization() {
     struct TestUnifier;
 
     impl Unifier for TestUnifier {
-        type D = Vec<u8>;
+        type K = Vec<u8>;
+        type V = Vec<u8>;
         type SerError = EncodeError;
         type DeError = DecodeError;
 
-        fn serialize_key(&self, data: impl Serialize) -> Result<Self::D, Self::SerError> {
+        fn serialize_key(&self, data: impl Serialize) -> Result<Self::K, Self::SerError> {
+            bincode::serde::encode_to_vec(data, bincode::config::standard())
+        }
+
+        fn serialize_value(&self, data: impl Serialize) -> Result<Self::V, Self::SerError> {
             bincode::serde::encode_to_vec(data, bincode::config::standard())
         }
 
         fn deserialize_key<T: serde::de::DeserializeOwned>(
             &self,
-            data: &Self::D,
+            data: &Self::K,
+        ) -> Result<T, Self::DeError> {
+            Ok(bincode::serde::decode_from_slice(data, bincode::config::standard())?.0)
+        }
+
+        fn deserialize_value<T: serde::de::DeserializeOwned>(
+            &self,
+            data: &Self::V,
         ) -> Result<T, Self::DeError> {
             Ok(bincode::serde::decode_from_slice(data, bincode::config::standard())?.0)
         }
