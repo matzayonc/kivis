@@ -2,11 +2,11 @@
 // This demonstrates how to create a remote storage server
 
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, post},
-    Json, Router,
 };
 use kivis::MemoryStorage;
 use serde::{Deserialize, Serialize};
@@ -117,7 +117,7 @@ async fn remove_handler(
             return (
                 StatusCode::BAD_REQUEST,
                 Json(RemoveResponse { value: None }),
-            )
+            );
         }
     };
 

@@ -2,7 +2,7 @@ use bincode::{
     config::Configuration,
     error::{DecodeError, EncodeError},
 };
-use kivis::{manifest, Database, DatabaseError, Record, Storage};
+use kivis::{Database, DatabaseError, Record, Storage, manifest};
 use std::path::PathBuf;
 use std::{fmt::Display, fs};
 
@@ -115,14 +115,13 @@ impl Storage for FileStore {
 
         let mut keys: Vec<Vec<u8>> = Vec::new();
         for entry in entries.flatten() {
-            if let Some(filename) = entry.file_name().to_str() {
-                if let Some(hex_key) = filename.strip_suffix(".dat") {
-                    if let Ok(key) = hex::decode(hex_key) {
-                        if key >= range.start && key < range.end {
-                            keys.push(key);
-                        }
-                    }
-                }
+            if let Some(filename) = entry.file_name().to_str()
+                && let Some(hex_key) = filename.strip_suffix(".dat")
+                && let Ok(key) = hex::decode(hex_key)
+                && key >= range.start
+                && key < range.end
+            {
+                keys.push(key);
             }
         }
 

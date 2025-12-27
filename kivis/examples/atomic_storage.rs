@@ -127,7 +127,9 @@ fn main() -> anyhow::Result<()> {
     atomic_storage_example()?;
 
     #[cfg(not(feature = "atomic"))]
-    println!("This example requires the 'atomic' feature to be enabled. Run with: cargo run --example atomic_storage --features atomic");
+    println!(
+        "This example requires the 'atomic' feature to be enabled. Run with: cargo run --example atomic_storage --features atomic"
+    );
 
     Ok(())
 }

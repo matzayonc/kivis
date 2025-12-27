@@ -3,7 +3,7 @@ use serde::de::DeserializeOwned;
 use crate::errors::DatabaseError;
 use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
-use crate::wrap::{empty_wrap, wrap, Subtable, Wrap, WrapPrelude};
+use crate::wrap::{Subtable, Wrap, WrapPrelude, empty_wrap, wrap};
 use crate::{
     DeriveKey, Incrementable, IndexBuilder, Indexer, Manifest, Manifests, RecordKey, Unifier,
     UnifierData,

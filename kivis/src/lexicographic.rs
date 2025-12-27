@@ -4,7 +4,7 @@ use core::ops::{Deref, DerefMut};
 #[cfg(not(feature = "std"))]
 use alloc::{string::String, string::ToString, vec::Vec};
 
-use serde::{de::Visitor, ser::SerializeTuple, Serialize};
+use serde::{Serialize, de::Visitor, ser::SerializeTuple};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LexicographicString(String);

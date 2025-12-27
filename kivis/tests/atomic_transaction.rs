@@ -10,7 +10,7 @@ mod tests {
     };
     use serde::{Deserialize, Serialize};
 
-    use kivis::{manifest, AtomicStorage, Database, DatabaseTransaction, Record, Storage};
+    use kivis::{AtomicStorage, Database, DatabaseTransaction, Record, Storage, manifest};
 
     #[derive(Debug, PartialEq, Eq)]
     pub enum MockError {

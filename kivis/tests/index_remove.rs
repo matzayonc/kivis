@@ -1,5 +1,5 @@
 use anyhow::Context;
-use kivis::{manifest, Database, LexicographicString, MemoryStorage, Record};
+use kivis::{Database, LexicographicString, MemoryStorage, Record, manifest};
 
 // Define a record type for a Pet.
 #[derive(Record, Debug, Clone, serde::Serialize, serde::Deserialize)]

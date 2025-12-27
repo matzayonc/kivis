@@ -7,7 +7,7 @@
 #![deny(clippy::expect_used)]
 
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, DeriveInput};
+use syn::{DeriveInput, parse_macro_input};
 
 mod generator;
 mod schema;
@@ -23,7 +23,7 @@ use crate::schema::Schema;
 /// # Attributes
 ///
 /// - `#[key]`: Marks fields as part of the primary key
-/// - `#[index]`: Marks fields for secondary indexing  
+/// - `#[index]`: Marks fields for secondary indexing
 /// - `#[derived_key(Type1, Type2, ...)]`: Specifies types for a derived key (mutually exclusive with `#[key]`)
 ///
 /// # Key Strategies
@@ -48,7 +48,7 @@ use crate::schema::Schema;
 /// }
 /// ```
 ///
-/// ## Field Key  
+/// ## Field Key
 /// ```
 /// use serde::{Serialize, Deserialize};
 ///
@@ -56,7 +56,7 @@ use crate::schema::Schema;
 /// #[derive(Serialize, Deserialize, Debug)]
 /// struct User {
 ///     id: u64,        // Would be marked with #[key] in actual usage
-///     name: String,   // Would be marked with #[index] in actual usage  
+///     name: String,   // Would be marked with #[index] in actual usage
 ///     email: String,
 /// }
 /// ```

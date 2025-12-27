@@ -1,6 +1,6 @@
 #![allow(clippy::duplicated_attributes)]
 
-use kivis::{manifest, Database, DeriveKey, MemoryStorage, Record};
+use kivis::{Database, DeriveKey, MemoryStorage, Record, manifest};
 use serde::{Deserialize, Serialize};
 
 type Payload = u16;
