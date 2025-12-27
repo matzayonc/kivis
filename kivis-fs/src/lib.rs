@@ -2,26 +2,42 @@ use kivis::{Storage, Unifier};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{fmt::Display, fs, path::PathBuf};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum FileStoreError {
-    Io,
-    Serialization,
-    Deserialization,
+    Io(std::io::Error),
+    Serialization(csv::Error),
 }
+
+impl PartialEq for FileStoreError {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Io(a), Self::Io(b)) => a.kind() == b.kind() && a.to_string() == b.to_string(),
+            (Self::Serialization(a), Self::Serialization(b)) => a.to_string() == b.to_string(),
+            _ => false,
+        }
+    }
+}
+
+impl Eq for FileStoreError {}
 
 impl Display for FileStoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Io => write!(f, "IO error"),
-            Self::Serialization => write!(f, "Serialization error"),
-            Self::Deserialization => write!(f, "Deserialization error"),
+            Self::Io(e) => write!(f, "IO error: {}", e),
+            Self::Serialization(e) => write!(f, "Serialization error: {}", e),
         }
     }
 }
 
 impl From<csv::Error> for FileStoreError {
-    fn from(_: csv::Error) -> Self {
-        Self::Serialization
+    fn from(e: csv::Error) -> Self {
+        Self::Serialization(e)
+    }
+}
+
+impl From<std::io::Error> for FileStoreError {
+    fn from(e: std::io::Error) -> Self {
+        Self::Io(e)
     }
 }
 
@@ -137,7 +153,7 @@ impl Storage for FileStore {
 
     fn insert(&mut self, key: String, value: String) -> Result<(), Self::StoreError> {
         let file_path = self.key_to_filename(&key);
-        fs::write(file_path, value).map_err(|_| FileStoreError::Io)?;
+        fs::write(file_path, value)?;
         Ok(())
     }
 
@@ -146,7 +162,7 @@ impl Storage for FileStore {
         match fs::read_to_string(file_path) {
             Ok(data) => Ok(Some(data)),
             Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(_) => Err(FileStoreError::Io),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -154,11 +170,11 @@ impl Storage for FileStore {
         let file_path = self.key_to_filename(&key);
         match fs::read_to_string(&file_path) {
             Ok(data) => {
-                fs::remove_file(file_path).map_err(|_| FileStoreError::Io)?;
+                fs::remove_file(file_path)?;
                 Ok(Some(data))
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(_) => Err(FileStoreError::Io),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -166,7 +182,7 @@ impl Storage for FileStore {
         &self,
         range: std::ops::Range<String>,
     ) -> Result<impl Iterator<Item = Result<String, Self::StoreError>>, Self::StoreError> {
-        let entries = fs::read_dir(&self.data_dir).map_err(|_| FileStoreError::Io)?;
+        let entries = fs::read_dir(&self.data_dir)?;
 
         let mut keys: Vec<String> = Vec::new();
         for entry in entries.flatten() {
