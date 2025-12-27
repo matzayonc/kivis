@@ -110,9 +110,7 @@ mod tests {
 
     #[test]
     fn test_transaction_new() -> anyhow::Result<()> {
-        let tx = DatabaseTransaction::<Manifest, _>::new_with_serialization_config(
-            Configuration::default(),
-        );
+        let tx = DatabaseTransaction::<Manifest, _>::new_with_serializer(Configuration::default());
         assert!(tx.is_empty());
         assert_eq!(tx.write_count(), 0);
         assert_eq!(tx.delete_count(), 0);
@@ -247,8 +245,7 @@ mod tests {
     #[test]
     fn test_empty_transaction_commit() -> anyhow::Result<()> {
         let mut storage = MockAtomicStorage::new();
-        let tx =
-            DatabaseTransaction::<Manifest, _>::new_with_serialization_config(Default::default());
+        let tx = DatabaseTransaction::<Manifest, _>::new_with_serializer(Default::default());
 
         // Empty transaction should succeed and return empty vector
         let result = tx.commit(&mut storage)?;

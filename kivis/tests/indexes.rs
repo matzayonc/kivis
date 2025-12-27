@@ -1,6 +1,6 @@
 use anyhow::Context;
 use bincode::serde::encode_to_vec;
-use kivis::{manifest, Database, DatabaseEntry, Index, MemoryStorage, Record, SimpleIndexer};
+use kivis::{manifest, Database, DatabaseEntry, Index, IndexBuilder, MemoryStorage, Record};
 
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
@@ -91,7 +91,7 @@ fn test_index() -> anyhow::Result<()> {
 
     let user_key = store.put(&user)?;
 
-    let mut indexer = SimpleIndexer::new(bincode::config::standard());
+    let mut indexer = IndexBuilder::new(bincode::config::standard());
     user.index_keys(&mut indexer)?;
     let index_keys = indexer.into_index_keys();
     assert_eq!(index_keys.len(), 1);
