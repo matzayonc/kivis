@@ -373,7 +373,7 @@ where
         self.store
     }
 
-    /// Returns the current [`Configuration`] used by the database.
+    /// Returns the current [`S::Serializer`] used by the database.
     pub fn serialization_config(&self) -> &S::Serializer {
         &self.serialization_config
     }
