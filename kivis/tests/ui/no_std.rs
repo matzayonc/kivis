@@ -2,8 +2,8 @@
 extern crate alloc;
 
 use alloc::string::String;
-use kivis::manifest;
 use kivis::Record;
+use kivis::manifest;
 use serde::{Deserialize, Serialize};
 
 #[derive(Record, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

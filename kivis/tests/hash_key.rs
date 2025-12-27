@@ -14,7 +14,7 @@
  * - Database.insert() method for records with derived keys
  */
 
-use kivis::{manifest, Database, DatabaseEntry, DeriveKey, MemoryStorage, RecordKey};
+use kivis::{Database, DatabaseEntry, DeriveKey, MemoryStorage, RecordKey, manifest};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};

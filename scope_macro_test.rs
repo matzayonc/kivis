@@ -1,4 +1,4 @@
-use kivis::{scope_impl, Scope};
+use kivis::{Scope, scope_impl};
 
 // Define some example structs
 #[derive(Debug)]

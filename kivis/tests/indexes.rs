@@ -1,6 +1,6 @@
 use anyhow::Context;
 use bincode::serde::encode_to_vec;
-use kivis::{manifest, Database, DatabaseEntry, Index, IndexBuilder, MemoryStorage, Record};
+use kivis::{Database, DatabaseEntry, Index, IndexBuilder, MemoryStorage, Record, manifest};
 
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,

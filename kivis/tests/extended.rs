@@ -1,4 +1,4 @@
-use kivis::{manifest, Database, DeriveKey, MemoryStorage, Record};
+use kivis::{Database, DeriveKey, MemoryStorage, Record, manifest};
 use serde::{Deserialize, Serialize};
 
 // Test 1: Default behavior (auto-incrementing key, not part of the struct) - existing test

@@ -1,4 +1,4 @@
-use kivis::{manifest, Database, MemoryStorage, Record};
+use kivis::{Database, MemoryStorage, Record, manifest};
 use serde::{Deserialize, Serialize};
 
 #[derive(Record, Serialize, Deserialize, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

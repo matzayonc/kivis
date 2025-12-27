@@ -1,4 +1,4 @@
-use kivis::{manifest, Record};
+use kivis::{Record, manifest};
 
 /// A user in the remote storage system
 #[derive(

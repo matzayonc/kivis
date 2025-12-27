@@ -1,4 +1,4 @@
-use kivis::{manifest, Database, DatabaseError, DeriveKey, MemoryStorage, Record};
+use kivis::{Database, DatabaseError, DeriveKey, MemoryStorage, Record, manifest};
 
 /// A user record with an indexed name field
 #[derive(

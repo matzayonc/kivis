@@ -10,7 +10,7 @@ use alloc::vec::Vec;
 use bincode::config::Configuration;
 use core::fmt::Debug;
 
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 pub use schema::*;
 pub use storage::*;

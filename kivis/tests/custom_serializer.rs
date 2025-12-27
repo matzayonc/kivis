@@ -1,7 +1,7 @@
 // Test demonstrating custom key vs value serialization in Unifier trait
 
 use bincode::error::{DecodeError, EncodeError};
-use kivis::{manifest, Database, Record, Storage, Unifier};
+use kivis::{Database, Record, Storage, Unifier, manifest};
 use serde::{Deserialize, Serialize};
 use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
@@ -82,16 +82,14 @@ impl From<DecodeError> for CustomError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CustomStorage {
     data: BTreeMap<Reverse<Vec<u8>>, Vec<u8>>,
 }
 
 impl CustomStorage {
     pub fn new() -> Self {
-        Self {
-            data: BTreeMap::new(),
-        }
+        Self::default()
     }
 
     pub fn raw_data(&self) -> &BTreeMap<Reverse<Vec<u8>>, Vec<u8>> {
@@ -157,8 +155,8 @@ fn test_custom_key_value_serialization() -> anyhow::Result<()> {
     // We can verify the serializer behavior works by checking that serialization
     // produces different outputs for keys vs values
     let unifier = CustomUnifier;
-    let test_key = unifier.serialize_key(&"key_data").unwrap();
-    let test_val = unifier.serialize_value(&"val_data").unwrap();
+    let test_key = unifier.serialize_key("key_data").unwrap();
+    let test_val = unifier.serialize_value("val_data").unwrap();
 
     assert!(
         test_key.starts_with(b"KEY:"),
@@ -198,8 +196,8 @@ fn test_default_value_serialization_uses_key_serialization() {
     let unifier = TestUnifier;
 
     // Test that serialize_value uses serialize_key by default
-    let key_result = unifier.serialize_key(&42u32).unwrap();
-    let value_result = unifier.serialize_value(&42u32).unwrap();
+    let key_result = unifier.serialize_key(42u32).unwrap();
+    let value_result = unifier.serialize_value(42u32).unwrap();
 
     assert_eq!(
         key_result, value_result,
@@ -207,7 +205,7 @@ fn test_default_value_serialization_uses_key_serialization() {
     );
 
     // Test that deserialize_value uses deserialize_key by default
-    let test_data = bincode::serde::encode_to_vec(&42u32, bincode::config::standard()).unwrap();
+    let test_data = bincode::serde::encode_to_vec(42u32, bincode::config::standard()).unwrap();
     let key_deser: u32 = unifier.deserialize_key(&test_data).unwrap();
     let value_deser: u32 = unifier.deserialize_value(&test_data).unwrap();
 

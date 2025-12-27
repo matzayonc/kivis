@@ -1,9 +1,9 @@
 #[cfg(feature = "atomic")]
 use crate::traits::AtomicStorage;
 use crate::{
-    wrap::{wrap, Subtable, WrapPrelude},
     Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, IndexBuilder, Indexer,
     Manifest, Manifests, RecordKey, Storage, Unifier, UnifierData,
+    wrap::{Subtable, WrapPrelude, wrap},
 };
 
 #[cfg(not(feature = "std"))]
@@ -81,7 +81,7 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
         IndexBuilder<U>: Indexer<Error = U::SerError>,
     {
         let last_key = database.manifest.last();
-        let new_key = if let Some(ref k) = last_key {
+        let new_key = if let Some(k) = last_key {
             k.next_id().ok_or(DatabaseError::FailedToIncrement)?
         } else {
             Default::default()
