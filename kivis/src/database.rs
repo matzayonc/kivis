@@ -101,6 +101,10 @@ where
         DatabaseTransaction::new(self)
     }
 
+    /// Commits a transaction to the database.
+    ///
+    /// All operations are applied using the storage backend's `batch_mixed` method.
+    ///
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if writing to the underlying storage fails.
@@ -108,25 +112,7 @@ where
         &mut self,
         transaction: DatabaseTransaction<M, S::Serializer>,
     ) -> Result<(), DatabaseError<S>> {
-        let (writes, deletes) = transaction.consume();
-        for (key, value) in writes {
-            // if let Some(fallback) = &mut self.fallback {
-            //     fallback
-            //         .insert(key.clone(), value.clone())
-            //         .map_err(DatabaseError::Storage)?;
-            // }
-            self.store
-                .insert(key, value)
-                .map_err(DatabaseError::Storage)?;
-        }
-
-        for key in deletes {
-            // if let Some(fallback) = &mut self.fallback {
-            //     fallback.remove(key.clone()).map_err(DatabaseError::Storage)?;
-            // }
-            self.store.remove(key).map_err(DatabaseError::Storage)?;
-        }
-
+        transaction.commit(&mut self.store)?;
         Ok(())
     }
 

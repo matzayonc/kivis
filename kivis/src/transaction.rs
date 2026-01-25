@@ -1,5 +1,3 @@
-#[cfg(feature = "atomic")]
-use crate::traits::AtomicStorage;
 use crate::{
     Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, IndexBuilder, Indexer,
     Manifest, Manifests, RecordKey, Storage, Unifier, UnifierData,
@@ -10,18 +8,33 @@ use crate::{
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
-type Writes<K, V> = Vec<(K, V)>;
-type Deletes<V> = Vec<Option<V>>;
+pub enum Op {
+    Write {
+        key_start: usize,
+        key_end: usize,
+        value_start: usize,
+        value_end: usize,
+    },
+    Delete {
+        key_start: usize,
+        key_end: usize,
+    },
+}
+
+type Deleted<V> = Vec<Option<V>>;
+type PreparedWrites<K, V> = Vec<(K, V)>;
 
 /// A database transaction that accumulates low-level byte operations (writes and deletes)
 /// without immediately applying them to storage.
 ///
 /// This struct is always available, but the `commit` method is only available when the "atomic" feature is enabled.
 pub struct DatabaseTransaction<Manifest, U: Unifier> {
-    /// Pending write operations: (key, value) pairs
-    pending_writes: Writes<U::K, U::V>,
-    /// Pending delete operations: keys to delete
-    pending_deletes: Vec<U::K>,
+    /// Pending operations: writes and deletes
+    pending_ops: Vec<Op>,
+    /// Key data buffer
+    key_data: U::K,
+    /// Value data buffer
+    value_data: U::V,
     /// Serialization configuration
     serializer: U,
     _marker: PhantomData<Manifest>,
@@ -31,8 +44,9 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     /// Creates a new empty transaction. Should be used by [`Database::create_transaction`].
     pub fn new<S: Storage<Serializer = U>>(database: &Database<S, M>) -> Self {
         Self {
-            pending_writes: Vec::new(),
-            pending_deletes: Vec::new(),
+            pending_ops: Vec::new(),
+            key_data: U::K::default(),
+            value_data: U::V::default(),
             serializer: database.serializer,
             _marker: PhantomData,
         }
@@ -42,8 +56,9 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     #[must_use]
     pub fn new_with_serializer(serializer: U) -> Self {
         Self {
-            pending_writes: Vec::new(),
-            pending_deletes: Vec::new(),
+            pending_ops: Vec::new(),
+            key_data: U::K::default(),
+            value_data: U::V::default(),
             serializer,
             _marker: PhantomData,
         }
@@ -118,10 +133,16 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     /// If the same key is written multiple times, only the last value is kept.
     /// If a key is both written and deleted, the write takes precedence.
     fn write(&mut self, key: U::K, value: U::V) {
-        self.pending_writes.retain(|(k, _)| k != &key);
-        self.pending_deletes.retain(|k| k != &key);
-        // Remove from deletes if it was there
-        self.pending_writes.push((key, value));
+        let (key_start, key_end) = self.key_data.buffer(key);
+        let (value_start, value_end) = self.value_data.buffer(value);
+
+        // Add the new write operation
+        self.pending_ops.push(Op::Write {
+            key_start,
+            key_end,
+            value_start,
+            value_end,
+        });
     }
 
     /// Adds a delete operation to the transaction.
@@ -129,68 +150,64 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     /// If a key is both written and deleted, the write takes precedence
     /// (so this delete will be ignored if the key was already written).
     fn delete(&mut self, key: U::K) {
-        // Only add to deletes if it's not already being written
-        if !self.pending_writes.iter().any(|(k, _)| k == &key) {
-            self.pending_deletes.push(key);
-        }
+        let (key_start, key_end) = self.key_data.buffer(key);
+
+        self.pending_ops.push(Op::Delete { key_start, key_end });
     }
 
     /// Returns true if the transaction has no pending operations.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.pending_writes.is_empty() && self.pending_deletes.is_empty()
-    }
-
-    /// Returns the number of pending write operations.
-    #[must_use]
-    pub fn write_count(&self) -> usize {
-        self.pending_writes.len()
-    }
-
-    /// Returns the number of pending delete operations.
-    #[must_use]
-    pub fn delete_count(&self) -> usize {
-        self.pending_deletes.len()
-    }
-
-    /// Returns an iterator over the pending write operations.
-    pub fn pending_writes(&self) -> impl Iterator<Item = &(U::K, U::V)> {
-        self.pending_writes.iter()
-    }
-
-    /// Returns an iterator over the pending delete keys.
-    pub fn pending_deletes(&self) -> impl Iterator<Item = &U::K> {
-        self.pending_deletes.iter()
+        self.pending_ops.is_empty()
     }
 
     fn serializer(&self) -> U {
         self.serializer
     }
 
-    /// Commits all pending operations to the storage atomically.
+    /// Commits all pending operations to the storage.
     ///
     /// Either all operations succeed, or none of them are applied.
     /// The transaction is consumed by this operation.
     ///
-    /// This method is only available when the "atomic" feature is enabled.
-    #[cfg(feature = "atomic")]
     /// # Errors
     ///
-    /// Returns a [`DatabaseError`] if the underlying batch operation fails.
+    /// Returns a [`DatabaseError`] if any storage operation fails.
     pub fn commit<S>(
         self,
         storage: &mut S,
-    ) -> Result<Deletes<<S::Serializer as Unifier>::V>, DatabaseError<S>>
+    ) -> Result<Deleted<<S::Serializer as Unifier>::V>, DatabaseError<S>>
     where
-        S: AtomicStorage + Storage<Serializer = U>,
+        S: Storage<Serializer = U>,
     {
         if self.is_empty() {
-            return Ok(Vec::new());
+            return Ok(Vec::with_capacity(0));
         }
 
         // Convert to the format expected by batch_mixed
-        let inserts = self.pending_writes.into_iter().collect();
-        let removes = self.pending_deletes.into_iter().collect();
+        let mut inserts = Vec::new();
+        let mut removes = Vec::new();
+
+        for op in self.pending_ops {
+            match op {
+                Op::Write {
+                    key_start,
+                    key_end,
+                    value_start,
+                    value_end,
+                } => {
+                    // Extract key and value from buffers using extract_range
+                    let key = self.key_data.extract_range(key_start, key_end);
+                    let value = self.value_data.extract_range(value_start, value_end);
+                    inserts.push((key, value));
+                }
+                Op::Delete { key_start, key_end } => {
+                    // Extract key from buffer using extract_range
+                    let key = self.key_data.extract_range(key_start, key_end);
+                    removes.push(key);
+                }
+            }
+        }
 
         storage
             .batch_mixed(inserts, removes)
@@ -204,23 +221,19 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
         drop(self);
     }
 
-    pub fn consume(
-        self,
-    ) -> (
-        impl Iterator<Item = (U::K, U::V)>,
-        impl Iterator<Item = U::K>,
-    ) {
-        (
-            self.pending_writes.into_iter(),
-            self.pending_deletes.into_iter(),
-        )
+    /// Consumes the transaction and returns the raw operation data.
+    ///
+    /// Returns the operations list, key buffer, and value buffer.
+    /// This allows custom processing of the transaction data without assuming specific types.
+    pub fn consume(self) -> (Vec<Op>, U::K, U::V) {
+        (self.pending_ops, self.key_data, self.value_data)
     }
 
     fn prepare_writes<R: DatabaseEntry>(
         &self,
         record: R,
         key: &R::Key,
-    ) -> Result<Writes<U::K, U::V>, U::SerError>
+    ) -> Result<PreparedWrites<U::K, U::V>, U::SerError>
     where
         R::Key: RecordKey<Record = R>,
         IndexBuilder<U>: Indexer<Error = U::SerError>,

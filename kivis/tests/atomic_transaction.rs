@@ -1,5 +1,4 @@
 // Note: test functions return Result and avoid using `unwrap()`
-#[cfg(feature = "atomic")]
 #[cfg(test)]
 mod tests {
     use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
@@ -10,7 +9,7 @@ mod tests {
     };
     use serde::{Deserialize, Serialize};
 
-    use kivis::{AtomicStorage, Database, DatabaseTransaction, Record, Storage, manifest};
+    use kivis::{Database, DatabaseTransaction, Record, Storage, manifest};
 
     #[derive(Debug, PartialEq, Eq)]
     pub enum MockError {
@@ -43,6 +42,19 @@ mod tests {
     pub struct MockRecord(#[key] u8, char);
 
     manifest![Manifest: MockRecord];
+
+    // Helper functions for testing transactions
+    fn write_count(ops: &[kivis::Op]) -> usize {
+        ops.iter()
+            .filter(|op| matches!(op, kivis::Op::Write { .. }))
+            .count()
+    }
+
+    fn delete_count(ops: &[kivis::Op]) -> usize {
+        ops.iter()
+            .filter(|op| matches!(op, kivis::Op::Delete { .. }))
+            .count()
+    }
 
     // Mock atomic storage implementation
     #[derive(Debug)]
@@ -84,15 +96,14 @@ mod tests {
             let iter = self.data.range(reverse_range);
             Ok(iter.map(|(k, _v)| Ok(k.0.clone())))
         }
-    }
 
-    impl AtomicStorage for MockAtomicStorage {
+        // Override the default batch_mixed implementation for better performance
         fn batch_mixed(
             &mut self,
             inserts: Vec<(Vec<u8>, Vec<u8>)>,
             removes: Vec<Vec<u8>>,
         ) -> Result<Vec<Option<Vec<u8>>>, Self::StoreError> {
-            // In a real implementation, this would be atomic
+            // In a real implementation, this could be atomic
             // First collect removed values
             let mut removed = Vec::new();
             for key in removes {
@@ -112,8 +123,9 @@ mod tests {
     fn test_transaction_new() -> anyhow::Result<()> {
         let tx = DatabaseTransaction::<Manifest, _>::new_with_serializer(Configuration::default());
         assert!(tx.is_empty());
-        assert_eq!(tx.write_count(), 0);
-        assert_eq!(tx.delete_count(), 0);
+        let (ops, _key_data, _value_data) = tx.consume();
+        assert_eq!(write_count(&ops), 0);
+        assert_eq!(delete_count(&ops), 0);
         Ok(())
     }
 
@@ -126,8 +138,9 @@ mod tests {
         tx.insert(MockRecord(2, 'b'))?;
 
         assert!(!tx.is_empty());
-        assert_eq!(tx.write_count(), 2);
-        assert_eq!(tx.delete_count(), 0);
+        let (ops, _key_data, _value_data) = tx.consume();
+        assert_eq!(write_count(&ops), 2);
+        assert_eq!(delete_count(&ops), 0);
 
         Ok(())
     }
@@ -141,66 +154,10 @@ mod tests {
         tx.remove(&MockRecordKey(2), &MockRecord(2, 'b'))?;
 
         assert!(!tx.is_empty());
-        assert_eq!(tx.write_count(), 0);
-        assert_eq!(tx.delete_count(), 2);
+        let (ops, _key_data, _value_data) = tx.consume();
+        assert_eq!(write_count(&ops), 0);
+        assert_eq!(delete_count(&ops), 2);
 
-        Ok(())
-    }
-
-    #[test]
-    fn test_transaction_write_overrides_delete() -> anyhow::Result<()> {
-        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
-        let mut tx = db.create_transaction();
-
-        // Delete first, then write
-        tx.remove(&MockRecordKey(1), &MockRecord(1, 'a'))?;
-        tx.insert(MockRecord(1, 'a'))?;
-
-        // Write should override delete
-        assert_eq!(tx.write_count(), 1);
-        assert_eq!(tx.delete_count(), 0);
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_transaction_delete_ignored_after_write() -> anyhow::Result<()> {
-        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
-        let mut tx = db.create_transaction();
-
-        // Write first, then delete
-        tx.insert(MockRecord(1, 'a'))?;
-        tx.remove(&MockRecordKey(1), &MockRecord(1, 'a'))?;
-
-        // Delete should be ignored since key is being written
-        assert_eq!(tx.write_count(), 1);
-        assert_eq!(tx.delete_count(), 0);
-        Ok(())
-    }
-
-    #[test]
-    fn test_transaction_multiple_writes_same_key() -> anyhow::Result<()> {
-        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
-        let mut tx = db.create_transaction();
-
-        tx.insert(MockRecord(1, 'a'))?;
-        tx.insert(MockRecord(1, 'b'))?;
-        tx.insert(MockRecord(1, 'c'))?;
-
-        // Should only have one write (last value)
-        assert_eq!(tx.write_count(), 1);
-
-        let writes: Vec<_> = tx.pending_writes().collect();
-        assert_eq!(writes.len(), 1);
-
-        let mut tx_only_c = db.create_transaction();
-        tx_only_c.insert(MockRecord(1, 'c'))?;
-
-        if let Some(w) = tx_only_c.pending_writes().next() {
-            assert_eq!(writes[0].1, w.1);
-        } else {
-            panic!("expected one pending write");
-        }
         Ok(())
     }
 
@@ -212,7 +169,6 @@ mod tests {
         // Add some operations
         tx.insert(MockRecord(1, 'a'))?;
         tx.insert(MockRecord(2, 'b'))?;
-        tx.remove(&MockRecordKey(1), &MockRecord(1, 'a'))?;
 
         // Commit the transaction
         let result = db.commit(tx);

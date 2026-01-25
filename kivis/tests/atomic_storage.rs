@@ -1,4 +1,4 @@
-// Example demonstrating the AtomicStorage trait
+// Example demonstrating the Storage trait with batch_mixed
 #[cfg(feature = "atomic")]
 #[cfg(test)]
 mod atomic_storage_example {
@@ -6,7 +6,7 @@ mod atomic_storage_example {
         config::Configuration,
         error::{DecodeError, EncodeError},
     };
-    use kivis::{AtomicStorage, Storage};
+    use kivis::Storage;
     use std::{cmp::Reverse, collections::BTreeMap, error::Error, fmt::Display, ops::Range};
 
     // Example error type for our mock atomic storage
@@ -94,9 +94,8 @@ mod atomic_storage_example {
             let iter = self.data.range(reverse_range);
             Ok(iter.map(|(k, _v)| Ok(k.0.clone())))
         }
-    }
 
-    impl AtomicStorage for MockAtomicStorage {
+        // Override batch_mixed for atomic behavior
         fn batch_mixed(
             &mut self,
             inserts: Vec<(Vec<u8>, Vec<u8>)>,

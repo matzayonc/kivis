@@ -51,9 +51,16 @@ pub trait Indexer {
     fn add(&mut self, discriminator: u8, value: &impl UnifiableRef) -> Result<(), Self::Error>;
 }
 
-pub trait UnifierData {
+pub trait UnifierData: Default {
     fn combine(&mut self, other: Self);
     fn next(&mut self);
+
+    fn buffer(&mut self, to_append: Self) -> (usize, usize);
+
+    /// Extracts a range from the data as a new instance.
+    /// This is used to extract individual values from buffered data.
+    #[must_use]
+    fn extract_range(&self, start: usize, end: usize) -> Self;
 
     #[must_use]
     fn duplicate(&self) -> Self
@@ -83,6 +90,16 @@ impl UnifierData for Vec<u8> {
         // If all bytes were 255, we need to add a new byte
         self.push(0);
     }
+
+    fn buffer(&mut self, to_append: Self) -> (usize, usize) {
+        let start = self.len();
+        self.extend(to_append);
+        (start, self.len())
+    }
+
+    fn extract_range(&self, start: usize, end: usize) -> Self {
+        self[start..end].to_vec()
+    }
 }
 
 #[cfg(feature = "std")]
@@ -104,6 +121,16 @@ impl UnifierData for alloc::string::String {
         };
 
         *self = next_valid_string;
+    }
+
+    fn buffer(&mut self, to_append: Self) -> (usize, usize) {
+        let start = self.len();
+        self.push_str(&to_append);
+        (start, self.len())
+    }
+
+    fn extract_range(&self, start: usize, end: usize) -> Self {
+        self[start..end].to_string()
     }
 }
 
