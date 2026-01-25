@@ -55,14 +55,12 @@ pub trait UnifierData {
     /// The owned type for this data (e.g., Vec<u8> for [u8], String for str)
     type Owned: Default + Clone + AsRef<Self>;
 
-    /// Combines data from source into the buffer.
-    fn combine(buffer: &mut Self::Owned, source: Self::Owned);
-
     /// Increments the buffer to the next value.
     fn next(buffer: &mut Self::Owned);
 
-    /// Appends data to the buffer and returns the start and end indices.
-    fn buffer(buffer: &mut Self::Owned, to_append: Self::Owned) -> (usize, usize);
+    /// Appends multiple parts to the buffer and returns the start and end indices.
+    /// This allows composing keys from multiple parts without intermediate allocations.
+    fn extend(buffer: &mut Self::Owned, parts: &[&Self]) -> (usize, usize);
 
     /// Extracts a range from the owned buffer as a reference.
     /// This is used to extract individual values from buffered data.
@@ -73,19 +71,15 @@ pub trait UnifierData {
     #[must_use]
     fn to_owned(data: &Self) -> Self::Owned;
 
-    /// Duplicates an owned value.
+    /// Duplicates data by converting to owned.
     #[must_use]
-    fn duplicate(data: &Self::Owned) -> Self::Owned {
-        data.clone()
+    fn duplicate(data: &Self) -> Self::Owned {
+        Self::to_owned(data)
     }
 }
 
 impl UnifierData for [u8] {
     type Owned = Vec<u8>;
-
-    fn combine(buffer: &mut Self::Owned, source: Self::Owned) {
-        buffer.extend(source);
-    }
 
     fn next(buffer: &mut Self::Owned) {
         for i in (0..buffer.len()).rev() {
@@ -102,9 +96,11 @@ impl UnifierData for [u8] {
         buffer.push(0);
     }
 
-    fn buffer(buffer: &mut Self::Owned, to_append: Self::Owned) -> (usize, usize) {
+    fn extend(buffer: &mut Self::Owned, parts: &[&Self]) -> (usize, usize) {
         let start = buffer.len();
-        buffer.extend(to_append);
+        for part in parts {
+            buffer.extend_from_slice(part);
+        }
         (start, buffer.len())
     }
 
@@ -121,10 +117,6 @@ impl UnifierData for [u8] {
 impl UnifierData for str {
     type Owned = alloc::string::String;
 
-    fn combine(buffer: &mut Self::Owned, source: Self::Owned) {
-        buffer.push_str(&source);
-    }
-
     fn next(buffer: &mut Self::Owned) {
         let mut bytes = buffer.as_bytes().to_vec();
 
@@ -140,9 +132,11 @@ impl UnifierData for str {
         *buffer = next_valid_string;
     }
 
-    fn buffer(buffer: &mut Self::Owned, to_append: Self::Owned) -> (usize, usize) {
+    fn extend(buffer: &mut Self::Owned, parts: &[&Self]) -> (usize, usize) {
         let start = buffer.len();
-        buffer.push_str(&to_append);
+        for part in parts {
+            buffer.push_str(part);
+        }
         (start, buffer.len())
     }
 
