@@ -59,17 +59,17 @@ impl Storage for MemoryStorage {
     type Serializer = Configuration;
     type StoreError = MemoryStorageError;
 
-    fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
-        self.insert(Reverse(key), value);
+    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::StoreError> {
+        self.insert(Reverse(key.to_vec()), value.to_vec());
         Ok(())
     }
 
-    fn get(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-        Ok(self.get(&Reverse(key)).cloned())
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+        Ok(self.get(&Reverse(key.to_vec())).cloned())
     }
 
-    fn remove(&mut self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-        Ok(self.remove(&Reverse(key)))
+    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+        Ok(self.remove(&Reverse(key.to_vec())))
     }
 
     fn iter_keys(

@@ -133,7 +133,7 @@ where
             .map_err(|e| DatabaseError::Storage(e.into()))?;
         let Some(value) = self
             .store
-            .get(serialized_key)
+            .get(serialized_key.as_ref())
             .map_err(DatabaseError::Storage)?
         else {
             // let Some(fallback) = &self.fallback else {
@@ -291,13 +291,15 @@ where
             .serializer
             .serialize_key(WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX)))
             .map_err(|e| DatabaseError::Storage(e.into()))?;
-        let mut end = start.duplicate();
-        start.combine(
+        let mut end = <S::Serializer as Unifier>::K::duplicate(&start);
+        <S::Serializer as Unifier>::K::combine(
+            &mut start,
             self.serializer()
                 .serialize_key(range.start)
                 .map_err(|e| DatabaseError::Storage(e.into()))?,
         );
-        end.combine(
+        <S::Serializer as Unifier>::K::combine(
+            &mut end,
             self.serializer()
                 .serialize_key(range.end)
                 .map_err(|e| DatabaseError::Storage(e.into()))?,
@@ -330,19 +332,19 @@ where
             .serializer
             .serialize_key(index_prelude)
             .map_err(|e| DatabaseError::Storage(e.into()))?;
-        let mut end = start.duplicate();
+        let mut end = <S::Serializer as Unifier>::K::duplicate(&start);
 
         let start_serialized = self
             .serializer
             .serialize_key(index_key)
             .map_err(|e| DatabaseError::Storage(e.into()))?;
         let end_serialized = {
-            let mut end_bytes = start_serialized.duplicate();
-            end_bytes.next();
+            let mut end_bytes = <S::Serializer as Unifier>::K::duplicate(&start_serialized);
+            <S::Serializer as Unifier>::K::next(&mut end_bytes);
             end_bytes
         };
-        start.combine(start_serialized);
-        end.combine(end_serialized);
+        <S::Serializer as Unifier>::K::combine(&mut start, start_serialized);
+        <S::Serializer as Unifier>::K::combine(&mut end, end_serialized);
 
         let raw_iter = self
             .store
@@ -365,10 +367,10 @@ where
     /// Helper function to process iterator results and get deserialized values
     fn process_iter_result<T: Unifiable>(
         &self,
-        result: Result<<S::Serializer as Unifier>::K, S::StoreError>,
+        result: Result<<<S::Serializer as Unifier>::K as UnifierData>::Owned, S::StoreError>,
     ) -> Result<T, DatabaseError<S>> {
         let key = result.map_err(DatabaseError::Storage)?;
-        let value = match self.store.get(key) {
+        let value = match self.store.get(key.as_ref()) {
             Ok(Some(data)) => data,
             Ok(None) => {
                 return Err(DatabaseError::Internal(

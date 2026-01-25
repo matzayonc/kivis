@@ -80,12 +80,12 @@ impl CsvSerializer {
 }
 
 impl Unifier for CsvSerializer {
-    type K = String;
-    type V = String;
+    type K = str;
+    type V = str;
     type SerError = csv::Error;
     type DeError = csv::Error;
 
-    fn serialize_key(&self, data: impl Serialize) -> Result<Self::K, Self::SerError> {
+    fn serialize_key(&self, data: impl Serialize) -> Result<String, Self::SerError> {
         let mut writer = csv::WriterBuilder::new()
             .has_headers(false)
             .quote_style(csv::QuoteStyle::Necessary)
@@ -102,7 +102,7 @@ impl Unifier for CsvSerializer {
         Ok(Self::encode_for_filename(&result))
     }
 
-    fn serialize_value(&self, data: impl Serialize) -> Result<Self::V, Self::SerError> {
+    fn serialize_value(&self, data: impl Serialize) -> Result<String, Self::SerError> {
         let mut writer = csv::WriterBuilder::new()
             .has_headers(false)
             .quote_style(csv::QuoteStyle::Necessary)
@@ -119,7 +119,7 @@ impl Unifier for CsvSerializer {
         Ok(Self::encode_for_filename(&result))
     }
 
-    fn deserialize_key<T: DeserializeOwned>(&self, data: &Self::K) -> Result<T, Self::DeError> {
+    fn deserialize_key<T: DeserializeOwned>(&self, data: &String) -> Result<T, Self::DeError> {
         let decoded = Self::decode_from_filename(data).ok_or_else(|| {
             csv::Error::from(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -139,7 +139,7 @@ impl Unifier for CsvSerializer {
         })?
     }
 
-    fn deserialize_value<T: DeserializeOwned>(&self, data: &Self::V) -> Result<T, Self::DeError> {
+    fn deserialize_value<T: DeserializeOwned>(&self, data: &String) -> Result<T, Self::DeError> {
         let decoded = Self::decode_from_filename(data).ok_or_else(|| {
             csv::Error::from(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -189,14 +189,14 @@ impl Storage for FileStore {
     type Serializer = CsvSerializer;
     type StoreError = FileStoreError;
 
-    fn insert(&mut self, key: String, value: String) -> Result<(), Self::StoreError> {
-        let file_path = self.key_to_filename(&key);
+    fn insert(&mut self, key: &str, value: &str) -> Result<(), Self::StoreError> {
+        let file_path = self.key_to_filename(key);
         fs::write(file_path, value)?;
         Ok(())
     }
 
-    fn get(&self, key: String) -> Result<Option<String>, Self::StoreError> {
-        let file_path = self.key_to_filename(&key);
+    fn get(&self, key: &str) -> Result<Option<String>, Self::StoreError> {
+        let file_path = self.key_to_filename(key);
         match fs::read_to_string(file_path) {
             Ok(data) => Ok(Some(data)),
             Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -204,8 +204,8 @@ impl Storage for FileStore {
         }
     }
 
-    fn remove(&mut self, key: String) -> Result<Option<String>, Self::StoreError> {
-        let file_path = self.key_to_filename(&key);
+    fn remove(&mut self, key: &str) -> Result<Option<String>, Self::StoreError> {
+        let file_path = self.key_to_filename(key);
         match fs::read_to_string(&file_path) {
             Ok(data) => {
                 fs::remove_file(file_path)?;

@@ -74,17 +74,17 @@ mod tests {
         type Serializer = Configuration;
         type StoreError = MockError;
 
-        fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
-            self.data.insert(Reverse(key), value);
+        fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::StoreError> {
+            self.data.insert(Reverse(key.to_vec()), value.to_vec());
             Ok(())
         }
 
-        fn get(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-            Ok(self.data.get(&Reverse(key)).cloned())
+        fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+            Ok(self.data.get(&Reverse(key.to_vec())).cloned())
         }
 
-        fn remove(&mut self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-            Ok(self.data.remove(&Reverse(key)))
+        fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+            Ok(self.data.remove(&Reverse(key.to_vec())))
         }
 
         fn iter_keys(
@@ -100,19 +100,19 @@ mod tests {
         // Override the default batch_mixed implementation for better performance
         fn batch_mixed(
             &mut self,
-            inserts: Vec<(Vec<u8>, Vec<u8>)>,
-            removes: Vec<Vec<u8>>,
+            inserts: Vec<(&[u8], &[u8])>,
+            removes: Vec<&[u8]>,
         ) -> Result<Vec<Option<Vec<u8>>>, Self::StoreError> {
             // In a real implementation, this could be atomic
             // First collect removed values
             let mut removed = Vec::new();
             for key in removes {
-                removed.push(self.data.remove(&Reverse(key)));
+                removed.push(self.data.remove(&Reverse(key.to_vec())));
             }
 
             // Then insert new values
             for (key, value) in inserts {
-                self.data.insert(Reverse(key), value);
+                self.data.insert(Reverse(key.to_vec()), value.to_vec());
             }
 
             Ok(removed)

@@ -51,68 +51,85 @@ pub trait Indexer {
     fn add(&mut self, discriminator: u8, value: &impl UnifiableRef) -> Result<(), Self::Error>;
 }
 
-pub trait UnifierData: Default {
-    fn combine(&mut self, other: Self);
-    fn next(&mut self);
+pub trait UnifierData {
+    /// The owned type for this data (e.g., Vec<u8> for [u8], String for str)
+    type Owned: Default + Clone + AsRef<Self>;
 
-    fn buffer(&mut self, to_append: Self) -> (usize, usize);
+    /// Combines data from source into the buffer.
+    fn combine(buffer: &mut Self::Owned, source: Self::Owned);
 
-    /// Extracts a range from the data as a new instance.
+    /// Increments the buffer to the next value.
+    fn next(buffer: &mut Self::Owned);
+
+    /// Appends data to the buffer and returns the start and end indices.
+    fn buffer(buffer: &mut Self::Owned, to_append: Self::Owned) -> (usize, usize);
+
+    /// Extracts a range from the owned buffer as a reference.
     /// This is used to extract individual values from buffered data.
     #[must_use]
-    fn extract_range(&self, start: usize, end: usize) -> Self;
+    fn extract_range(buffer: &Self::Owned, start: usize, end: usize) -> &Self;
 
+    /// Converts a reference to an owned value.
     #[must_use]
-    fn duplicate(&self) -> Self
-    where
-        Self: Clone,
-    {
-        self.clone()
+    fn to_owned(data: &Self) -> Self::Owned;
+
+    /// Duplicates an owned value.
+    #[must_use]
+    fn duplicate(data: &Self::Owned) -> Self::Owned {
+        data.clone()
     }
 }
 
-impl UnifierData for Vec<u8> {
-    fn combine(&mut self, other: Self) {
-        self.extend(other);
+impl UnifierData for [u8] {
+    type Owned = Vec<u8>;
+
+    fn combine(buffer: &mut Self::Owned, source: Self::Owned) {
+        buffer.extend(source);
     }
 
-    fn next(&mut self) {
-        for i in (0..self.len()).rev() {
+    fn next(buffer: &mut Self::Owned) {
+        for i in (0..buffer.len()).rev() {
             // Add one if possible
-            if self[i] < 255 {
-                self[i] += 1;
+            if buffer[i] < 255 {
+                buffer[i] += 1;
                 return;
             }
             // Otherwise, set to zero and carry over
-            self[i] = 0;
+            buffer[i] = 0;
         }
 
         // If all bytes were 255, we need to add a new byte
-        self.push(0);
+        buffer.push(0);
     }
 
-    fn buffer(&mut self, to_append: Self) -> (usize, usize) {
-        let start = self.len();
-        self.extend(to_append);
-        (start, self.len())
+    fn buffer(buffer: &mut Self::Owned, to_append: Self::Owned) -> (usize, usize) {
+        let start = buffer.len();
+        buffer.extend(to_append);
+        (start, buffer.len())
     }
 
-    fn extract_range(&self, start: usize, end: usize) -> Self {
-        self[start..end].to_vec()
+    fn extract_range(buffer: &Self::Owned, start: usize, end: usize) -> &Self {
+        &buffer[start..end]
+    }
+
+    fn to_owned(data: &Self) -> Self::Owned {
+        data.to_vec()
     }
 }
 
 #[cfg(feature = "std")]
-impl UnifierData for alloc::string::String {
-    fn combine(&mut self, other: Self) {
-        self.push_str(&other);
+impl UnifierData for str {
+    type Owned = alloc::string::String;
+
+    fn combine(buffer: &mut Self::Owned, source: Self::Owned) {
+        buffer.push_str(&source);
     }
 
-    fn next(&mut self) {
-        let mut bytes = self.as_bytes().to_vec();
+    fn next(buffer: &mut Self::Owned) {
+        let mut bytes = buffer.as_bytes().to_vec();
 
         let next_valid_string = loop {
-            bytes.next();
+            <[u8]>::next(&mut bytes);
 
             if let Ok(parsed_back) = alloc::string::String::from_utf8(bytes.clone()) {
                 // If the bytes are not valid UTF-8, increment and try again.
@@ -120,17 +137,21 @@ impl UnifierData for alloc::string::String {
             }
         };
 
-        *self = next_valid_string;
+        *buffer = next_valid_string;
     }
 
-    fn buffer(&mut self, to_append: Self) -> (usize, usize) {
-        let start = self.len();
-        self.push_str(&to_append);
-        (start, self.len())
+    fn buffer(buffer: &mut Self::Owned, to_append: Self::Owned) -> (usize, usize) {
+        let start = buffer.len();
+        buffer.push_str(&to_append);
+        (start, buffer.len())
     }
 
-    fn extract_range(&self, start: usize, end: usize) -> Self {
-        self[start..end].to_string()
+    fn extract_range(buffer: &Self::Owned, start: usize, end: usize) -> &Self {
+        &buffer[start..end]
+    }
+
+    fn to_owned(data: &Self) -> Self::Owned {
+        data.to_string()
     }
 }
 
@@ -141,8 +162,8 @@ impl<T: Serialize + DeserializeOwned> Unifiable for T {}
 impl<T: Serialize + DeserializeOwned + Clone> UnifiableRef for T {}
 
 pub trait Unifier {
-    type K: UnifierData + Clone + PartialEq + Eq;
-    type V: UnifierData + Clone + PartialEq + Eq;
+    type K: UnifierData + ?Sized;
+    type V: UnifierData + ?Sized;
     type SerError: Debug;
     type DeError: Debug;
 
@@ -150,13 +171,19 @@ pub trait Unifier {
     /// # Errors
     ///
     /// Returns an error if serialization fails.
-    fn serialize_key(&self, data: impl Unifiable) -> Result<Self::K, Self::SerError>;
+    fn serialize_key(
+        &self,
+        data: impl Unifiable,
+    ) -> Result<<Self::K as UnifierData>::Owned, Self::SerError>;
 
     /// Serializes a borrowed key.
     /// # Errors
     ///
     /// Returns an error if serialization fails.
-    fn serialize_key_ref<R: UnifiableRef>(&self, data: &R) -> Result<Self::K, Self::SerError> {
+    fn serialize_key_ref<R: UnifiableRef>(
+        &self,
+        data: &R,
+    ) -> Result<<Self::K as UnifierData>::Owned, Self::SerError> {
         self.serialize_key(data.clone())
     }
 
@@ -164,13 +191,19 @@ pub trait Unifier {
     /// # Errors
     ///
     /// Returns an error if serialization fails.
-    fn serialize_value(&self, data: impl Unifiable) -> Result<Self::V, Self::SerError>;
+    fn serialize_value(
+        &self,
+        data: impl Unifiable,
+    ) -> Result<<Self::V as UnifierData>::Owned, Self::SerError>;
 
     /// Serializes a borrowed value.
     /// # Errors
     ///
     /// Returns an error if serialization fails.
-    fn serialize_value_ref<R: UnifiableRef>(&self, data: &R) -> Result<Self::V, Self::SerError> {
+    fn serialize_value_ref<R: UnifiableRef>(
+        &self,
+        data: &R,
+    ) -> Result<<Self::V as UnifierData>::Owned, Self::SerError> {
         self.serialize_value(data.clone())
     }
 
@@ -178,45 +211,51 @@ pub trait Unifier {
     /// # Errors
     ///
     /// Returns an error if deserialization fails.
-    fn deserialize_key<T: Unifiable>(&self, data: &Self::K) -> Result<T, Self::DeError>;
+    fn deserialize_key<T: Unifiable>(
+        &self,
+        data: &<Self::K as UnifierData>::Owned,
+    ) -> Result<T, Self::DeError>;
 
     /// Deserializes a value from the given data.
     /// # Errors
     ///
     /// Returns an error if deserialization fails.
-    fn deserialize_value<T: Unifiable>(&self, data: &Self::V) -> Result<T, Self::DeError>;
+    fn deserialize_value<T: Unifiable>(
+        &self,
+        data: &<Self::V as UnifierData>::Owned,
+    ) -> Result<T, Self::DeError>;
 }
 
 impl Unifier for Configuration {
-    type K = Vec<u8>;
-    type V = Vec<u8>;
+    type K = [u8];
+    type V = [u8];
     type SerError = EncodeError;
     type DeError = DecodeError;
 
-    fn serialize_key(&self, data: impl Serialize) -> Result<Self::K, Self::SerError> {
+    fn serialize_key(&self, data: impl Serialize) -> Result<Vec<u8>, Self::SerError> {
         encode_to_vec(data, Self::default())
     }
 
-    fn serialize_value(&self, data: impl Serialize) -> Result<Self::V, Self::SerError> {
+    fn serialize_value(&self, data: impl Serialize) -> Result<Vec<u8>, Self::SerError> {
         encode_to_vec(data, Self::default())
     }
 
-    fn deserialize_key<T: DeserializeOwned>(&self, data: &Self::K) -> Result<T, Self::DeError> {
+    fn deserialize_key<T: DeserializeOwned>(&self, data: &Vec<u8>) -> Result<T, Self::DeError> {
         Ok(decode_from_slice(data, Self::default())?.0)
     }
 
-    fn deserialize_value<T: DeserializeOwned>(&self, data: &Self::V) -> Result<T, Self::DeError> {
+    fn deserialize_value<T: DeserializeOwned>(&self, data: &Vec<u8>) -> Result<T, Self::DeError> {
         Ok(decode_from_slice(data, Self::default())?.0)
     }
 }
 
-pub struct IndexBuilder<U: Unifier>(Vec<(u8, U::K)>, U);
+pub struct IndexBuilder<U: Unifier>(Vec<(u8, <U::K as UnifierData>::Owned)>, U);
 impl<U: Unifier> IndexBuilder<U> {
     pub fn new(serializer: U) -> Self {
         Self(Vec::new(), serializer)
     }
 
-    pub fn into_index_keys(self) -> Vec<(u8, U::K)> {
+    pub fn into_index_keys(self) -> Vec<(u8, <U::K as UnifierData>::Owned)> {
         self.0
     }
 }

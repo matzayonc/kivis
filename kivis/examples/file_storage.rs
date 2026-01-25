@@ -80,14 +80,14 @@ impl Storage for FileStore {
     type Serializer = Configuration;
     type StoreError = FileStoreError;
 
-    fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
-        let file_path = self.key_to_filename(&key);
+    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::StoreError> {
+        let file_path = self.key_to_filename(key);
         fs::write(file_path, value).map_err(|_| FileStoreError::Io)?;
         Ok(())
     }
 
-    fn get(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-        let file_path = self.key_to_filename(&key);
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+        let file_path = self.key_to_filename(key);
         match fs::read(file_path) {
             Ok(data) => Ok(Some(data)),
             Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
@@ -95,8 +95,8 @@ impl Storage for FileStore {
         }
     }
 
-    fn remove(&mut self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-        let file_path = self.key_to_filename(&key);
+    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+        let file_path = self.key_to_filename(key);
         match fs::read(&file_path) {
             Ok(data) => {
                 fs::remove_file(file_path).map_err(|_| FileStoreError::Io)?;

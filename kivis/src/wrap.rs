@@ -2,7 +2,12 @@
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
-use crate::{DatabaseEntry, Unifier};
+use crate::{DatabaseEntry, Unifier, UnifierData};
+
+type KeyRange<U> = (
+    <<U as Unifier>::K as UnifierData>::Owned,
+    <<U as Unifier>::K as UnifierData>::Owned,
+);
 
 /// Internal enum representing different subtables within a database scope.
 #[derive(Debug)]
@@ -77,7 +82,7 @@ pub(crate) struct Wrap<R> {
 pub(crate) fn wrap<R: DatabaseEntry, U: Unifier>(
     item_key: &R::Key,
     unifier: &U,
-) -> Result<U::K, U::SerError> {
+) -> Result<<U::K as UnifierData>::Owned, U::SerError> {
     let wrapped = Wrap {
         prelude: WrapPrelude {
             scope: R::SCOPE,
@@ -90,7 +95,7 @@ pub(crate) fn wrap<R: DatabaseEntry, U: Unifier>(
 
 pub(crate) fn empty_wrap<R: DatabaseEntry, U: Unifier>(
     config: &U,
-) -> Result<(U::K, U::K), U::SerError> {
+) -> Result<KeyRange<U>, U::SerError> {
     let start = Wrap {
         prelude: WrapPrelude {
             scope: R::SCOPE,

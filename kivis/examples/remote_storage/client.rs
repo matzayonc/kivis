@@ -98,10 +98,10 @@ impl Storage for Client {
     type Serializer = bincode::config::Configuration;
     type StoreError = ClientError;
 
-    fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
+    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::StoreError> {
         let request = InsertRequest {
-            key: hex::encode(&key),
-            value: hex::encode(&value),
+            key: hex::encode(key),
+            value: hex::encode(value),
         };
 
         let response = self
@@ -121,8 +121,8 @@ impl Storage for Client {
         }
     }
 
-    fn get(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-        let key_hex = hex::encode(&key);
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+        let key_hex = hex::encode(key);
 
         let response = self
             .client
@@ -148,8 +148,8 @@ impl Storage for Client {
         }
     }
 
-    fn remove(&mut self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-        let key_hex = hex::encode(&key);
+    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+        let key_hex = hex::encode(key);
 
         let response = self
             .client
