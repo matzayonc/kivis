@@ -2,9 +2,6 @@ mod incrementable_types;
 mod schema;
 mod storage;
 
-#[cfg(feature = "atomic")]
-mod atomic;
-
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 use bincode::config::Configuration;
@@ -14,9 +11,6 @@ use serde::{Serialize, de::DeserializeOwned};
 
 pub use schema::*;
 pub use storage::*;
-
-#[cfg(feature = "atomic")]
-pub use atomic::*;
 
 use crate::{Database, DatabaseError};
 

@@ -9,6 +9,9 @@ use super::Debug;
 type KeysIteratorItem<S> =
     Result<<<S as Storage>::Serializer as Unifier>::K, <S as Storage>::StoreError>;
 
+type Key<S> = <<S as Storage>::Serializer as Unifier>::K;
+type Value<S> = <<S as Storage>::Serializer as Unifier>::V;
+
 /// A trait defining a storage backend for the database.
 ///
 /// The storage backend is responsible for storing and retrieving records and their associated indexes.
@@ -69,4 +72,39 @@ pub trait Storage {
     ) -> Result<impl Iterator<Item = KeysIteratorItem<Self>>, Self::StoreError>
     where
         Self: Sized;
+
+    /// Execute mixed insert and delete operations.
+    ///
+    /// Default implementation applies operations one by one (not atomic).
+    /// Storage backends can override this method to provide atomic behavior.
+    ///
+    /// # Arguments
+    /// * `inserts` - A vector of key-value pairs to insert
+    /// * `removes` - A vector of keys to remove
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(Vec<Option<V>>)` with the previous values (if any) for removed keys,
+    /// or an error if any operation fails.
+    ///
+    /// # Errors
+    /// Returns an error if any of the insert or remove operations fail.
+    fn batch_mixed(
+        &mut self,
+        inserts: Vec<(Key<Self>, Value<Self>)>,
+        removes: Vec<Key<Self>>,
+    ) -> Result<Vec<Option<Value<Self>>>, Self::StoreError> {
+        // Default implementation: apply operations one by one (not atomic)
+        let mut removed = Vec::new();
+
+        for key in removes {
+            removed.push(self.remove(key)?);
+        }
+
+        for (key, value) in inserts {
+            self.insert(key, value)?;
+        }
+
+        Ok(removed)
+    }
 }
