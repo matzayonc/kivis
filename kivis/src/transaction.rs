@@ -21,8 +21,10 @@ pub enum Op {
     },
 }
 
-type Deleted<V> = Vec<Option<V>>;
-type PreparedWrites<K, V> = Vec<(K, V)>;
+type PreparedWrites<U> = Vec<(
+    <<U as Unifier>::K as UnifierData>::Owned,
+    <<U as Unifier>::V as UnifierData>::Owned,
+)>;
 
 /// A database transaction that accumulates low-level byte operations (writes and deletes)
 /// without immediately applying them to storage.
@@ -32,9 +34,9 @@ pub struct DatabaseTransaction<Manifest, U: Unifier> {
     /// Pending operations: writes and deletes
     pending_ops: Vec<Op>,
     /// Key data buffer
-    key_data: U::K,
+    key_data: <U::K as UnifierData>::Owned,
     /// Value data buffer
-    value_data: U::V,
+    value_data: <U::V as UnifierData>::Owned,
     /// Serialization configuration
     serializer: U,
     _marker: PhantomData<Manifest>,
@@ -45,8 +47,8 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     pub fn new<S: Storage<Serializer = U>>(database: &Database<S, M>) -> Self {
         Self {
             pending_ops: Vec::new(),
-            key_data: U::K::default(),
-            value_data: U::V::default(),
+            key_data: <U::K as UnifierData>::Owned::default(),
+            value_data: <U::V as UnifierData>::Owned::default(),
             serializer: database.serializer,
             _marker: PhantomData,
         }
@@ -57,8 +59,8 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     pub fn new_with_serializer(serializer: U) -> Self {
         Self {
             pending_ops: Vec::new(),
-            key_data: U::K::default(),
-            value_data: U::V::default(),
+            key_data: <U::K as UnifierData>::Owned::default(),
+            value_data: <U::V as UnifierData>::Owned::default(),
             serializer,
             _marker: PhantomData,
         }
@@ -132,9 +134,9 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     ///
     /// If the same key is written multiple times, only the last value is kept.
     /// If a key is both written and deleted, the write takes precedence.
-    fn write(&mut self, key: U::K, value: U::V) {
-        let (key_start, key_end) = self.key_data.buffer(key);
-        let (value_start, value_end) = self.value_data.buffer(value);
+    fn write(&mut self, key: <U::K as UnifierData>::Owned, value: <U::V as UnifierData>::Owned) {
+        let (key_start, key_end) = U::K::buffer(&mut self.key_data, key);
+        let (value_start, value_end) = U::V::buffer(&mut self.value_data, value);
 
         // Add the new write operation
         self.pending_ops.push(Op::Write {
@@ -149,8 +151,8 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     ///
     /// If a key is both written and deleted, the write takes precedence
     /// (so this delete will be ignored if the key was already written).
-    fn delete(&mut self, key: U::K) {
-        let (key_start, key_end) = self.key_data.buffer(key);
+    fn delete(&mut self, key: <U::K as UnifierData>::Owned) {
+        let (key_start, key_end) = U::K::buffer(&mut self.key_data, key);
 
         self.pending_ops.push(Op::Delete { key_start, key_end });
     }
@@ -173,10 +175,7 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if any storage operation fails.
-    pub fn commit<S>(
-        self,
-        storage: &mut S,
-    ) -> Result<Deleted<<S::Serializer as Unifier>::V>, DatabaseError<S>>
+    pub fn commit<S>(self, storage: &mut S) -> Result<crate::Deleted<S>, DatabaseError<S>>
     where
         S: Storage<Serializer = U>,
     {
@@ -197,13 +196,13 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
                     value_end,
                 } => {
                     // Extract key and value from buffers using extract_range
-                    let key = self.key_data.extract_range(key_start, key_end);
-                    let value = self.value_data.extract_range(value_start, value_end);
+                    let key = U::K::extract_range(&self.key_data, key_start, key_end);
+                    let value = U::V::extract_range(&self.value_data, value_start, value_end);
                     inserts.push((key, value));
                 }
                 Op::Delete { key_start, key_end } => {
                     // Extract key from buffer using extract_range
-                    let key = self.key_data.extract_range(key_start, key_end);
+                    let key = U::K::extract_range(&self.key_data, key_start, key_end);
                     removes.push(key);
                 }
             }
@@ -225,7 +224,13 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     ///
     /// Returns the operations list, key buffer, and value buffer.
     /// This allows custom processing of the transaction data without assuming specific types.
-    pub fn consume(self) -> (Vec<Op>, U::K, U::V) {
+    pub fn consume(
+        self,
+    ) -> (
+        Vec<Op>,
+        <U::K as UnifierData>::Owned,
+        <U::V as UnifierData>::Owned,
+    ) {
         (self.pending_ops, self.key_data, self.value_data)
     }
 
@@ -233,7 +238,7 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
         &self,
         record: R,
         key: &R::Key,
-    ) -> Result<PreparedWrites<U::K, U::V>, U::SerError>
+    ) -> Result<PreparedWrites<U>, U::SerError>
     where
         R::Key: RecordKey<Record = R>,
         IndexBuilder<U>: Indexer<Error = U::SerError>,
@@ -250,14 +255,14 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
             let mut entry = self
                 .serializer()
                 .serialize_key(WrapPrelude::new::<R>(Subtable::Index(discriminator)))?;
-            entry.combine(index_key);
+            U::K::combine(&mut entry, index_key);
 
             // Indexes might be repeated, so we need to ensure that the key is unique.
             // TODO: Add a way to declare as unique and deduplicate by provided hash.
-            entry.combine(key_hash.duplicate());
+            U::K::combine(&mut entry, U::K::duplicate(&key_hash));
 
             // Index entries store the primary key as the value (serialized as a value type)
-            writes.push((entry, key_value.duplicate()));
+            writes.push((entry, U::V::duplicate(&key_value)));
         }
 
         let key = wrap::<R, U>(key, &self.serializer())?;
@@ -271,7 +276,7 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
         &self,
         record: &R,
         key: &R::Key,
-    ) -> Result<Vec<U::K>, U::SerError>
+    ) -> Result<Vec<<U::K as UnifierData>::Owned>, U::SerError>
     where
         R::Key: RecordKey<Record = R>,
         IndexBuilder<U>: Indexer<Error = U::SerError>,
@@ -285,9 +290,9 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
             let mut entry = self
                 .serializer()
                 .serialize_key(WrapPrelude::new::<R>(Subtable::Index(discriminator)))?;
-            entry.combine(index_key);
+            U::K::combine(&mut entry, index_key);
             let key_bytes = self.serializer().serialize_key_ref(key)?;
-            entry.combine(key_bytes);
+            U::K::combine(&mut entry, key_bytes);
 
             deletes.push(entry);
         }

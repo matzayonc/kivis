@@ -165,17 +165,17 @@ impl Storage for ManualStorage {
     type Serializer = Configuration;
     type StoreError = NoError;
 
-    fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
-        self.data.insert(key, value);
+    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::StoreError> {
+        self.data.insert(key.to_vec(), value.to_vec());
         Ok(())
     }
 
-    fn get(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-        Ok(self.data.get(&key).cloned())
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+        Ok(self.data.get(key).cloned())
     }
 
-    fn remove(&mut self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-        Ok(self.data.remove(&key))
+    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+        Ok(self.data.remove(key))
     }
 
     fn iter_keys(

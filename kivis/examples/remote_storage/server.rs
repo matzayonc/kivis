@@ -70,7 +70,7 @@ async fn insert_handler(
     let mut storage = storage.lock().unwrap();
 
     // Use the Storage trait's insert method
-    match kivis::Storage::insert(&mut *storage, key, value) {
+    match kivis::Storage::insert(&mut *storage, &key, &value) {
         Ok(_) => (StatusCode::OK, "Inserted successfully"),
         Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Failed to insert"),
     }
@@ -88,7 +88,7 @@ async fn get_handler(
 
     let storage = storage.lock().unwrap();
 
-    match kivis::Storage::get(&*storage, key) {
+    match kivis::Storage::get(&*storage, &key) {
         Ok(Some(value)) => {
             let value_hex = hex::encode(&value);
             (
@@ -123,7 +123,7 @@ async fn remove_handler(
 
     let mut storage = storage.lock().unwrap();
 
-    match kivis::Storage::remove(&mut *storage, key) {
+    match kivis::Storage::remove(&mut *storage, &key) {
         Ok(Some(value)) => {
             let value_hex = hex::encode(&value);
             (
