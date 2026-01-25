@@ -54,17 +54,17 @@ fn atomic_storage_example() -> anyhow::Result<()> {
         type Serializer = Configuration;
         type StoreError = MyStorageError;
 
-        fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
-            self.data.insert(Reverse(key), value);
+        fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::StoreError> {
+            self.data.insert(Reverse(key.to_vec()), value.to_vec());
             Ok(())
         }
 
-        fn get(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-            Ok(self.data.get(&Reverse(key)).cloned())
+        fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+            Ok(self.data.get(&Reverse(key.to_vec())).cloned())
         }
 
-        fn remove(&mut self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-            Ok(self.data.remove(&Reverse(key)))
+        fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+            Ok(self.data.remove(&Reverse(key.to_vec())))
         }
 
         fn iter_keys(
@@ -80,15 +80,15 @@ fn atomic_storage_example() -> anyhow::Result<()> {
         // Override batch_mixed for atomic behavior
         fn batch_mixed(
             &mut self,
-            inserts: Vec<(Vec<u8>, Vec<u8>)>,
-            removes: Vec<Vec<u8>>,
+            inserts: Vec<(&[u8], &[u8])>,
+            removes: Vec<&[u8]>,
         ) -> Result<Vec<Option<Vec<u8>>>, Self::StoreError> {
             let mut removed = Vec::new();
             for (key, value) in inserts {
-                self.data.insert(Reverse(key), value);
+                self.data.insert(Reverse(key.to_vec()), value.to_vec());
             }
             for key in removes {
-                removed.push(self.data.remove(&Reverse(key)));
+                removed.push(self.data.remove(&Reverse(key.to_vec())));
             }
             Ok(removed)
         }
@@ -99,16 +99,16 @@ fn atomic_storage_example() -> anyhow::Result<()> {
 
     // Perform atomic batch operations
     let operations = vec![
-        (b"user1".to_vec(), b"Alice".to_vec()),
-        (b"user2".to_vec(), b"Bob".to_vec()),
-        (b"user3".to_vec(), b"Charlie".to_vec()),
+        (&b"user1"[..], &b"Alice"[..]),
+        (&b"user2"[..], &b"Bob"[..]),
+        (&b"user3"[..], &b"Charlie"[..]),
     ];
 
     // All insertions happen atomically
     storage.batch_mixed(operations, Vec::new()).unwrap();
 
     // All removals happen atomically
-    let keys_to_remove = vec![b"user1".to_vec(), b"user3".to_vec()];
+    let keys_to_remove = vec![&b"user1"[..], &b"user3"[..]];
     let removed = storage.batch_mixed(Vec::new(), keys_to_remove).unwrap();
 
     println!("Removed values: {:?}", removed);

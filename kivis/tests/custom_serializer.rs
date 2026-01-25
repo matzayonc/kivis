@@ -10,12 +10,12 @@ use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 pub struct CustomUnifier;
 
 impl Unifier for CustomUnifier {
-    type K = Vec<u8>;
-    type V = Vec<u8>;
+    type K = [u8];
+    type V = [u8];
     type SerError = EncodeError;
     type DeError = DecodeError;
 
-    fn serialize_key(&self, data: impl Serialize) -> Result<Self::K, Self::SerError> {
+    fn serialize_key(&self, data: impl Serialize) -> Result<Vec<u8>, Self::SerError> {
         // Keys are serialized with a "KEY:" prefix
         let mut result = b"KEY:".to_vec();
         let encoded = bincode::serde::encode_to_vec(data, bincode::config::standard())?;
@@ -23,7 +23,7 @@ impl Unifier for CustomUnifier {
         Ok(result)
     }
 
-    fn serialize_value(&self, data: impl Serialize) -> Result<Self::V, Self::SerError> {
+    fn serialize_value(&self, data: impl Serialize) -> Result<Vec<u8>, Self::SerError> {
         // Values are serialized with a "VAL:" prefix
         let mut result = b"VAL:".to_vec();
         let encoded = bincode::serde::encode_to_vec(data, bincode::config::standard())?;
@@ -33,7 +33,7 @@ impl Unifier for CustomUnifier {
 
     fn deserialize_key<T: serde::de::DeserializeOwned>(
         &self,
-        data: &Self::K,
+        data: &Vec<u8>,
     ) -> Result<T, Self::DeError> {
         // Strip the "KEY:" prefix and deserialize
         if !data.starts_with(b"KEY:") {
@@ -45,7 +45,7 @@ impl Unifier for CustomUnifier {
 
     fn deserialize_value<T: serde::de::DeserializeOwned>(
         &self,
-        data: &Self::V,
+        data: &Vec<u8>,
     ) -> Result<T, Self::DeError> {
         // Strip the "VAL:" prefix and deserialize
         if !data.starts_with(b"VAL:") {
@@ -102,17 +102,17 @@ impl Storage for CustomStorage {
     type Serializer = CustomUnifier;
     type StoreError = CustomError;
 
-    fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
-        self.data.insert(Reverse(key), value);
+    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::StoreError> {
+        self.data.insert(Reverse(key.to_vec()), value.to_vec());
         Ok(())
     }
 
-    fn get(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-        Ok(self.data.get(&Reverse(key)).cloned())
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+        Ok(self.data.get(&Reverse(key.to_vec())).cloned())
     }
 
-    fn remove(&mut self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-        Ok(self.data.remove(&Reverse(key)))
+    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+        Ok(self.data.remove(&Reverse(key.to_vec())))
     }
 
     fn iter_keys(
@@ -178,29 +178,29 @@ fn test_default_value_serialization_uses_key_serialization() {
     struct TestUnifier;
 
     impl Unifier for TestUnifier {
-        type K = Vec<u8>;
-        type V = Vec<u8>;
+        type K = [u8];
+        type V = [u8];
         type SerError = EncodeError;
         type DeError = DecodeError;
 
-        fn serialize_key(&self, data: impl Serialize) -> Result<Self::K, Self::SerError> {
+        fn serialize_key(&self, data: impl Serialize) -> Result<Vec<u8>, Self::SerError> {
             bincode::serde::encode_to_vec(data, bincode::config::standard())
         }
 
-        fn serialize_value(&self, data: impl Serialize) -> Result<Self::V, Self::SerError> {
+        fn serialize_value(&self, data: impl Serialize) -> Result<Vec<u8>, Self::SerError> {
             bincode::serde::encode_to_vec(data, bincode::config::standard())
         }
 
         fn deserialize_key<T: serde::de::DeserializeOwned>(
             &self,
-            data: &Self::K,
+            data: &Vec<u8>,
         ) -> Result<T, Self::DeError> {
             Ok(bincode::serde::decode_from_slice(data, bincode::config::standard())?.0)
         }
 
         fn deserialize_value<T: serde::de::DeserializeOwned>(
             &self,
-            data: &Self::V,
+            data: &Vec<u8>,
         ) -> Result<T, Self::DeError> {
             Ok(bincode::serde::decode_from_slice(data, bincode::config::standard())?.0)
         }

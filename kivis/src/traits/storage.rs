@@ -6,11 +6,15 @@ use crate::Unifier;
 
 use super::Debug;
 
-type KeysIteratorItem<S> =
-    Result<<<S as Storage>::Serializer as Unifier>::K, <S as Storage>::StoreError>;
+type KeysIteratorItem<S> = Result<
+    <<<S as Storage>::Serializer as Unifier>::K as crate::UnifierData>::Owned,
+    <S as Storage>::StoreError,
+>;
 
-type Key<S> = <<S as Storage>::Serializer as Unifier>::K;
-type Value<S> = <<S as Storage>::Serializer as Unifier>::V;
+type Value<S> = <<<S as Storage>::Serializer as Unifier>::V as crate::UnifierData>::Owned;
+type KeyRef<S> = <<S as Storage>::Serializer as Unifier>::K;
+type ValueRef<S> = <<S as Storage>::Serializer as Unifier>::V;
+pub type Deleted<S> = Vec<Option<Value<S>>>;
 
 /// A trait defining a storage backend for the database.
 ///
@@ -37,8 +41,8 @@ pub trait Storage {
     /// Returns an error if the underlying storage fails to insert the key-value pair.
     fn insert(
         &mut self,
-        key: <Self::Serializer as Unifier>::K,
-        value: <Self::Serializer as Unifier>::V,
+        key: &KeyRef<Self>,
+        value: &ValueRef<Self>,
     ) -> Result<(), Self::StoreError>;
 
     /// Should retrieve the value associated with the given key from the storage.
@@ -46,20 +50,14 @@ pub trait Storage {
     /// # Errors
     ///
     /// Returns an error if the underlying storage fails while retrieving the value.
-    fn get(
-        &self,
-        key: <Self::Serializer as Unifier>::K,
-    ) -> Result<Option<<Self::Serializer as Unifier>::V>, Self::StoreError>;
+    fn get(&self, key: &KeyRef<Self>) -> Result<Option<Value<Self>>, Self::StoreError>;
 
     /// Should remove the value associated with the given key from the storage.
     ///
     /// # Errors
     ///
     /// Returns an error if the underlying storage fails while removing the value.
-    fn remove(
-        &mut self,
-        key: <Self::Serializer as Unifier>::K,
-    ) -> Result<Option<<Self::Serializer as Unifier>::V>, Self::StoreError>;
+    fn remove(&mut self, key: &KeyRef<Self>) -> Result<Option<Value<Self>>, Self::StoreError>;
 
     /// Should iterate over the keys in the storage that are in range.
     ///
@@ -68,7 +66,7 @@ pub trait Storage {
     /// Returns an error if the underlying storages fails during iteration.
     fn iter_keys(
         &self,
-        range: Range<<Self::Serializer as Unifier>::K>,
+        range: Range<<<Self::Serializer as Unifier>::K as crate::UnifierData>::Owned>,
     ) -> Result<impl Iterator<Item = KeysIteratorItem<Self>>, Self::StoreError>
     where
         Self: Sized;
@@ -79,8 +77,8 @@ pub trait Storage {
     /// Storage backends can override this method to provide atomic behavior.
     ///
     /// # Arguments
-    /// * `inserts` - A vector of key-value pairs to insert
-    /// * `removes` - A vector of keys to remove
+    /// * `inserts` - A vector of key-value reference pairs to insert
+    /// * `removes` - A vector of key references to remove
     ///
     /// # Returns
     ///
@@ -91,8 +89,8 @@ pub trait Storage {
     /// Returns an error if any of the insert or remove operations fail.
     fn batch_mixed(
         &mut self,
-        inserts: Vec<(Key<Self>, Value<Self>)>,
-        removes: Vec<Key<Self>>,
+        inserts: Vec<(&KeyRef<Self>, &ValueRef<Self>)>,
+        removes: Vec<&KeyRef<Self>>,
     ) -> Result<Vec<Option<Value<Self>>>, Self::StoreError> {
         // Default implementation: apply operations one by one (not atomic)
         let mut removed = Vec::new();

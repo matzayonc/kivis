@@ -64,25 +64,25 @@ mod atomic_storage_example {
         type Serializer = Configuration;
         type StoreError = MockAtomicError;
 
-        fn insert(&mut self, key: Vec<u8>, value: Vec<u8>) -> Result<(), Self::StoreError> {
+        fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::StoreError> {
             if self.fail_next {
                 self.fail_next = false;
                 return Err(MockAtomicError::Storage("Simulated failure".to_string()));
             }
-            self.data.insert(Reverse(key), value);
+            self.data.insert(Reverse(key.to_vec()), value.to_vec());
             Ok(())
         }
 
-        fn get(&self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
-            Ok(self.data.get(&Reverse(key)).cloned())
+        fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+            Ok(self.data.get(&Reverse(key.to_vec())).cloned())
         }
 
-        fn remove(&mut self, key: Vec<u8>) -> Result<Option<Vec<u8>>, Self::StoreError> {
+        fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
             if self.fail_next {
                 self.fail_next = false;
                 return Err(MockAtomicError::Storage("Simulated failure".to_string()));
             }
-            Ok(self.data.remove(&Reverse(key)))
+            Ok(self.data.remove(&Reverse(key.to_vec())))
         }
 
         fn iter_keys(
@@ -98,8 +98,8 @@ mod atomic_storage_example {
         // Override batch_mixed for atomic behavior
         fn batch_mixed(
             &mut self,
-            inserts: Vec<(Vec<u8>, Vec<u8>)>,
-            removes: Vec<Vec<u8>>,
+            inserts: Vec<(&[u8], &[u8])>,
+            removes: Vec<&[u8]>,
         ) -> Result<Vec<Option<Vec<u8>>>, Self::StoreError> {
             if self.fail_next {
                 return Err(MockAtomicError::Storage(
@@ -111,12 +111,12 @@ mod atomic_storage_example {
             // First collect removed values
             let mut removed = Vec::new();
             for key in removes {
-                removed.push(self.data.remove(&Reverse(key)));
+                removed.push(self.data.remove(&Reverse(key.to_vec())));
             }
 
             // Then insert new values
             for (key, value) in inserts {
-                self.data.insert(Reverse(key), value);
+                self.data.insert(Reverse(key.to_vec()), value.to_vec());
             }
 
             Ok(removed)
@@ -128,9 +128,9 @@ mod atomic_storage_example {
         let mut storage = MockAtomicStorage::new();
 
         let inserts = vec![
-            (b"key1".to_vec(), b"value1".to_vec()),
-            (b"key2".to_vec(), b"value2".to_vec()),
-            (b"key3".to_vec(), b"value3".to_vec()),
+            (&b"key1"[..], &b"value1"[..]),
+            (&b"key2"[..], &b"value2"[..]),
+            (&b"key3"[..], &b"value3"[..]),
         ];
 
         // Test batch mixed with only inserts
@@ -138,9 +138,9 @@ mod atomic_storage_example {
         assert!(removed.is_empty());
 
         // Verify all values were inserted
-        assert_eq!(storage.get(b"key1".to_vec())?, Some(b"value1".to_vec()));
-        assert_eq!(storage.get(b"key2".to_vec())?, Some(b"value2".to_vec()));
-        assert_eq!(storage.get(b"key3".to_vec())?, Some(b"value3".to_vec()));
+        assert_eq!(storage.get(&b"key1"[..])?, Some(b"value1".to_vec()));
+        assert_eq!(storage.get(&b"key2"[..])?, Some(b"value2".to_vec()));
+        assert_eq!(storage.get(&b"key3"[..])?, Some(b"value3".to_vec()));
         Ok(())
     }
 
@@ -149,11 +149,11 @@ mod atomic_storage_example {
         let mut storage = MockAtomicStorage::new();
 
         // Insert some test data
-        storage.insert(b"key1".to_vec(), b"value1".to_vec())?;
-        storage.insert(b"key2".to_vec(), b"value2".to_vec())?;
-        storage.insert(b"key3".to_vec(), b"value3".to_vec())?;
+        storage.insert(&b"key1"[..], &b"value1"[..])?;
+        storage.insert(&b"key2"[..], &b"value2"[..])?;
+        storage.insert(&b"key3"[..], &b"value3"[..])?;
 
-        let keys_to_remove = vec![b"key1".to_vec(), b"key2".to_vec(), b"nonexistent".to_vec()];
+        let keys_to_remove = vec![&b"key1"[..], &b"key2"[..], &b"nonexistent"[..]];
 
         // Test batch mixed with only removes
         let removed = storage.batch_mixed(vec![], keys_to_remove)?;
@@ -164,9 +164,9 @@ mod atomic_storage_example {
         assert_eq!(removed[2], None); // nonexistent key
 
         // Verify keys were actually removed
-        assert_eq!(storage.get(b"key1".to_vec())?, None);
-        assert_eq!(storage.get(b"key2".to_vec())?, None);
-        assert_eq!(storage.get(b"key3".to_vec())?, Some(b"value3".to_vec()));
+        assert_eq!(storage.get(&b"key1"[..])?, None);
+        assert_eq!(storage.get(&b"key2"[..])?, None);
+        assert_eq!(storage.get(&b"key3"[..])?, Some(b"value3".to_vec()));
         Ok(())
     }
 
@@ -175,15 +175,15 @@ mod atomic_storage_example {
         let mut storage = MockAtomicStorage::new();
 
         // Insert some initial data
-        storage.insert(b"existing1".to_vec(), b"value1".to_vec())?;
-        storage.insert(b"existing2".to_vec(), b"value2".to_vec())?;
+        storage.insert(&b"existing1"[..], &b"value1"[..])?;
+        storage.insert(&b"existing2"[..], &b"value2"[..])?;
 
         let inserts = vec![
-            (b"new1".to_vec(), b"newvalue1".to_vec()),
-            (b"new2".to_vec(), b"newvalue2".to_vec()),
+            (&b"new1"[..], &b"newvalue1"[..]),
+            (&b"new2"[..], &b"newvalue2"[..]),
         ];
 
-        let removes = vec![b"existing1".to_vec(), b"nonexistent".to_vec()];
+        let removes = vec![&b"existing1"[..], &b"nonexistent"[..]];
 
         // Test mixed operations
         let removed = storage.batch_mixed(inserts, removes)?;
@@ -193,15 +193,12 @@ mod atomic_storage_example {
         assert_eq!(removed[1], None);
 
         // Verify inserts
-        assert_eq!(storage.get(b"new1".to_vec())?, Some(b"newvalue1".to_vec()));
-        assert_eq!(storage.get(b"new2".to_vec())?, Some(b"newvalue2".to_vec()));
+        assert_eq!(storage.get(&b"new1"[..])?, Some(b"newvalue1".to_vec()));
+        assert_eq!(storage.get(&b"new2"[..])?, Some(b"newvalue2".to_vec()));
 
         // Verify removes
-        assert_eq!(storage.get(b"existing1".to_vec())?, None);
-        assert_eq!(
-            storage.get(b"existing2".to_vec())?,
-            Some(b"value2".to_vec())
-        );
+        assert_eq!(storage.get(&b"existing1"[..])?, None);
+        assert_eq!(storage.get(&b"existing2"[..])?, Some(b"value2".to_vec()));
         Ok(())
     }
 
@@ -211,7 +208,7 @@ mod atomic_storage_example {
 
         storage.set_fail_next(true);
 
-        let inserts = vec![(b"key1".to_vec(), b"value1".to_vec())];
+        let inserts = vec![(&b"key1"[..], &b"value1"[..])];
 
         // Test that failure is properly returned
         let result = storage.batch_mixed(inserts, vec![]);
