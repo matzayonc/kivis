@@ -291,19 +291,17 @@ where
             .serializer
             .serialize_key(WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX)))
             .map_err(|e| DatabaseError::Storage(e.into()))?;
-        let mut end = <S::Serializer as Unifier>::K::duplicate(&start);
-        <S::Serializer as Unifier>::K::combine(
-            &mut start,
-            self.serializer()
-                .serialize_key(range.start)
-                .map_err(|e| DatabaseError::Storage(e.into()))?,
-        );
-        <S::Serializer as Unifier>::K::combine(
-            &mut end,
-            self.serializer()
-                .serialize_key(range.end)
-                .map_err(|e| DatabaseError::Storage(e.into()))?,
-        );
+        let mut end = <<S as Storage>::Serializer as Unifier>::K::duplicate(start.as_ref());
+        let start_key = self
+            .serializer()
+            .serialize_key(range.start)
+            .map_err(|e| DatabaseError::Storage(e.into()))?;
+        let end_key = self
+            .serializer()
+            .serialize_key(range.end)
+            .map_err(|e| DatabaseError::Storage(e.into()))?;
+        <S::Serializer as Unifier>::K::extend(&mut start, &[start_key.as_ref()]);
+        <S::Serializer as Unifier>::K::extend(&mut end, &[end_key.as_ref()]);
         let raw_iter = self
             .store
             .iter_keys(start..end)
@@ -332,19 +330,19 @@ where
             .serializer
             .serialize_key(index_prelude)
             .map_err(|e| DatabaseError::Storage(e.into()))?;
-        let mut end = <S::Serializer as Unifier>::K::duplicate(&start);
+        let mut end = <S::Serializer as Unifier>::K::duplicate(start.as_ref());
 
         let start_serialized = self
             .serializer
             .serialize_key(index_key)
             .map_err(|e| DatabaseError::Storage(e.into()))?;
         let end_serialized = {
-            let mut end_bytes = <S::Serializer as Unifier>::K::duplicate(&start_serialized);
+            let mut end_bytes = <S::Serializer as Unifier>::K::duplicate(start_serialized.as_ref());
             <S::Serializer as Unifier>::K::next(&mut end_bytes);
             end_bytes
         };
-        <S::Serializer as Unifier>::K::combine(&mut start, start_serialized);
-        <S::Serializer as Unifier>::K::combine(&mut end, end_serialized);
+        <S::Serializer as Unifier>::K::extend(&mut start, &[start_serialized.as_ref()]);
+        <S::Serializer as Unifier>::K::extend(&mut end, &[end_serialized.as_ref()]);
 
         let raw_iter = self
             .store

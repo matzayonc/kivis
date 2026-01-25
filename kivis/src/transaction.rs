@@ -21,11 +21,6 @@ pub enum Op {
     },
 }
 
-type PreparedWrites<U> = Vec<(
-    <<U as Unifier>::K as UnifierData>::Owned,
-    <<U as Unifier>::V as UnifierData>::Owned,
-)>;
-
 /// A database transaction that accumulates low-level byte operations (writes and deletes)
 /// without immediately applying them to storage.
 ///
@@ -76,10 +71,7 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
         IndexBuilder<U>: Indexer<Error = U::SerError>,
     {
         let original_key = R::key(&record);
-        let writes = self.prepare_writes::<R>(record, &original_key)?;
-        for (k, v) in writes {
-            self.write(k, v);
-        }
+        self.prepare_writes::<R>(record, &original_key)?;
         Ok(original_key)
     }
 
@@ -101,15 +93,11 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
         let new_key = if let Some(k) = last_key {
             k.next_id().ok_or(DatabaseError::FailedToIncrement)?
         } else {
-            Default::default()
+            R::Key::default()
         };
 
-        let writes = self
-            .prepare_writes::<R>(record, &new_key)
+        self.prepare_writes::<R>(record, &new_key)
             .map_err(|e| DatabaseError::Storage(e.into()))?;
-        for (k, v) in writes {
-            self.write(k, v);
-        }
         last_key.replace(new_key.clone());
         Ok(new_key)
     }
@@ -123,20 +111,16 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
         M: Manifests<R>,
         IndexBuilder<U>: Indexer<Error = U::SerError>,
     {
-        let deletes = self.prepare_deletes::<R>(record, key)?;
-        for d in deletes {
-            self.delete(d);
-        }
-        Ok(())
+        self.prepare_deletes::<R>(record, key)
     }
 
     /// Adds a write operation to the transaction.
     ///
     /// If the same key is written multiple times, only the last value is kept.
     /// If a key is both written and deleted, the write takes precedence.
-    fn write(&mut self, key: <U::K as UnifierData>::Owned, value: <U::V as UnifierData>::Owned) {
-        let (key_start, key_end) = U::K::buffer(&mut self.key_data, key);
-        let (value_start, value_end) = U::V::buffer(&mut self.value_data, value);
+    fn write(&mut self, key_parts: &[&U::K], value: &U::V) {
+        let (key_start, key_end) = U::K::extend(&mut self.key_data, key_parts);
+        let (value_start, value_end) = U::V::extend(&mut self.value_data, &[value]);
 
         // Add the new write operation
         self.pending_ops.push(Op::Write {
@@ -151,8 +135,8 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     ///
     /// If a key is both written and deleted, the write takes precedence
     /// (so this delete will be ignored if the key was already written).
-    fn delete(&mut self, key: <U::K as UnifierData>::Owned) {
-        let (key_start, key_end) = U::K::buffer(&mut self.key_data, key);
+    fn delete(&mut self, key_parts: &[&U::K]) {
+        let (key_start, key_end) = U::K::extend(&mut self.key_data, key_parts);
 
         self.pending_ops.push(Op::Delete { key_start, key_end });
     }
@@ -235,16 +219,14 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     }
 
     fn prepare_writes<R: DatabaseEntry>(
-        &self,
+        &mut self,
         record: R,
         key: &R::Key,
-    ) -> Result<PreparedWrites<U>, U::SerError>
+    ) -> Result<(), U::SerError>
     where
         R::Key: RecordKey<Record = R>,
         IndexBuilder<U>: Indexer<Error = U::SerError>,
     {
-        let mut writes = Vec::with_capacity(R::INDEX_COUNT_HINT + 1);
-
         let mut indexer = IndexBuilder::new(self.serializer());
         record.index_keys(&mut indexer)?;
 
@@ -252,54 +234,52 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
         let key_value = self.serializer().serialize_value_ref(key)?;
 
         for (discriminator, index_key) in indexer.into_index_keys() {
-            let mut entry = self
+            // Build index entry key using compose from key parts
+            let prelude = self
                 .serializer()
                 .serialize_key(WrapPrelude::new::<R>(Subtable::Index(discriminator)))?;
-            U::K::combine(&mut entry, index_key);
-
-            // Indexes might be repeated, so we need to ensure that the key is unique.
-            // TODO: Add a way to declare as unique and deduplicate by provided hash.
-            U::K::combine(&mut entry, U::K::duplicate(&key_hash));
 
             // Index entries store the primary key as the value (serialized as a value type)
-            writes.push((entry, U::V::duplicate(&key_value)));
+            self.write(
+                &[prelude.as_ref(), index_key.as_ref(), key_hash.as_ref()],
+                key_value.as_ref(),
+            );
         }
 
-        let key = wrap::<R, U>(key, &self.serializer())?;
+        let wrapped_key = wrap::<R, U>(key, &self.serializer())?;
         let value = self.serializer().serialize_value(record)?;
-        writes.push((key, value));
+        self.write(&[wrapped_key.as_ref()], value.as_ref());
 
-        Ok(writes)
+        Ok(())
     }
 
     fn prepare_deletes<R: DatabaseEntry>(
-        &self,
+        &mut self,
         record: &R,
         key: &R::Key,
-    ) -> Result<Vec<<U::K as UnifierData>::Owned>, U::SerError>
+    ) -> Result<(), U::SerError>
     where
         R::Key: RecordKey<Record = R>,
         IndexBuilder<U>: Indexer<Error = U::SerError>,
     {
-        let mut deletes = Vec::with_capacity(R::INDEX_COUNT_HINT + 1);
-
         let mut indexer = IndexBuilder::new(self.serializer());
         record.index_keys(&mut indexer)?;
 
+        let key_bytes = self.serializer().serialize_key_ref(key)?;
+
         for (discriminator, index_key) in indexer.into_index_keys() {
-            let mut entry = self
+            // Build index delete key using compose from key parts
+            let prelude = self
                 .serializer()
                 .serialize_key(WrapPrelude::new::<R>(Subtable::Index(discriminator)))?;
-            U::K::combine(&mut entry, index_key);
-            let key_bytes = self.serializer().serialize_key_ref(key)?;
-            U::K::combine(&mut entry, key_bytes);
 
-            deletes.push(entry);
+            self.delete(&[prelude.as_ref(), index_key.as_ref(), key_bytes.as_ref()]);
         }
 
+        // Delete main record
         let key = wrap::<R, _>(key, &self.serializer())?;
-        deletes.push(key);
+        self.delete(&[key.as_ref()]);
 
-        Ok(deletes)
+        Ok(())
     }
 }
