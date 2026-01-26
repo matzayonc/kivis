@@ -2,7 +2,7 @@
 use alloc::vec::Vec;
 use core::{fmt::Display, ops::Range};
 
-use crate::Unifier;
+use crate::{OpsIter, Unifier};
 
 use super::Debug;
 
@@ -15,6 +15,14 @@ type Value<S> = <<<S as Storage>::Serializer as Unifier>::V as crate::UnifierDat
 type KeyRef<S> = <<S as Storage>::Serializer as Unifier>::K;
 type ValueRef<S> = <<S as Storage>::Serializer as Unifier>::V;
 pub type Deleted<S> = Vec<Option<Value<S>>>;
+
+/// Represents a batch operation: either insert or delete.
+pub enum BatchOp<'a, K: ?Sized, V: ?Sized> {
+    /// Insert operation with key and value references
+    Insert { key: &'a K, value: &'a V },
+    /// Delete operation with key reference
+    Delete { key: &'a K },
+}
 
 /// A trait defining a storage backend for the database.
 ///
@@ -77,32 +85,34 @@ pub trait Storage {
     /// Storage backends can override this method to provide atomic behavior.
     ///
     /// # Arguments
-    /// * `inserts` - A vector of key-value reference pairs to insert
-    /// * `removes` - A vector of key references to remove
+    /// * `operations` - A vector of batch operations (inserts and deletes)
     ///
     /// # Returns
     ///
-    /// Returns `Ok(Vec<Option<V>>)` with the previous values (if any) for removed keys,
-    /// or an error if any operation fails.
+    /// Returns `Ok(Vec<Option<V>>)` with the previous values (if any) for deleted keys only,
+    /// in the order delete operations appear in the operations vector.
+    /// Insert operations do not contribute to the result vector.
     ///
     /// # Errors
     /// Returns an error if any of the insert or remove operations fail.
     fn batch_mixed(
         &mut self,
-        inserts: Vec<(&KeyRef<Self>, &ValueRef<Self>)>,
-        removes: Vec<&KeyRef<Self>>,
+        operations: OpsIter<'_, Self::Serializer>,
     ) -> Result<Vec<Option<Value<Self>>>, Self::StoreError> {
         // Default implementation: apply operations one by one (not atomic)
-        let mut removed = Vec::new();
+        let mut deleted = Vec::new();
 
-        for key in removes {
-            removed.push(self.remove(key)?);
+        for op in operations {
+            match op {
+                BatchOp::Insert { key, value } => {
+                    self.insert(key, value)?;
+                }
+                BatchOp::Delete { key } => {
+                    deleted.push(self.remove(key)?);
+                }
+            }
         }
 
-        for (key, value) in inserts {
-            self.insert(key, value)?;
-        }
-
-        Ok(removed)
+        Ok(deleted)
     }
 }
