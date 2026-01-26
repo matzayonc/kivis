@@ -9,7 +9,7 @@ mod tests {
     };
     use serde::{Deserialize, Serialize};
 
-    use kivis::{Database, DatabaseTransaction, Record, Storage, manifest};
+    use kivis::{BatchOp, Database, DatabaseTransaction, OpsIter, Record, Storage, manifest};
 
     #[derive(Debug, PartialEq, Eq)]
     pub enum MockError {
@@ -42,19 +42,6 @@ mod tests {
     pub struct MockRecord(#[key] u8, char);
 
     manifest![Manifest: MockRecord];
-
-    // Helper functions for testing transactions
-    fn write_count(ops: &[kivis::Op]) -> usize {
-        ops.iter()
-            .filter(|op| matches!(op, kivis::Op::Write { .. }))
-            .count()
-    }
-
-    fn delete_count(ops: &[kivis::Op]) -> usize {
-        ops.iter()
-            .filter(|op| matches!(op, kivis::Op::Delete { .. }))
-            .count()
-    }
 
     // Mock atomic storage implementation
     #[derive(Debug)]
@@ -98,24 +85,24 @@ mod tests {
         }
 
         // Override the default batch_mixed implementation for better performance
-        fn batch_mixed(
+        fn batch_mixed<'a>(
             &mut self,
-            inserts: Vec<(&[u8], &[u8])>,
-            removes: Vec<&[u8]>,
+            operations: OpsIter<'a, Self::Serializer>,
         ) -> Result<Vec<Option<Vec<u8>>>, Self::StoreError> {
             // In a real implementation, this could be atomic
-            // First collect removed values
-            let mut removed = Vec::new();
-            for key in removes {
-                removed.push(self.data.remove(&Reverse(key.to_vec())));
+            let mut deleted = Vec::new();
+            for op in operations {
+                match op {
+                    BatchOp::Insert { key, value } => {
+                        self.data.insert(Reverse(key.to_vec()), value.to_vec());
+                    }
+                    BatchOp::Delete { key } => {
+                        deleted.push(self.data.remove(&Reverse(key.to_vec())));
+                    }
+                }
             }
 
-            // Then insert new values
-            for (key, value) in inserts {
-                self.data.insert(Reverse(key.to_vec()), value.to_vec());
-            }
-
-            Ok(removed)
+            Ok(deleted)
         }
     }
 
@@ -123,40 +110,46 @@ mod tests {
     fn test_transaction_new() -> anyhow::Result<()> {
         let tx = DatabaseTransaction::<Manifest, _>::new_with_serializer(Configuration::default());
         assert!(tx.is_empty());
-        let (ops, _key_data, _value_data) = tx.consume();
-        assert_eq!(write_count(&ops), 0);
-        assert_eq!(delete_count(&ops), 0);
         Ok(())
     }
 
     #[test]
     fn test_transaction_write() -> anyhow::Result<()> {
-        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
+        let mut db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
         let mut tx = db.create_transaction();
 
         tx.insert(MockRecord(1, 'a'))?;
         tx.insert(MockRecord(2, 'b'))?;
 
         assert!(!tx.is_empty());
-        let (ops, _key_data, _value_data) = tx.consume();
-        assert_eq!(write_count(&ops), 2);
-        assert_eq!(delete_count(&ops), 0);
+
+        // Verify by committing and checking the database
+        db.commit(tx)?;
+        assert_eq!(db.get(&MockRecordKey(1))?, Some(MockRecord(1, 'a')));
+        assert_eq!(db.get(&MockRecordKey(2))?, Some(MockRecord(2, 'b')));
 
         Ok(())
     }
 
     #[test]
     fn test_transaction_delete() -> anyhow::Result<()> {
-        let db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
-        let mut tx = db.create_transaction();
+        let mut db = Database::<MockAtomicStorage, Manifest>::new(MockAtomicStorage::new())?;
 
+        // First insert some records
+        db.insert(MockRecord(1, 'a'))?;
+        db.insert(MockRecord(2, 'b'))?;
+
+        // Now delete them in a transaction
+        let mut tx = db.create_transaction();
         tx.remove(&MockRecordKey(1), &MockRecord(1, 'a'))?;
         tx.remove(&MockRecordKey(2), &MockRecord(2, 'b'))?;
 
         assert!(!tx.is_empty());
-        let (ops, _key_data, _value_data) = tx.consume();
-        assert_eq!(write_count(&ops), 0);
-        assert_eq!(delete_count(&ops), 2);
+
+        // Verify by committing and checking the database
+        db.commit(tx)?;
+        assert_eq!(db.get(&MockRecordKey(1))?, None);
+        assert_eq!(db.get(&MockRecordKey(2))?, None);
 
         Ok(())
     }

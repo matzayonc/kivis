@@ -45,25 +45,21 @@
 // can reference `::kivis::alloc::vec::Vec` and not depend on the consumer to import alloc.
 pub extern crate alloc;
 
-#[cfg(feature = "memory-storage")]
-mod btreemap;
 mod database;
 mod errors;
-mod lexicographic;
 mod traits;
 mod transaction;
+mod utils;
 mod wrap;
 
-#[cfg(feature = "memory-storage")]
-pub use btreemap::{MemoryStorage, MemoryStorageError};
 pub use database::Database;
 pub use kivis_derive::Record;
-pub use lexicographic::*;
 pub use paste::paste;
 pub use traits::*;
+pub use utils::*;
 
 pub use crate::errors::{DatabaseError, InternalDatabaseError};
 
 #[cfg(feature = "atomic")]
 // Database transaction is only usefull if atomic storage is enabled.
-pub use transaction::{DatabaseTransaction, Op};
+pub use transaction::{DatabaseTransaction, Op, OpsIter};
