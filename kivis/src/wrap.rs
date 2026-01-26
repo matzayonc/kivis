@@ -82,7 +82,8 @@ pub(crate) struct Wrap<R> {
 pub(crate) fn wrap<R: DatabaseEntry, U: Unifier>(
     item_key: &R::Key,
     unifier: &U,
-) -> Result<<U::K as UnifierData>::Owned, U::SerError> {
+    buffer: &mut <U::K as UnifierData>::Owned,
+) -> Result<(), U::SerError> {
     let wrapped = Wrap {
         prelude: WrapPrelude {
             scope: R::SCOPE,
@@ -90,7 +91,8 @@ pub(crate) fn wrap<R: DatabaseEntry, U: Unifier>(
         },
         key: item_key.clone(),
     };
-    unifier.serialize_key(wrapped)
+    unifier.serialize_key(buffer, wrapped)?;
+    Ok(())
 }
 
 pub(crate) fn empty_wrap<R: DatabaseEntry, U: Unifier>(
@@ -112,5 +114,11 @@ pub(crate) fn empty_wrap<R: DatabaseEntry, U: Unifier>(
         key: (),
     };
 
-    Ok((config.serialize_key(start)?, config.serialize_key(end)?))
+    let mut start_buffer = <U::K as UnifierData>::Owned::default();
+    config.serialize_key(&mut start_buffer, start)?;
+
+    let mut end_buffer = <U::K as UnifierData>::Owned::default();
+    config.serialize_key(&mut end_buffer, end)?;
+
+    Ok((start_buffer, end_buffer))
 }
