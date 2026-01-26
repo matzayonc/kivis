@@ -58,9 +58,11 @@ pub trait UnifierData {
     /// Increments the buffer to the next value.
     fn next(buffer: &mut Self::Owned);
 
-    /// Appends multiple parts to the buffer and returns the start and end indices.
-    /// This allows composing keys from multiple parts without intermediate allocations.
-    fn extend(buffer: &mut Self::Owned, parts: &[&Self]) -> (usize, usize);
+    /// Appends a single part to the buffer.
+    fn extend(buffer: &mut Self::Owned, part: &Self);
+
+    /// Returns the current length of the buffer.
+    fn len(buffer: &Self::Owned) -> usize;
 
     /// Extracts a range from the owned buffer as a reference.
     /// This is used to extract individual values from buffered data.
@@ -96,12 +98,12 @@ impl UnifierData for [u8] {
         buffer.push(0);
     }
 
-    fn extend(buffer: &mut Self::Owned, parts: &[&Self]) -> (usize, usize) {
-        let start = buffer.len();
-        for part in parts {
-            buffer.extend_from_slice(part);
-        }
-        (start, buffer.len())
+    fn extend(buffer: &mut Self::Owned, part: &Self) {
+        buffer.extend_from_slice(part);
+    }
+
+    fn len(buffer: &Self::Owned) -> usize {
+        buffer.len()
     }
 
     fn extract_range(buffer: &Self::Owned, start: usize, end: usize) -> &Self {
@@ -132,12 +134,12 @@ impl UnifierData for str {
         *buffer = next_valid_string;
     }
 
-    fn extend(buffer: &mut Self::Owned, parts: &[&Self]) -> (usize, usize) {
-        let start = buffer.len();
-        for part in parts {
-            buffer.push_str(part);
-        }
-        (start, buffer.len())
+    fn extend(buffer: &mut Self::Owned, part: &Self) {
+        buffer.push_str(part);
+    }
+
+    fn len(buffer: &Self::Owned) -> usize {
+        buffer.len()
     }
 
     fn extract_range(buffer: &Self::Owned, start: usize, end: usize) -> &Self {
@@ -161,44 +163,48 @@ pub trait Unifier {
     type SerError: Debug;
     type DeError: Debug;
 
-    /// Serializes a key.
+    /// Serializes a key directly into an existing buffer and returns the start and end positions.
     /// # Errors
     ///
     /// Returns an error if serialization fails.
     fn serialize_key(
         &self,
+        buffer: &mut <Self::K as UnifierData>::Owned,
         data: impl Unifiable,
-    ) -> Result<<Self::K as UnifierData>::Owned, Self::SerError>;
+    ) -> Result<(usize, usize), Self::SerError>;
 
-    /// Serializes a borrowed key.
+    /// Serializes a borrowed key directly into an existing buffer and returns the start and end positions.
     /// # Errors
     ///
     /// Returns an error if serialization fails.
     fn serialize_key_ref<R: UnifiableRef>(
         &self,
+        buffer: &mut <Self::K as UnifierData>::Owned,
         data: &R,
-    ) -> Result<<Self::K as UnifierData>::Owned, Self::SerError> {
-        self.serialize_key(data.clone())
+    ) -> Result<(usize, usize), Self::SerError> {
+        self.serialize_key(buffer, data.clone())
     }
 
-    /// Serializes a value.
+    /// Serializes a value directly into an existing buffer and returns the start and end positions.
     /// # Errors
     ///
     /// Returns an error if serialization fails.
     fn serialize_value(
         &self,
+        buffer: &mut <Self::V as UnifierData>::Owned,
         data: impl Unifiable,
-    ) -> Result<<Self::V as UnifierData>::Owned, Self::SerError>;
+    ) -> Result<(usize, usize), Self::SerError>;
 
-    /// Serializes a borrowed value.
+    /// Serializes a borrowed value directly into an existing buffer and returns the start and end positions.
     /// # Errors
     ///
     /// Returns an error if serialization fails.
     fn serialize_value_ref<R: UnifiableRef>(
         &self,
+        buffer: &mut <Self::V as UnifierData>::Owned,
         data: &R,
-    ) -> Result<<Self::V as UnifierData>::Owned, Self::SerError> {
-        self.serialize_value(data.clone())
+    ) -> Result<(usize, usize), Self::SerError> {
+        self.serialize_value(buffer, data.clone())
     }
 
     /// Deserializes a key from the given data.
@@ -226,12 +232,26 @@ impl Unifier for Configuration {
     type SerError = EncodeError;
     type DeError = DecodeError;
 
-    fn serialize_key(&self, data: impl Serialize) -> Result<Vec<u8>, Self::SerError> {
-        encode_to_vec(data, Self::default())
+    fn serialize_key(
+        &self,
+        buffer: &mut Vec<u8>,
+        data: impl Serialize,
+    ) -> Result<(usize, usize), Self::SerError> {
+        let start = <[u8]>::len(buffer);
+        let serialized = encode_to_vec(data, Self::default())?;
+        <[u8]>::extend(buffer, &serialized);
+        Ok((start, <[u8]>::len(buffer)))
     }
 
-    fn serialize_value(&self, data: impl Serialize) -> Result<Vec<u8>, Self::SerError> {
-        encode_to_vec(data, Self::default())
+    fn serialize_value(
+        &self,
+        buffer: &mut Vec<u8>,
+        data: impl Serialize,
+    ) -> Result<(usize, usize), Self::SerError> {
+        let start = <[u8]>::len(buffer);
+        let serialized = encode_to_vec(data, Self::default())?;
+        <[u8]>::extend(buffer, &serialized);
+        Ok((start, <[u8]>::len(buffer)))
     }
 
     fn deserialize_key<T: DeserializeOwned>(&self, data: &Vec<u8>) -> Result<T, Self::DeError> {
@@ -256,8 +276,9 @@ impl<U: Unifier> IndexBuilder<U> {
 impl<U: Unifier> Indexer for IndexBuilder<U> {
     type Error = U::SerError;
     fn add(&mut self, discriminator: u8, index: &impl UnifiableRef) -> Result<(), Self::Error> {
-        let data = self.1.serialize_key_ref(index)?;
-        self.0.push((discriminator, data));
+        let mut buffer = <U::K as UnifierData>::Owned::default();
+        self.1.serialize_key_ref(&mut buffer, index)?;
+        self.0.push((discriminator, buffer));
         Ok(())
     }
 }

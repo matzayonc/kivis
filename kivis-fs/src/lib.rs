@@ -85,7 +85,12 @@ impl Unifier for CsvSerializer {
     type SerError = csv::Error;
     type DeError = csv::Error;
 
-    fn serialize_key(&self, data: impl Serialize) -> Result<String, Self::SerError> {
+    fn serialize_key(
+        &self,
+        buffer: &mut String,
+        data: impl Serialize,
+    ) -> Result<(usize, usize), Self::SerError> {
+        let start = buffer.len();
         let mut writer = csv::WriterBuilder::new()
             .has_headers(false)
             .quote_style(csv::QuoteStyle::Necessary)
@@ -99,10 +104,16 @@ impl Unifier for CsvSerializer {
         if result.ends_with('\n') {
             result.pop();
         }
-        Ok(Self::encode_for_filename(&result))
+        buffer.push_str(&Self::encode_for_filename(&result));
+        Ok((start, buffer.len()))
     }
 
-    fn serialize_value(&self, data: impl Serialize) -> Result<String, Self::SerError> {
+    fn serialize_value(
+        &self,
+        buffer: &mut String,
+        data: impl Serialize,
+    ) -> Result<(usize, usize), Self::SerError> {
+        let start = buffer.len();
         let mut writer = csv::WriterBuilder::new()
             .has_headers(false)
             .quote_style(csv::QuoteStyle::Necessary)
@@ -116,7 +127,8 @@ impl Unifier for CsvSerializer {
         if result.ends_with('\n') {
             result.pop();
         }
-        Ok(Self::encode_for_filename(&result))
+        buffer.push_str(&Self::encode_for_filename(&result));
+        Ok((start, buffer.len()))
     }
 
     fn deserialize_key<T: DeserializeOwned>(&self, data: &String) -> Result<T, Self::DeError> {

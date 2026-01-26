@@ -114,33 +114,6 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
         self.prepare_deletes::<R>(record, key)
     }
 
-    /// Adds a write operation to the transaction.
-    ///
-    /// If the same key is written multiple times, only the last value is kept.
-    /// If a key is both written and deleted, the write takes precedence.
-    fn write(&mut self, key_parts: &[&U::K], value: &U::V) {
-        let (key_start, key_end) = U::K::extend(&mut self.key_data, key_parts);
-        let (value_start, value_end) = U::V::extend(&mut self.value_data, &[value]);
-
-        // Add the new write operation
-        self.pending_ops.push(Op::Write {
-            key_start,
-            key_end,
-            value_start,
-            value_end,
-        });
-    }
-
-    /// Adds a delete operation to the transaction.
-    ///
-    /// If a key is both written and deleted, the write takes precedence
-    /// (so this delete will be ignored if the key was already written).
-    fn delete(&mut self, key_parts: &[&U::K]) {
-        let (key_start, key_end) = U::K::extend(&mut self.key_data, key_parts);
-
-        self.pending_ops.push(Op::Delete { key_start, key_end });
-    }
-
     /// Returns true if the transaction has no pending operations.
     #[must_use]
     pub fn is_empty(&self) -> bool {
@@ -230,25 +203,83 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
         let mut indexer = IndexBuilder::new(self.serializer());
         record.index_keys(&mut indexer)?;
 
-        let key_hash = self.serializer().serialize_key_ref(key)?;
-        let key_value = self.serializer().serialize_value_ref(key)?;
+        // Track serialized key hash and value positions, lazily initialized on first iteration
+        let mut key_hash_range: Option<(usize, usize)> = None;
+        let mut key_value_range: Option<(usize, usize)> = None;
 
         for (discriminator, index_key) in indexer.into_index_keys() {
-            // Build index entry key using compose from key parts
-            let prelude = self
-                .serializer()
-                .serialize_key(WrapPrelude::new::<R>(Subtable::Index(discriminator)))?;
+            // Write index entry directly to buffers
+            let key_start = U::K::len(&self.key_data);
 
-            // Index entries store the primary key as the value (serialized as a value type)
-            self.write(
-                &[prelude.as_ref(), index_key.as_ref(), key_hash.as_ref()],
-                key_value.as_ref(),
-            );
+            let mut prelude_buffer = <U::K as UnifierData>::Owned::default();
+            self.serializer().serialize_key(
+                &mut prelude_buffer,
+                WrapPrelude::new::<R>(Subtable::Index(discriminator)),
+            )?;
+
+            U::K::extend(&mut self.key_data, prelude_buffer.as_ref());
+            U::K::extend(&mut self.key_data, index_key.as_ref());
+
+            // Serialize key hash on first iteration or reuse from previous iterations
+            if let Some((start, end)) = key_hash_range {
+                // Reuse previously serialized key hash
+                let key_hash = U::K::extract_range(&self.key_data, start, end);
+                let key_hash_owned = U::K::to_owned(key_hash);
+                U::K::extend(&mut self.key_data, key_hash_owned.as_ref());
+            } else {
+                // First iteration: serialize key hash and save indices
+                let start = U::K::len(&self.key_data);
+                self.serializer()
+                    .serialize_key_ref(&mut self.key_data, key)?;
+                let end = U::K::len(&self.key_data);
+                key_hash_range = Some((start, end));
+            }
+
+            let key_end = U::K::len(&self.key_data);
+
+            let value_start = U::V::len(&self.value_data);
+
+            // Serialize key value on first iteration or reuse from previous iterations
+            if let Some((start, end)) = key_value_range {
+                // Reuse previously serialized key value
+                let key_value = U::V::extract_range(&self.value_data, start, end);
+                let key_value_owned = U::V::to_owned(key_value);
+                U::V::extend(&mut self.value_data, key_value_owned.as_ref());
+            } else {
+                // First iteration: serialize key value and save indices
+                let start = U::V::len(&self.value_data);
+                self.serializer()
+                    .serialize_value_ref(&mut self.value_data, key)?;
+                let end = U::V::len(&self.value_data);
+                key_value_range = Some((start, end));
+            }
+
+            let value_end = U::V::len(&self.value_data);
+
+            self.pending_ops.push(Op::Write {
+                key_start,
+                key_end,
+                value_start,
+                value_end,
+            });
         }
 
-        let wrapped_key = wrap::<R, U>(key, &self.serializer())?;
-        let value = self.serializer().serialize_value(record)?;
-        self.write(&[wrapped_key.as_ref()], value.as_ref());
+        // Write main record directly to buffers
+        let key_start = U::K::len(&self.key_data);
+        wrap::<R, U>(key, &self.serializer(), &mut self.key_data)?;
+        let key_end = U::K::len(&self.key_data);
+
+        let value_start = U::V::len(&self.value_data);
+        self.serializer()
+            .serialize_value(&mut self.value_data, record)?;
+        let value_end = U::V::len(&self.value_data);
+
+        self.pending_ops.push(Op::Write {
+            key_start,
+            key_end,
+            value_start,
+            value_end,
+        });
 
         Ok(())
     }
@@ -265,20 +296,49 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
         let mut indexer = IndexBuilder::new(self.serializer());
         record.index_keys(&mut indexer)?;
 
-        let key_bytes = self.serializer().serialize_key_ref(key)?;
+        let index_keys = indexer.into_index_keys();
 
-        for (discriminator, index_key) in indexer.into_index_keys() {
-            // Build index delete key using compose from key parts
-            let prelude = self
-                .serializer()
-                .serialize_key(WrapPrelude::new::<R>(Subtable::Index(discriminator)))?;
+        // Track serialized key position, lazily initialized on first iteration
+        let mut key_bytes_range: Option<(usize, usize)> = None;
 
-            self.delete(&[prelude.as_ref(), index_key.as_ref(), key_bytes.as_ref()]);
+        for (discriminator, index_key) in index_keys {
+            // Write index delete key directly to buffer
+            let key_start = U::K::len(&self.key_data);
+
+            let mut prelude_buffer = <U::K as UnifierData>::Owned::default();
+            self.serializer().serialize_key(
+                &mut prelude_buffer,
+                WrapPrelude::new::<R>(Subtable::Index(discriminator)),
+            )?;
+
+            U::K::extend(&mut self.key_data, prelude_buffer.as_ref());
+            U::K::extend(&mut self.key_data, index_key.as_ref());
+
+            // Serialize key on first iteration or reuse from previous iterations
+            if let Some((start, end)) = key_bytes_range {
+                // Reuse previously serialized key
+                let key_bytes = U::K::extract_range(&self.key_data, start, end);
+                let key_bytes_owned = U::K::to_owned(key_bytes);
+                U::K::extend(&mut self.key_data, key_bytes_owned.as_ref());
+            } else {
+                // First iteration: serialize key and save indices
+                let start = U::K::len(&self.key_data);
+                self.serializer()
+                    .serialize_key_ref(&mut self.key_data, key)?;
+                let end = U::K::len(&self.key_data);
+                key_bytes_range = Some((start, end));
+            }
+
+            let key_end = U::K::len(&self.key_data);
+            self.pending_ops.push(Op::Delete { key_start, key_end });
         }
 
-        // Delete main record
-        let key = wrap::<R, _>(key, &self.serializer())?;
-        self.delete(&[key.as_ref()]);
+        // Delete main record - write directly to buffer
+        let key_start = U::K::len(&self.key_data);
+        // TODO: Use directly
+        wrap::<R, _>(key, &self.serializer(), &mut self.key_data)?;
+        let key_end = U::K::len(&self.key_data);
+        self.pending_ops.push(Op::Delete { key_start, key_end });
 
         Ok(())
     }
