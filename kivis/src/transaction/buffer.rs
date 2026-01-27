@@ -1,6 +1,6 @@
 use crate::{
     DatabaseEntry, RecordKey, Unifier, UnifierData,
-    wrap::{Subtable, WrapPrelude, wrap},
+    wrap::{Subtable, WrapPrelude},
 };
 
 #[cfg(not(feature = "std"))]
@@ -55,7 +55,7 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
         R::Key: RecordKey<Record = R>,
     {
         // Track serialized key hash and value positions, lazily initialized on first iteration
-        let mut key_hash_range: Option<(usize, usize)> = None;
+        let mut key_range: Option<(usize, usize)> = None;
         let mut key_value_range: Option<(usize, usize)> = None;
 
         let serializer = self.serializer();
@@ -72,7 +72,7 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
             // Serialize the index key directly into the buffer
             record.index_key(&mut self.key_data, discriminator, &serializer)?;
             // Serialize key hash on first iteration or reuse from previous iterations
-            if let Some((start, end)) = key_hash_range {
+            if let Some((start, end)) = key_range {
                 // Reuse previously serialized key hash
                 U::K::duplicate_within(&mut self.key_data, start, end);
             } else {
@@ -80,7 +80,7 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
                 let start = U::K::len(&self.key_data);
                 serializer.serialize_key_ref(&mut self.key_data, key)?;
                 let end = U::K::len(&self.key_data);
-                key_hash_range = Some((start, end));
+                key_range = Some((start, end));
             }
 
             let key_end = U::K::len(&self.key_data);
@@ -103,7 +103,14 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
         }
 
         // Write main record directly to buffers
-        wrap::<R, U>(key, &self.serializer(), &mut self.key_data)?;
+        self.serializer()
+            .serialize_key(&mut self.key_data, WrapPrelude::new::<R>(Subtable::Main))?;
+        if let Some((start, end)) = key_range {
+            // Reuse previously serialized key hash
+            U::K::duplicate_within(&mut self.key_data, start, end);
+        } else {
+            serializer.serialize_key_ref(&mut self.key_data, key)?;
+        }
         let key_end = U::K::len(&self.key_data);
 
         self.serializer()
@@ -156,8 +163,14 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
         }
 
         // Delete main record - write directly to buffer
-        // TODO: Use directly
-        wrap::<R, _>(key, &self.serializer(), &mut self.key_data)?;
+        self.serializer()
+            .serialize_key(&mut self.key_data, WrapPrelude::new::<R>(Subtable::Main))?;
+        if let Some((start, end)) = key_bytes_range {
+            // Reuse previously serialized key
+            U::K::duplicate_within(&mut self.key_data, start, end);
+        } else {
+            serializer.serialize_key_ref(&mut self.key_data, key)?;
+        }
         let key_end = U::K::len(&self.key_data);
         self.pending_ops.push(Op::Delete { key_end });
 

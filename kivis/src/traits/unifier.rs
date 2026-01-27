@@ -76,6 +76,8 @@ impl UnifierData for [u8] {
 
     fn duplicate_within(buffer: &mut Self::Owned, start: usize, end: usize) {
         let len = buffer.len();
+        let copy_len = end - start;
+        buffer.resize(len + copy_len, 0);
         buffer.copy_within(start..end, len);
     }
 }

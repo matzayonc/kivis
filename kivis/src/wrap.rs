@@ -78,22 +78,22 @@ pub(crate) struct Wrap<R> {
     pub key: R,
 }
 
-/// Wraps a database entry key with scope and subtable information for storage.
-pub(crate) fn wrap<R: DatabaseEntry, U: Unifier>(
-    item_key: &R::Key,
-    unifier: &U,
-    buffer: &mut <U::K as UnifierData>::Owned,
-) -> Result<(), U::SerError> {
-    let wrapped = Wrap {
-        prelude: WrapPrelude {
-            scope: R::SCOPE,
-            subtable: Subtable::Main,
-        },
-        key: item_key.clone(),
-    };
-    unifier.serialize_key(buffer, wrapped)?;
-    Ok(())
-}
+// /// Wraps a database entry key with scope and subtable information for storage.
+// pub(crate) fn wrap<R: DatabaseEntry, U: Unifier>(
+//     item_key: &R::Key,
+//     unifier: &U,
+//     buffer: &mut <U::K as UnifierData>::Owned,
+// ) -> Result<(), U::SerError> {
+//     unifier.serialize_key(
+//         buffer,
+//         WrapPrelude {
+//             scope: R::SCOPE,
+//             subtable: Subtable::Main,
+//         },
+//     )?;
+//     unifier.serialize_key_ref(buffer, item_key)?;
+//     Ok(())
+// }
 
 pub(crate) fn empty_wrap<R: DatabaseEntry, U: Unifier>(
     config: &U,
