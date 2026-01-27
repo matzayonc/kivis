@@ -93,7 +93,7 @@ fn test_index() -> anyhow::Result<()> {
 
     let mut indexer = IndexBuilder::new(bincode::config::standard());
     user.index_keys(&mut indexer)?;
-    let index_keys = indexer.into_index_keys();
+    let index_keys: Vec<_> = indexer.iter().collect();
     assert_eq!(index_keys.len(), 1);
     assert_eq!(index_keys[0].0, UserNameIndex::INDEX);
     assert_eq!(

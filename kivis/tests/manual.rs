@@ -32,8 +32,11 @@ impl Scope for User {
 impl kivis::DatabaseEntry for User {
     type Key = UserKey;
     const INDEX_COUNT_HINT: usize = 1;
-    fn index_keys<I: kivis::Indexer>(&self, indexer: &mut I) -> Result<(), I::Error> {
-        indexer.add(1, &self.name)?;
+    fn index_keys<U: kivis::Unifier>(
+        &self,
+        indexer: &mut kivis::IndexBuilder<U>,
+    ) -> Result<(), U::SerError> {
+        indexer.add(&self.name)?;
         Ok(())
     }
 }
@@ -43,7 +46,7 @@ pub struct UserNameIndex(pub String);
 impl Index for UserNameIndex {
     type Key = UserKey;
     type Record = User;
-    const INDEX: u8 = 1;
+    const INDEX: u8 = 0;
 }
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct User {
@@ -264,9 +267,9 @@ fn test_index() -> anyhow::Result<()> {
 
     let mut indexer = IndexBuilder::new(bincode::config::standard());
     user.index_keys(&mut indexer)?;
-    let index_keys = indexer.into_index_keys();
+    let index_keys: Vec<_> = indexer.iter().collect();
     assert_eq!(index_keys.len(), 1);
-    assert_eq!(index_keys[0].0, 1);
+    assert_eq!(index_keys[0].0, 0);
     assert_eq!(
         index_keys[0].1,
         encode_to_vec(&user.name, bincode::config::standard()).context("Missing")?,

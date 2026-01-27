@@ -1,5 +1,5 @@
 use crate::{
-    Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, IndexBuilder, Indexer,
+    Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable,
     Manifest, Manifests, RecordKey, Storage, Unifier,
 };
 
@@ -44,7 +44,6 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     where
         R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
         M: Manifests<R>,
-        IndexBuilder<U>: Indexer<Error = U::SerError>,
     {
         let original_key = R::key(&record);
         self.buffer.prepare_writes::<R>(record, &original_key)?;
@@ -63,7 +62,6 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     where
         R::Key: RecordKey<Record = R> + Incrementable + Ord,
         M: Manifests<R>,
-        IndexBuilder<U>: Indexer<Error = U::SerError>,
     {
         let last_key = database.manifest.last();
         let new_key = if let Some(k) = last_key {
@@ -86,7 +84,6 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     where
         R::Key: RecordKey<Record = R>,
         M: Manifests<R>,
-        IndexBuilder<U>: Indexer<Error = U::SerError>,
     {
         self.buffer.prepare_deletes::<R>(record, key)
     }

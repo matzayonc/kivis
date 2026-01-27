@@ -1,5 +1,5 @@
 use crate::{
-    DatabaseEntry, IndexBuilder, Indexer, RecordKey, Unifier, UnifierData,
+    DatabaseEntry, IndexBuilder, RecordKey, Unifier, UnifierData,
     wrap::{Subtable, WrapPrelude, wrap},
 };
 
@@ -53,7 +53,6 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
     ) -> Result<(), U::SerError>
     where
         R::Key: RecordKey<Record = R>,
-        IndexBuilder<U>: Indexer<Error = U::SerError>,
     {
         let mut indexer = IndexBuilder::new(self.serializer());
         record.index_keys(&mut indexer)?;
@@ -62,7 +61,7 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
         let mut key_hash_range: Option<(usize, usize)> = None;
         let mut key_value_range: Option<(usize, usize)> = None;
 
-        for (discriminator, index_key) in indexer.into_index_keys() {
+        for (discriminator, index_key) in indexer.iter() {
             // Write index entry directly to buffers
             let mut prelude_buffer = <U::K as UnifierData>::Owned::default();
             self.serializer().serialize_key(
@@ -130,12 +129,11 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
     ) -> Result<(), U::SerError>
     where
         R::Key: RecordKey<Record = R>,
-        IndexBuilder<U>: Indexer<Error = U::SerError>,
     {
         let mut indexer = IndexBuilder::new(self.serializer());
         record.index_keys(&mut indexer)?;
 
-        let index_keys = indexer.into_index_keys();
+        let index_keys = indexer.iter();
 
         // Track serialized key position, lazily initialized on first iteration
         let mut key_bytes_range: Option<(usize, usize)> = None;
