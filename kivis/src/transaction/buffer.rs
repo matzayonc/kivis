@@ -74,9 +74,7 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
             // Serialize key hash on first iteration or reuse from previous iterations
             if let Some((start, end)) = key_hash_range {
                 // Reuse previously serialized key hash
-                let key_hash = U::K::extract_range(&self.key_data, start, end);
-                let key_hash_owned = U::K::to_owned(key_hash);
-                U::K::extend(&mut self.key_data, key_hash_owned.as_ref());
+                U::K::duplicate_within(&mut self.key_data, start, end);
             } else {
                 // First iteration: serialize key hash and save indices
                 let start = U::K::len(&self.key_data);
@@ -90,9 +88,7 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
             // Serialize key value on first iteration or reuse from previous iterations
             if let Some((start, end)) = key_value_range {
                 // Reuse previously serialized key value
-                let key_value = U::V::extract_range(&self.value_data, start, end);
-                let key_value_owned = U::V::to_owned(key_value);
-                U::V::extend(&mut self.value_data, key_value_owned.as_ref());
+                U::V::duplicate_within(&mut self.value_data, start, end);
             } else {
                 // First iteration: serialize key value and save indices
                 let start = U::V::len(&self.value_data);
@@ -146,9 +142,7 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
             // Serialize key on first iteration or reuse from previous iterations
             if let Some((start, end)) = key_bytes_range {
                 // Reuse previously serialized key
-                let key_bytes = U::K::extract_range(&self.key_data, start, end);
-                let key_bytes_owned = U::K::to_owned(key_bytes);
-                U::K::extend(&mut self.key_data, key_bytes_owned.as_ref());
+                U::K::duplicate_within(&mut self.key_data, start, end);
             } else {
                 // First iteration: serialize key and save indices
                 let start = U::K::len(&self.key_data);
