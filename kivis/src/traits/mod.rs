@@ -25,7 +25,7 @@ pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {
     /// Each tuple contains the index discriminator and the key bytes.
     /// # Errors
     /// Returns an error if serializing any of the index keys fails.
-    fn index_keys<I: Indexer>(&self, indexer: &mut I) -> Result<(), I::Error> {
+    fn index_keys<U: Unifier>(&self, indexer: &mut IndexBuilder<U>) -> Result<(), U::SerError> {
         Ok(())
     }
 }

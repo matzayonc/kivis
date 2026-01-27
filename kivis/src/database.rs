@@ -3,8 +3,7 @@ use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
 use crate::wrap::{Subtable, Wrap, WrapPrelude, empty_wrap, wrap};
 use crate::{
-    DeriveKey, Incrementable, IndexBuilder, Indexer, Manifest, Manifests, RecordKey, Unifiable,
-    Unifier, UnifierData,
+    DeriveKey, Incrementable, Manifest, Manifests, RecordKey, Unifiable, Unifier, UnifierData,
 };
 use core::ops::Range;
 
@@ -24,7 +23,6 @@ pub struct Database<S: Storage, M: Manifest> {
 impl<S: Storage, M: Manifest> Database<S, M>
 where
     S::Serializer: Unifier + Copy,
-    IndexBuilder<S::Serializer>: Indexer<Error = <S::Serializer as Unifier>::SerError>,
 {
     /// Creates a new [`Database`] instance over any storage backend.
     /// One of the key features of `kivis` is that it can work with any storage backend that implements the [`Storage`] trait.
