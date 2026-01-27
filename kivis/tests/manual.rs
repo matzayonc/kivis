@@ -6,10 +6,7 @@ use bincode::{
 };
 use std::{collections::BTreeMap, fmt::Display, ops::Range};
 
-use kivis::{
-    Database, DatabaseEntry, DeriveKey, Incrementable, Index, IndexBuilder, RecordKey, Scope,
-    Storage,
-};
+use kivis::{Database, DatabaseEntry, DeriveKey, Incrementable, Index, RecordKey, Scope, Storage};
 
 // Define a record type for an User.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
@@ -31,12 +28,19 @@ impl Scope for User {
 }
 impl kivis::DatabaseEntry for User {
     type Key = UserKey;
-    const INDEX_COUNT_HINT: usize = 1;
-    fn index_keys<U: kivis::Unifier>(
+    const INDEX_COUNT_HINT: u8 = 1;
+    fn index_key<U: kivis::Unifier>(
         &self,
-        indexer: &mut kivis::IndexBuilder<U>,
+        buffer: &mut <U::K as kivis::UnifierData>::Owned,
+        discriminator: u8,
+        serializer: &U,
     ) -> Result<(), U::SerError> {
-        indexer.add(&self.name)?;
+        match discriminator {
+            0 => {
+                serializer.serialize_key_ref(buffer, &self.name)?;
+            }
+            _ => {}
+        }
         Ok(())
     }
 }
@@ -265,13 +269,11 @@ fn test_index() -> anyhow::Result<()> {
 
     let _user_key = database.insert(user.clone())?;
 
-    let mut indexer = IndexBuilder::new(bincode::config::standard());
-    user.index_keys(&mut indexer)?;
-    let index_keys: Vec<_> = indexer.iter().collect();
-    assert_eq!(index_keys.len(), 1);
-    assert_eq!(index_keys[0].0, 0);
+    let serializer = bincode::config::standard();
+    let mut buffer = Vec::new();
+    user.index_key(&mut buffer, 0, &serializer)?;
     assert_eq!(
-        index_keys[0].1,
+        buffer,
         encode_to_vec(&user.name, bincode::config::standard()).context("Missing")?,
     );
 

@@ -25,6 +25,19 @@ pub trait DeriveKey {
     fn key(c: &<Self::Key as RecordKey>::Record) -> Self::Key;
 }
 
+/// A trait defining an index in the database.
+///
+/// An index is a way to efficiently look up records in the database by a specific key.
+/// It defines a table, primary key type, and an unique prefix for the index.
+pub trait Index: Unifiable + Debug {
+    /// The key type used by this index.
+    type Key: Unifiable + Clone + Eq + Debug;
+    /// The record type that this index applies to.
+    type Record: DatabaseEntry;
+    /// Unique identifier for this index within the record type.
+    const INDEX: u8;
+}
+
 /// A trait describing how a key can be auto-incremented, defined for numeric types.
 pub trait Incrementable: Default + Sized {
     /// The first and last valid values of the type.
@@ -38,13 +51,17 @@ pub trait Incrementable: Default + Sized {
 pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {
     /// The primary key type for this database entry.
     type Key: RecordKey;
-    const INDEX_COUNT_HINT: usize = 0;
+    const INDEX_COUNT_HINT: u8 = 0;
 
-    /// Returns the index keys for this entry.
-    /// Each tuple contains the index discriminator and the key bytes.
+    /// Serializes a specific index into the provided buffer.
     /// # Errors
-    /// Returns an error if serializing any of the index keys fails.
-    fn index_keys<U: Unifier>(&self, indexer: &mut IndexBuilder<U>) -> Result<(), U::SerError> {
+    /// Returns an error if serializing the index fails.
+    fn index_key<U: Unifier>(
+        &self,
+        buffer: &mut <U::K as UnifierData>::Owned,
+        discriminator: u8,
+        serializer: &U,
+    ) -> Result<(), U::SerError> {
         Ok(())
     }
 }

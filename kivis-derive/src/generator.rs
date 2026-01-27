@@ -168,9 +168,7 @@ impl Generator {
                 }
             };
 
-            index_values.push(quote! {
-                (#i as u8, #field_access)
-            });
+            index_values.push(field_access);
         }
 
         (index_impl, index_values)
@@ -185,6 +183,7 @@ impl Generator {
         let (impl_generics, ty_generics, where_clause) = self.0.generics.split_for_impl();
 
         let index_count = index_values.len();
+        let indices = (0..index_count).map(|i| i as u8);
 
         quote! {
             impl #impl_generics ::kivis::RecordKey for #key_type #ty_generics #where_clause {
@@ -193,12 +192,22 @@ impl Generator {
 
             impl #impl_generics ::kivis::DatabaseEntry for #name #ty_generics #where_clause {
                 type Key = #key_type;
-                const INDEX_COUNT_HINT: usize = #index_count;
+                const INDEX_COUNT_HINT: u8 = #index_count as u8;
 
-                fn index_keys<U: ::kivis::Unifier>(&self, indexer: &mut ::kivis::IndexBuilder<U>) -> Result<(), U::SerError> {
-                    #(
-                        indexer.add(#index_values.1)?;
-                    )*
+                fn index_key<U: ::kivis::Unifier>(
+                    &self,
+                    buffer: &mut <U::K as ::kivis::UnifierData>::Owned,
+                    discriminator: u8,
+                    serializer: &U,
+                ) -> Result<(), U::SerError> {
+                    match discriminator {
+                        #(
+                            #indices => {
+                                serializer.serialize_key_ref(buffer, #index_values)?;
+                            }
+                        )*
+                        _ => {}
+                    }
                     Ok(())
                 }
             }
