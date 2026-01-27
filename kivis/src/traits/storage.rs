@@ -4,7 +4,7 @@ use core::{fmt::Display, ops::Range};
 
 use crate::{OpsIter, Unifier};
 
-use super::Debug;
+use core::fmt::Debug;
 
 type KeysIteratorItem<S> = Result<
     <<<S as Storage>::Serializer as Unifier>::K as crate::UnifierData>::Owned,
