@@ -195,9 +195,9 @@ impl Generator {
                 type Key = #key_type;
                 const INDEX_COUNT_HINT: usize = #index_count;
 
-                fn index_keys<I: ::kivis::Indexer>(&self, indexer: &mut I) -> Result<(), I::Error> {
+                fn index_keys<U: ::kivis::Unifier>(&self, indexer: &mut ::kivis::IndexBuilder<U>) -> Result<(), U::SerError> {
                     #(
-                        indexer.add(#index_values.0, #index_values.1)?;
+                        indexer.add(#index_values.1)?;
                     )*
                     Ok(())
                 }
