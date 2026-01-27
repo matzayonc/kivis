@@ -1,9 +1,12 @@
-use bincode::{
-    error::{DecodeError, EncodeError},
-    serde::{decode_from_slice, encode_to_vec},
-};
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
 
-pub use super::*;
+use core::fmt::Debug;
+
+use serde::{Serialize, de::DeserializeOwned};
+
+use super::*;
+use crate::{Database, DatabaseError};
 
 /// A trait defining that the implementing type is a key of some record.
 /// Each type can be a key of only one record type, which is defined by the [`DatabaseEntry`] trait.
@@ -30,297 +33,40 @@ pub trait Incrementable: Default + Sized {
     fn next_id(&self) -> Option<Self>;
 }
 
-/// A trait defining an index in the database.
-///
-/// An index is a way to efficiently look up records in the database by a specific key.
-/// It defines a table, primary key type, and an unique prefix for the index.
-pub trait Index: Unifiable + Debug {
-    /// The key type used by this index.
-    type Key: Unifiable + Clone + Eq + Debug;
-    /// The record type that this index applies to.
-    type Record: DatabaseEntry;
-    /// Unique identifier for this index within the record type.
-    const INDEX: u8;
-}
+/// The main trait of the crate, defines a database entry that can be stored with its indexes.
+#[allow(unused_variables)] // Defalt implementation may not use all variables.
+pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {
+    /// The primary key type for this database entry.
+    type Key: RecordKey;
+    const INDEX_COUNT_HINT: usize = 0;
 
-pub trait UnifierData {
-    /// The owned type for this data (e.g., Vec<u8> for [u8], String for str)
-    type Owned: Default + Clone + AsRef<Self>;
-
-    /// Increments the buffer to the next value.
-    fn next(buffer: &mut Self::Owned);
-
-    /// Appends a single part to the buffer.
-    fn extend(buffer: &mut Self::Owned, part: &Self);
-
-    /// Returns the current length of the buffer.
-    fn len(buffer: &Self::Owned) -> usize;
-
-    /// Extracts a range from the owned buffer as a reference.
-    /// This is used to extract individual values from buffered data.
-    #[must_use]
-    fn extract_range(buffer: &Self::Owned, start: usize, end: usize) -> &Self;
-
-    /// Converts a reference to an owned value.
-    #[must_use]
-    fn to_owned(data: &Self) -> Self::Owned;
-
-    /// Duplicates data by converting to owned.
-    #[must_use]
-    fn duplicate(data: &Self) -> Self::Owned {
-        Self::to_owned(data)
-    }
-}
-
-impl UnifierData for [u8] {
-    type Owned = Vec<u8>;
-
-    fn next(buffer: &mut Self::Owned) {
-        for i in (0..buffer.len()).rev() {
-            // Add one if possible
-            if buffer[i] < 255 {
-                buffer[i] += 1;
-                return;
-            }
-            // Otherwise, set to zero and carry over
-            buffer[i] = 0;
-        }
-
-        // If all bytes were 255, we need to add a new byte
-        buffer.push(0);
-    }
-
-    fn extend(buffer: &mut Self::Owned, part: &Self) {
-        buffer.extend_from_slice(part);
-    }
-
-    fn len(buffer: &Self::Owned) -> usize {
-        buffer.len()
-    }
-
-    fn extract_range(buffer: &Self::Owned, start: usize, end: usize) -> &Self {
-        &buffer[start..end]
-    }
-
-    fn to_owned(data: &Self) -> Self::Owned {
-        data.to_vec()
-    }
-}
-
-#[cfg(feature = "std")]
-impl UnifierData for str {
-    type Owned = alloc::string::String;
-
-    fn next(buffer: &mut Self::Owned) {
-        let mut bytes = buffer.as_bytes().to_vec();
-
-        let next_valid_string = loop {
-            <[u8]>::next(&mut bytes);
-
-            if let Ok(parsed_back) = alloc::string::String::from_utf8(bytes.clone()) {
-                // If the bytes are not valid UTF-8, increment and try again.
-                break parsed_back;
-            }
-        };
-
-        *buffer = next_valid_string;
-    }
-
-    fn extend(buffer: &mut Self::Owned, part: &Self) {
-        buffer.push_str(part);
-    }
-
-    fn len(buffer: &Self::Owned) -> usize {
-        buffer.len()
-    }
-
-    fn extract_range(buffer: &Self::Owned, start: usize, end: usize) -> &Self {
-        &buffer[start..end]
-    }
-
-    fn to_owned(data: &Self) -> Self::Owned {
-        data.to_string()
-    }
-}
-
-pub trait Unifiable: Serialize + DeserializeOwned {}
-pub trait UnifiableRef: Unifiable + Clone {}
-
-impl<T: Serialize + DeserializeOwned> Unifiable for T {}
-impl<T: Serialize + DeserializeOwned + Clone> UnifiableRef for T {}
-
-pub trait Unifier {
-    type K: UnifierData + ?Sized;
-    type V: UnifierData + ?Sized;
-    type SerError: Debug;
-    type DeError: Debug;
-
-    /// Serializes a key directly into an existing buffer and returns the start and end positions.
+    /// Returns the index keys for this entry.
+    /// Each tuple contains the index discriminator and the key bytes.
     /// # Errors
-    ///
-    /// Returns an error if serialization fails.
-    fn serialize_key(
-        &self,
-        buffer: &mut <Self::K as UnifierData>::Owned,
-        data: impl Unifiable,
-    ) -> Result<(usize, usize), Self::SerError>;
-
-    /// Serializes a borrowed key directly into an existing buffer and returns the start and end positions.
-    /// # Errors
-    ///
-    /// Returns an error if serialization fails.
-    fn serialize_key_ref<R: UnifiableRef>(
-        &self,
-        buffer: &mut <Self::K as UnifierData>::Owned,
-        data: &R,
-    ) -> Result<(usize, usize), Self::SerError> {
-        self.serialize_key(buffer, data.clone())
-    }
-
-    /// Serializes a value directly into an existing buffer and returns the start and end positions.
-    /// # Errors
-    ///
-    /// Returns an error if serialization fails.
-    fn serialize_value(
-        &self,
-        buffer: &mut <Self::V as UnifierData>::Owned,
-        data: impl Unifiable,
-    ) -> Result<(usize, usize), Self::SerError>;
-
-    /// Serializes a borrowed value directly into an existing buffer and returns the start and end positions.
-    /// # Errors
-    ///
-    /// Returns an error if serialization fails.
-    fn serialize_value_ref<R: UnifiableRef>(
-        &self,
-        buffer: &mut <Self::V as UnifierData>::Owned,
-        data: &R,
-    ) -> Result<(usize, usize), Self::SerError> {
-        self.serialize_value(buffer, data.clone())
-    }
-
-    /// Deserializes a key from the given data.
-    /// # Errors
-    ///
-    /// Returns an error if deserialization fails.
-    fn deserialize_key<T: Unifiable>(
-        &self,
-        data: &<Self::K as UnifierData>::Owned,
-    ) -> Result<T, Self::DeError>;
-
-    /// Deserializes a value from the given data.
-    /// # Errors
-    ///
-    /// Returns an error if deserialization fails.
-    fn deserialize_value<T: Unifiable>(
-        &self,
-        data: &<Self::V as UnifierData>::Owned,
-    ) -> Result<T, Self::DeError>;
-}
-
-impl Unifier for Configuration {
-    type K = [u8];
-    type V = [u8];
-    type SerError = EncodeError;
-    type DeError = DecodeError;
-
-    fn serialize_key(
-        &self,
-        buffer: &mut Vec<u8>,
-        data: impl Serialize,
-    ) -> Result<(usize, usize), Self::SerError> {
-        let start = <[u8]>::len(buffer);
-        let serialized = encode_to_vec(data, Self::default())?;
-        <[u8]>::extend(buffer, &serialized);
-        Ok((start, <[u8]>::len(buffer)))
-    }
-
-    fn serialize_value(
-        &self,
-        buffer: &mut Vec<u8>,
-        data: impl Serialize,
-    ) -> Result<(usize, usize), Self::SerError> {
-        let start = <[u8]>::len(buffer);
-        let serialized = encode_to_vec(data, Self::default())?;
-        <[u8]>::extend(buffer, &serialized);
-        Ok((start, <[u8]>::len(buffer)))
-    }
-
-    fn deserialize_key<T: DeserializeOwned>(&self, data: &Vec<u8>) -> Result<T, Self::DeError> {
-        Ok(decode_from_slice(data, Self::default())?.0)
-    }
-
-    fn deserialize_value<T: DeserializeOwned>(&self, data: &Vec<u8>) -> Result<T, Self::DeError> {
-        Ok(decode_from_slice(data, Self::default())?.0)
-    }
-}
-
-pub struct IndexBuilder<U: Unifier> {
-    /// List of end positions for each index
-    indices: Vec<usize>,
-    /// Shared buffer for all index keys
-    key_data: <U::K as UnifierData>::Owned,
-    serializer: U,
-}
-
-pub struct IndexIter<U: Unifier> {
-    indices: alloc::vec::IntoIter<usize>,
-    key_data: <U::K as UnifierData>::Owned,
-    current_start: usize,
-    current_discriminator: u8,
-}
-
-impl<U: Unifier> Iterator for IndexIter<U> {
-    type Item = (u8, <U::K as UnifierData>::Owned);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let end = self.indices.next()?;
-        let key_slice =
-            <U::K as UnifierData>::extract_range(&self.key_data, self.current_start, end);
-        let key_owned = <U::K as UnifierData>::to_owned(key_slice);
-        let discriminator = self.current_discriminator;
-        self.current_start = end;
-        self.current_discriminator += 1;
-        Some((discriminator, key_owned))
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.indices.size_hint()
-    }
-}
-
-impl<U: Unifier> ExactSizeIterator for IndexIter<U> {
-    fn len(&self) -> usize {
-        self.indices.len()
-    }
-}
-
-impl<U: Unifier> IndexBuilder<U> {
-    pub fn new(serializer: U) -> Self {
-        Self {
-            indices: Vec::new(),
-            key_data: <U::K as UnifierData>::Owned::default(),
-            serializer,
-        }
-    }
-
-    pub fn iter(self) -> IndexIter<U> {
-        IndexIter {
-            indices: self.indices.into_iter(),
-            key_data: self.key_data,
-            current_start: 0,
-            current_discriminator: 0,
-        }
-    }
-
-    /// # Errors
-    ///
-    /// Returns an error if serialization fails.
-    pub fn add(&mut self, index: &impl UnifiableRef) -> Result<(), U::SerError> {
-        self.serializer
-            .serialize_key_ref(&mut self.key_data, index)?;
-        let end = <U::K as UnifierData>::len(&self.key_data);
-        self.indices.push(end);
+    /// Returns an error if serializing any of the index keys fails.
+    fn index_keys<U: Unifier>(&self, indexer: &mut IndexBuilder<U>) -> Result<(), U::SerError> {
         Ok(())
     }
+}
+
+pub trait Manifests<T: Scope + DatabaseEntry> {
+    fn last(&mut self) -> &mut Option<T::Key>;
+}
+
+pub trait Manifest: Default {
+    fn members() -> Vec<u8>;
+    /// # Errors
+    ///
+    /// Returns a [`DatabaseError`] if loading manifests requires access to the
+    /// underlying storage and that operation fails.
+    fn load<S: Storage>(&mut self, db: &mut Database<S, Self>) -> Result<(), DatabaseError<S>>
+    where
+        Self: Sized;
+}
+
+pub trait Scope {
+    /// Unique table identifier for this database entry type.
+    /// Must be unique across all tables in a database instance.
+    const SCOPE: u8;
+    type Manifest;
 }
