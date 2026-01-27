@@ -1,6 +1,3 @@
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
-
 use core::fmt::Debug;
 
 use serde::{Serialize, de::DeserializeOwned};
@@ -71,7 +68,7 @@ pub trait Manifests<T: Scope + DatabaseEntry> {
 }
 
 pub trait Manifest: Default {
-    fn members() -> Vec<u8>;
+    fn members() -> &'static [u8];
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if loading manifests requires access to the
