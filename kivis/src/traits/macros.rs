@@ -85,8 +85,8 @@ macro_rules! manifest {
         $crate::scope_impl_with_index!($manifest_name, 0; $($ty),+);
 
         impl $crate::Manifest for $manifest_name {
-            fn members() -> ::kivis::alloc::vec::Vec<u8> {
-                $crate::generate_member_scopes!(0; $($ty),+)
+            fn members() -> &'static [u8] {
+                &$crate::generate_member_scopes!(0; $($ty),+)
             }
 
             fn load<S: $crate::Storage>(&mut self, db: &mut $crate::Database<S, Self>) -> ::core::result::Result<(), $crate::DatabaseError<S>> {
@@ -114,28 +114,11 @@ macro_rules! manifest {
 /// Helper macro to generate member scope list
 #[macro_export]
 macro_rules! generate_member_scopes {
-    // Base case: no more types
-    ($index:expr;) => {
+    ($index:expr; $($ty:ty),+) => {
         {
-            ::kivis::alloc::vec::Vec::new()
-        }
-    };
-
-    // Single type remaining
-    ($index:expr; $ty:ty) => {
-        {
-            ::kivis::alloc::vec::Vec::from([$index])
-        }
-    };
-
-    // Multiple types remaining - add current index and recurse
-    ($index:expr; $ty:ty, $($rest:ty),+) => {
-        {
-            let mut scopes = {
-                ::kivis::alloc::vec::Vec::from([$index])
-            };
-            scopes.extend($crate::generate_member_scopes!($index + 1; $($rest),+));
-            scopes
+            [
+                $(<$ty as $crate::Scope>::SCOPE),+
+            ]
         }
     };
 }
