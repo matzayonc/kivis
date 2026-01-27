@@ -1,6 +1,6 @@
 use anyhow::Context;
 use bincode::serde::encode_to_vec;
-use kivis::{Database, DatabaseEntry, Index, IndexBuilder, MemoryStorage, Record, manifest};
+use kivis::{Database, DatabaseEntry, Index, MemoryStorage, Record, manifest};
 
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
@@ -91,13 +91,11 @@ fn test_index() -> anyhow::Result<()> {
 
     let user_key = store.put(user.clone())?;
 
-    let mut indexer = IndexBuilder::new(bincode::config::standard());
-    user.index_keys(&mut indexer)?;
-    let index_keys: Vec<_> = indexer.iter().collect();
-    assert_eq!(index_keys.len(), 1);
-    assert_eq!(index_keys[0].0, UserNameIndex::INDEX);
+    let serializer = bincode::config::standard();
+    let mut buffer = Vec::new();
+    user.index_key(&mut buffer, UserNameIndex::INDEX, &serializer)?;
     assert_eq!(
-        index_keys[0].1,
+        buffer,
         encode_to_vec(&user.name, bincode::config::standard()).context("Missing")?
     );
 
