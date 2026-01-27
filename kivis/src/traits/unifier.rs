@@ -8,7 +8,7 @@ use alloc::vec::Vec;
 
 use bincode::config::Configuration;
 use core::fmt::Debug;
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 pub trait UnifierData {
     /// The owned type for this data (e.g., Vec<u8> for [u8], String for str)
@@ -28,15 +28,20 @@ pub trait UnifierData {
     #[must_use]
     fn extract_range(buffer: &Self::Owned, start: usize, end: usize) -> &Self;
 
-    /// Converts a reference to an owned value.
+    /// Duplicates data by cloning the owned buffer.
     #[must_use]
-    fn to_owned(data: &Self) -> Self::Owned;
-
-    /// Duplicates data by converting to owned.
-    #[must_use]
-    fn duplicate(data: &Self) -> Self::Owned {
-        Self::to_owned(data)
+    fn duplicate(data: &Self) -> Self::Owned
+    where
+        Self::Owned: Clone + AsRef<Self>,
+    {
+        let mut result = Self::Owned::default();
+        Self::extend(&mut result, data);
+        result
     }
+
+    /// Duplicates a range from the buffer and appends it to the same buffer.
+    /// Equivalent to extract_range + to_owned + extend combined.
+    fn duplicate_within(buffer: &mut Self::Owned, start: usize, end: usize);
 }
 
 impl UnifierData for [u8] {
@@ -69,8 +74,9 @@ impl UnifierData for [u8] {
         &buffer[start..end]
     }
 
-    fn to_owned(data: &Self) -> Self::Owned {
-        data.to_vec()
+    fn duplicate_within(buffer: &mut Self::Owned, start: usize, end: usize) {
+        let len = buffer.len();
+        buffer.copy_within(start..end, len);
     }
 }
 
@@ -105,8 +111,8 @@ impl UnifierData for str {
         &buffer[start..end]
     }
 
-    fn to_owned(data: &Self) -> Self::Owned {
-        data.to_string()
+    fn duplicate_within(buffer: &mut Self::Owned, start: usize, end: usize) {
+        buffer.extend_from_within(start..end);
     }
 }
 
