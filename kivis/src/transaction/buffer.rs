@@ -1,5 +1,5 @@
 use crate::{
-    DatabaseEntry, IndexBuilder, RecordKey, Unifier, UnifierData,
+    DatabaseEntry, RecordKey, Unifier, UnifierData,
     wrap::{Subtable, WrapPrelude, wrap},
 };
 
@@ -54,24 +54,23 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
     where
         R::Key: RecordKey<Record = R>,
     {
-        let mut indexer = IndexBuilder::new(self.serializer());
-        record.index_keys(&mut indexer)?;
-
         // Track serialized key hash and value positions, lazily initialized on first iteration
         let mut key_hash_range: Option<(usize, usize)> = None;
         let mut key_value_range: Option<(usize, usize)> = None;
 
-        for (discriminator, index_key) in indexer.iter() {
+        let serializer = self.serializer();
+        for discriminator in 0..R::INDEX_COUNT_HINT {
             // Write index entry directly to buffers
             let mut prelude_buffer = <U::K as UnifierData>::Owned::default();
-            self.serializer().serialize_key(
+            serializer.serialize_key(
                 &mut prelude_buffer,
                 WrapPrelude::new::<R>(Subtable::Index(discriminator)),
             )?;
 
             U::K::extend(&mut self.key_data, prelude_buffer.as_ref());
-            U::K::extend(&mut self.key_data, index_key.as_ref());
 
+            // Serialize the index key directly into the buffer
+            record.index_key(&mut self.key_data, discriminator, &serializer)?;
             // Serialize key hash on first iteration or reuse from previous iterations
             if let Some((start, end)) = key_hash_range {
                 // Reuse previously serialized key hash
@@ -81,8 +80,7 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
             } else {
                 // First iteration: serialize key hash and save indices
                 let start = U::K::len(&self.key_data);
-                self.serializer()
-                    .serialize_key_ref(&mut self.key_data, key)?;
+                serializer.serialize_key_ref(&mut self.key_data, key)?;
                 let end = U::K::len(&self.key_data);
                 key_hash_range = Some((start, end));
             }
@@ -98,8 +96,7 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
             } else {
                 // First iteration: serialize key value and save indices
                 let start = U::V::len(&self.value_data);
-                self.serializer()
-                    .serialize_value_ref(&mut self.value_data, key)?;
+                serializer.serialize_value_ref(&mut self.value_data, key)?;
                 let end = U::V::len(&self.value_data);
                 key_value_range = Some((start, end));
             }
@@ -130,25 +127,22 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
     where
         R::Key: RecordKey<Record = R>,
     {
-        let mut indexer = IndexBuilder::new(self.serializer());
-        record.index_keys(&mut indexer)?;
-
-        let index_keys = indexer.iter();
-
         // Track serialized key position, lazily initialized on first iteration
         let mut key_bytes_range: Option<(usize, usize)> = None;
 
-        for (discriminator, index_key) in index_keys {
+        let serializer = self.serializer();
+        for discriminator in 0..R::INDEX_COUNT_HINT {
             // Write index delete key directly to buffer
             let mut prelude_buffer = <U::K as UnifierData>::Owned::default();
-            self.serializer().serialize_key(
+            serializer.serialize_key(
                 &mut prelude_buffer,
                 WrapPrelude::new::<R>(Subtable::Index(discriminator)),
             )?;
 
             U::K::extend(&mut self.key_data, prelude_buffer.as_ref());
-            U::K::extend(&mut self.key_data, index_key.as_ref());
 
+            // Serialize the index key directly into the buffer
+            record.index_key(&mut self.key_data, discriminator, &serializer)?;
             // Serialize key on first iteration or reuse from previous iterations
             if let Some((start, end)) = key_bytes_range {
                 // Reuse previously serialized key
@@ -158,8 +152,7 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
             } else {
                 // First iteration: serialize key and save indices
                 let start = U::K::len(&self.key_data);
-                self.serializer()
-                    .serialize_key_ref(&mut self.key_data, key)?;
+                serializer.serialize_key_ref(&mut self.key_data, key)?;
                 let end = U::K::len(&self.key_data);
                 key_bytes_range = Some((start, end));
             }
