@@ -1,7 +1,7 @@
 use crate::errors::DatabaseError;
 use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
-use crate::wrap::{Subtable, Wrap, WrapPrelude, empty_wrap, wrap};
+use crate::wrap::{Subtable, Wrap, WrapPrelude, empty_wrap};
 use crate::{
     DeriveKey, Incrementable, Manifest, Manifests, RecordKey, Unifiable, Unifier, UnifierData,
 };
@@ -129,8 +129,10 @@ where
     {
         let mut serialized_key =
             <<<S as Storage>::Serializer as Unifier>::K as UnifierData>::Owned::default();
+
         wrap::<K::Record, S::Serializer>(key, &self.serializer, &mut serialized_key)
             .map_err(|e| DatabaseError::Storage(e.into()))?;
+
         let Some(value) = self
             .store
             .get(serialized_key.as_ref())
@@ -381,4 +383,15 @@ where
             .deserialize_value(&value)
             .map_err(|e| DatabaseError::Storage(e.into()))
     }
+}
+
+/// Wraps a database entry key with scope and subtable information for storage.
+fn wrap<R: DatabaseEntry, U: Unifier>(
+    item_key: &R::Key,
+    unifier: &U,
+    buffer: &mut <U::K as UnifierData>::Owned,
+) -> Result<(), U::SerError> {
+    unifier.serialize_key(buffer, WrapPrelude::new::<R>(Subtable::Main))?;
+    unifier.serialize_key_ref(buffer, item_key)?;
+    Ok(())
 }
