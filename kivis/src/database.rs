@@ -8,7 +8,7 @@ use crate::{
 use core::ops::Range;
 
 #[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, vec::Vec};
+use alloc::boxed::Box;
 
 type DatabaseIteratorItem<R, S> = Result<<R as DatabaseEntry>::Key, DatabaseError<S>>;
 

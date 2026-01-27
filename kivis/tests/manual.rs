@@ -98,8 +98,8 @@ struct Manifest {
     last_pet: Option<PetKey>,
 }
 impl kivis::Manifest for Manifest {
-    fn members() -> Vec<u8> {
-        vec![User::SCOPE, Pet::SCOPE]
+    fn members() -> &'static [u8] {
+        &[User::SCOPE, Pet::SCOPE]
     }
 
     fn load<S: Storage>(
