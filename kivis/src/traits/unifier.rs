@@ -84,7 +84,7 @@ impl UnifierData for [u8] {
 
 #[cfg(feature = "std")]
 impl UnifierData for str {
-    type Owned = alloc::string::String;
+    type Owned = String;
 
     fn next(buffer: &mut Self::Owned) {
         let mut bytes = buffer.as_bytes().to_vec();
@@ -92,7 +92,7 @@ impl UnifierData for str {
         let next_valid_string = loop {
             <[u8]>::next(&mut bytes);
 
-            if let Ok(parsed_back) = alloc::string::String::from_utf8(bytes.clone()) {
+            if let Ok(parsed_back) = String::from_utf8(bytes.clone()) {
                 // If the bytes are not valid UTF-8, increment and try again.
                 break parsed_back;
             }
