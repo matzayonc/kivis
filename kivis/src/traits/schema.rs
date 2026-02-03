@@ -55,10 +55,10 @@ pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {
     /// Returns an error if serializing the index fails.
     fn index_key<U: Unifier>(
         &self,
-        buffer: &mut <U::K as UnifierData>::Owned,
+        buffer: &mut <U::K as UnifierData>::Buffer,
         discriminator: u8,
         serializer: &U,
-    ) -> Result<(), U::SerError> {
+    ) -> Result<(), BufferOverflowOr<U::SerError>> {
         Ok(())
     }
 }

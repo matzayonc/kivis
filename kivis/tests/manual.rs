@@ -6,7 +6,10 @@ use bincode::{
 };
 use std::{collections::BTreeMap, fmt::Display, ops::Range};
 
-use kivis::{Database, DatabaseEntry, DeriveKey, Incrementable, Index, RecordKey, Scope, Storage};
+use kivis::{
+    BufferOverflowError, BufferOverflowOr, Database, DatabaseEntry, DeriveKey, Incrementable,
+    Index, RecordKey, Scope, Storage,
+};
 
 // Define a record type for an User.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
@@ -31,10 +34,10 @@ impl kivis::DatabaseEntry for User {
     const INDEX_COUNT_HINT: u8 = 1;
     fn index_key<U: kivis::Unifier>(
         &self,
-        buffer: &mut <U::K as kivis::UnifierData>::Owned,
+        buffer: &mut <U::K as kivis::UnifierData>::Buffer,
         discriminator: u8,
         serializer: &U,
-    ) -> Result<(), U::SerError> {
+    ) -> Result<(), BufferOverflowOr<U::SerError>> {
         match discriminator {
             0 => {
                 serializer.serialize_key_ref(buffer, &self.name)?;
@@ -133,6 +136,7 @@ struct ManualStorage {
 enum NoError {
     Serialization(EncodeError),
     Deserialization(DecodeError),
+    BufferOverflow,
 }
 
 impl Display for NoError {
@@ -140,6 +144,7 @@ impl Display for NoError {
         match self {
             Self::Serialization(e) => write!(f, "Serialization error: {e:?}"),
             Self::Deserialization(e) => write!(f, "Deserialization error: {e:?}"),
+            Self::BufferOverflow => write!(f, "Buffer overflow error"),
         }
     }
 }
@@ -150,6 +155,7 @@ impl PartialEq for NoError {
             (self, other),
             (Self::Serialization(_), Self::Serialization(_))
                 | (Self::Deserialization(_), Self::Deserialization(_))
+                | (Self::BufferOverflow, Self::BufferOverflow)
         )
     }
 }
@@ -165,6 +171,12 @@ impl From<EncodeError> for NoError {
 impl From<DecodeError> for NoError {
     fn from(e: DecodeError) -> Self {
         Self::Deserialization(e)
+    }
+}
+
+impl From<BufferOverflowError> for NoError {
+    fn from(_: BufferOverflowError) -> Self {
+        Self::BufferOverflow
     }
 }
 

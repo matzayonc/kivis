@@ -9,12 +9,16 @@ mod tests {
     };
     use serde::{Deserialize, Serialize};
 
-    use kivis::{BatchOp, Database, DatabaseTransaction, OpsIter, Record, Storage, manifest};
+    use kivis::{
+        BatchOp, BufferOverflowError, Database, DatabaseTransaction, OpsIter, Record, Storage,
+        manifest,
+    };
 
     #[derive(Debug, PartialEq, Eq)]
     pub enum MockError {
         Serialization,
         Deserialization,
+        BufferOverflow,
     }
 
     impl Display for MockError {
@@ -22,6 +26,7 @@ mod tests {
             match self {
                 Self::Serialization => write!(f, "Serialization error"),
                 Self::Deserialization => write!(f, "Deserialization error"),
+                Self::BufferOverflow => write!(f, "Buffer overflow error"),
             }
         }
     }
@@ -35,6 +40,12 @@ mod tests {
     impl From<DecodeError> for MockError {
         fn from(_: DecodeError) -> Self {
             Self::Deserialization
+        }
+    }
+
+    impl From<BufferOverflowError> for MockError {
+        fn from(_: BufferOverflowError) -> Self {
+            Self::BufferOverflow
         }
     }
 
