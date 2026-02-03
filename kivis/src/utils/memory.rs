@@ -5,7 +5,7 @@ use bincode::{
     error::{DecodeError, EncodeError},
 };
 
-use crate::Storage;
+use crate::{BufferOverflowError, Storage};
 
 /// A memory-based storage implementation using a [`BTreeMap`].
 ///
@@ -20,6 +20,8 @@ pub enum MemoryStorageError {
     Serialization(EncodeError),
     /// Deserialization error
     Deserialization(DecodeError),
+    /// Buffer overflow error
+    BufferOverflow,
 }
 
 impl Display for MemoryStorageError {
@@ -27,6 +29,7 @@ impl Display for MemoryStorageError {
         match self {
             Self::Serialization(e) => write!(f, "Serialization error: {e:?}"),
             Self::Deserialization(e) => write!(f, "Deserialization error: {e:?}"),
+            Self::BufferOverflow => write!(f, "Buffer overflow error"),
         }
     }
 }
@@ -52,6 +55,12 @@ impl From<EncodeError> for MemoryStorageError {
 impl From<DecodeError> for MemoryStorageError {
     fn from(e: DecodeError) -> Self {
         Self::Deserialization(e)
+    }
+}
+
+impl From<BufferOverflowError> for MemoryStorageError {
+    fn from(_: BufferOverflowError) -> Self {
+        Self::BufferOverflow
     }
 }
 

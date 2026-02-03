@@ -5,7 +5,7 @@ use core::{
 
 use bincode::config::Configuration;
 
-use crate::{Storage, Unifier};
+use crate::{BufferOverflowError, BufferOverflowOr, Storage, Unifier};
 
 /// Errors that can occur while interacting with the database.
 ///
@@ -37,6 +37,22 @@ pub enum InternalDatabaseError {
     Serialization(<Configuration as Unifier>::SerError),
     /// Internal deserialization error, most likely caused by database corruption.
     Deserialization(<Configuration as Unifier>::DeError),
+}
+
+// This cannot be a [`From`] implementation because of orphan rules.
+impl<S> DatabaseError<S>
+where
+    S: Storage,
+{
+    /// Creates a new `DatabaseError::Storage` from the given storage error.
+    pub(crate) fn from_buffer_overflow_or(
+        e: BufferOverflowOr<<S::Serializer as Unifier>::SerError>,
+    ) -> Self {
+        match e.0 {
+            Some(err) => DatabaseError::Storage(err.into()),
+            None => DatabaseError::Storage(BufferOverflowError.into()),
+        }
+    }
 }
 
 impl<S: Storage> From<InternalDatabaseError> for DatabaseError<S> {

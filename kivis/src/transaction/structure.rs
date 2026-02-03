@@ -1,6 +1,6 @@
 use crate::{
-    Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable,
-    Manifest, Manifests, RecordKey, Storage, Unifier,
+    BufferOverflowOr, Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, Manifest,
+    Manifests, RecordKey, Storage, Unifier,
 };
 
 use core::marker::PhantomData;
@@ -40,7 +40,10 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     /// # Errors
     ///
     /// Returns a [`U::SerError`] if serializing keys or values fails while preparing the writes.
-    pub fn insert<K: RecordKey<Record = R>, R>(&mut self, record: R) -> Result<K, U::SerError>
+    pub fn insert<K: RecordKey<Record = R>, R>(
+        &mut self,
+        record: R,
+    ) -> Result<K, BufferOverflowOr<U::SerError>>
     where
         R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
         M: Manifests<R>,
@@ -72,7 +75,7 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
 
         self.buffer
             .prepare_writes::<R>(record, &new_key)
-            .map_err(|e| DatabaseError::Storage(e.into()))?;
+            .map_err(DatabaseError::from_buffer_overflow_or)?;
         last_key.replace(new_key.clone());
         Ok(new_key)
     }
@@ -80,7 +83,11 @@ impl<M: Manifest, U: Unifier + Copy> DatabaseTransaction<M, U> {
     /// # Errors
     ///
     /// Returns a [`U::SerError`] if serializing keys to delete fails.
-    pub fn remove<R: DatabaseEntry>(&mut self, key: &R::Key, record: &R) -> Result<(), U::SerError>
+    pub fn remove<R: DatabaseEntry>(
+        &mut self,
+        key: &R::Key,
+        record: &R,
+    ) -> Result<(), BufferOverflowOr<U::SerError>>
     where
         R::Key: RecordKey<Record = R>,
         M: Manifests<R>,

@@ -1,7 +1,7 @@
 // Client that communicates with the remote storage server via HTTP
 // This demonstrates how to implement the Storage trait using HTTP requests
 
-use kivis::Storage;
+use kivis::{BufferOverflowError, Storage};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::ops::Range;
@@ -24,6 +24,8 @@ pub enum ClientError {
     Deserialization(String),
     /// Server error
     Server(String),
+    /// Buffer overflow error (if applicable)
+    BufferOverflow,
 }
 
 impl fmt::Display for ClientError {
@@ -33,6 +35,7 @@ impl fmt::Display for ClientError {
             Self::Serialization(e) => write!(f, "Serialization error: {}", e),
             Self::Deserialization(e) => write!(f, "Deserialization error: {}", e),
             Self::Server(e) => write!(f, "Server error: {}", e),
+            Self::BufferOverflow => write!(f, "Buffer overflow error"),
         }
     }
 }
@@ -60,6 +63,12 @@ impl From<bincode::error::EncodeError> for ClientError {
 impl From<bincode::error::DecodeError> for ClientError {
     fn from(e: bincode::error::DecodeError) -> Self {
         Self::Deserialization(format!("{:?}", e))
+    }
+}
+
+impl From<BufferOverflowError> for ClientError {
+    fn from(_: BufferOverflowError) -> Self {
+        Self::BufferOverflow
     }
 }
 

@@ -1,4 +1,4 @@
-use kivis::{Storage, Unifier};
+use kivis::{BufferOverflowError, BufferOverflowOr, Storage, Unifier};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{fmt::Display, fs, path::PathBuf};
 
@@ -6,6 +6,7 @@ use std::{fmt::Display, fs, path::PathBuf};
 pub enum FileStoreError {
     Io(std::io::Error),
     Serialization(csv::Error),
+    BufferOverflow,
 }
 
 impl PartialEq for FileStoreError {
@@ -25,6 +26,7 @@ impl Display for FileStoreError {
         match self {
             Self::Io(e) => write!(f, "IO error: {}", e),
             Self::Serialization(e) => write!(f, "Serialization error: {}", e),
+            Self::BufferOverflow => write!(f, "Buffer overflow error"),
         }
     }
 }
@@ -38,6 +40,12 @@ impl From<csv::Error> for FileStoreError {
 impl From<std::io::Error> for FileStoreError {
     fn from(e: std::io::Error) -> Self {
         Self::Io(e)
+    }
+}
+
+impl From<BufferOverflowError> for FileStoreError {
+    fn from(_: BufferOverflowError) -> Self {
+        Self::BufferOverflow
     }
 }
 
@@ -89,14 +97,14 @@ impl Unifier for CsvSerializer {
         &self,
         buffer: &mut String,
         data: impl Serialize,
-    ) -> Result<(usize, usize), Self::SerError> {
+    ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
         let start = buffer.len();
         let mut writer = csv::WriterBuilder::new()
             .has_headers(false)
             .quote_style(csv::QuoteStyle::Necessary)
             .from_writer(Vec::new());
         writer.serialize(data)?;
-        writer.flush()?;
+        writer.flush().map_err(Self::SerError::from)?;
         let bytes = writer
             .into_inner()
             .map_err(|e| csv::Error::from(std::io::Error::other(e.to_string())))?;
@@ -112,14 +120,14 @@ impl Unifier for CsvSerializer {
         &self,
         buffer: &mut String,
         data: impl Serialize,
-    ) -> Result<(usize, usize), Self::SerError> {
+    ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
         let start = buffer.len();
         let mut writer = csv::WriterBuilder::new()
             .has_headers(false)
             .quote_style(csv::QuoteStyle::Necessary)
             .from_writer(Vec::new());
         writer.serialize(data)?;
-        writer.flush()?;
+        writer.flush().map_err(Self::SerError::from)?;
         let bytes = writer
             .into_inner()
             .map_err(|e| csv::Error::from(std::io::Error::other(e.to_string())))?;
