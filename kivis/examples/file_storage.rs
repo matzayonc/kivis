@@ -3,47 +3,20 @@ use bincode::{
     error::{DecodeError, EncodeError},
 };
 use kivis::{Database, DatabaseError, Record, Repository, Storage, manifest};
+use std::fs;
 use std::path::PathBuf;
-use std::{fmt::Display, fs};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, thiserror::Error)]
 enum FileStoreError {
-    Io,
-    Serialization,
-    Deserialization,
-    BufferOverflow,
+    #[error("IO error")]
+    Io(#[from] std::io::Error),
+    #[error("Serialization error")]
+    Serialization(#[from] EncodeError),
+    #[error("Deserialization error")]
+    Deserialization(#[from] DecodeError),
+    #[error("Buffer overflow error")]
+    BufferOverflow(#[from] kivis::BufferOverflowError),
 }
-
-impl Display for FileStoreError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Io => write!(f, "IO error"),
-            Self::Serialization => write!(f, "Serialization error"),
-            Self::Deserialization => write!(f, "Deserialization error"),
-            Self::BufferOverflow => write!(f, "Buffer overflow error"),
-        }
-    }
-}
-
-impl From<EncodeError> for FileStoreError {
-    fn from(_: EncodeError) -> Self {
-        Self::Serialization
-    }
-}
-
-impl From<DecodeError> for FileStoreError {
-    fn from(_: DecodeError) -> Self {
-        Self::Deserialization
-    }
-}
-
-impl From<kivis::BufferOverflowError> for FileStoreError {
-    fn from(_: kivis::BufferOverflowError) -> Self {
-        Self::BufferOverflow
-    }
-}
-
-impl std::error::Error for FileStoreError {}
 
 /// A user record with an indexed name field
 #[derive(
@@ -97,7 +70,7 @@ impl Repository for FileStore {
     type Error = FileStoreError;
     fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
         let file_path = self.key_to_filename(key);
-        fs::write(file_path, value).map_err(|_| FileStoreError::Io)?;
+        fs::write(file_path, value)?;
         Ok(())
     }
 
@@ -106,7 +79,7 @@ impl Repository for FileStore {
         match fs::read(file_path) {
             Ok(data) => Ok(Some(data)),
             Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(_) => Err(FileStoreError::Io),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -114,11 +87,11 @@ impl Repository for FileStore {
         let file_path = self.key_to_filename(key);
         match fs::read(&file_path) {
             Ok(data) => {
-                fs::remove_file(file_path).map_err(|_| FileStoreError::Io)?;
+                fs::remove_file(file_path)?;
                 Ok(Some(data))
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(_) => Err(FileStoreError::Io),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -126,7 +99,7 @@ impl Repository for FileStore {
         &self,
         range: std::ops::Range<Vec<u8>>,
     ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {
-        let entries = fs::read_dir(&self.data_dir).map_err(|_| FileStoreError::Io)?;
+        let entries = fs::read_dir(&self.data_dir)?;
 
         let mut keys: Vec<Vec<u8>> = Vec::new();
         for entry in entries.flatten() {

@@ -18,7 +18,7 @@ pub trait Repository {
     type V: UnifierData + ?Sized;
 
     /// Error type returned by repository operations.
-    type Error: Debug + Error + Eq + PartialEq + From<BufferOverflowError>;
+    type Error: Debug + Error + From<BufferOverflowError>;
 
     /// Insert a key-value pair into the repository.
     ///

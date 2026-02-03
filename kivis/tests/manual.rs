@@ -4,7 +4,8 @@ use bincode::{
     error::{DecodeError, EncodeError},
     serde::encode_to_vec,
 };
-use std::{collections::BTreeMap, fmt::Display, ops::Range};
+use std::{collections::BTreeMap, ops::Range};
+use thiserror::Error;
 
 use kivis::{
     BufferOverflowError, BufferOverflowOr, Database, DatabaseEntry, DeriveKey, Incrementable,
@@ -129,55 +130,15 @@ impl kivis::Manifests<Pet> for Manifest {
 struct ManualStorage {
     data: BTreeMap<Vec<u8>, Vec<u8>>,
 }
-#[derive(Debug)]
+#[derive(Debug, Error)]
 enum NoError {
-    Serialization(EncodeError),
-    Deserialization(DecodeError),
-    BufferOverflow,
+    #[error("Serialization error: {0:?}")]
+    Serialization(#[from] EncodeError),
+    #[error("Deserialization error: {0:?}")]
+    Deserialization(#[from] DecodeError),
+    #[error("Buffer overflow error")]
+    BufferOverflow(#[from] BufferOverflowError),
 }
-
-impl Display for NoError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Serialization(e) => write!(f, "Serialization error: {e:?}"),
-            Self::Deserialization(e) => write!(f, "Deserialization error: {e:?}"),
-            Self::BufferOverflow => write!(f, "Buffer overflow error"),
-        }
-    }
-}
-
-impl PartialEq for NoError {
-    fn eq(&self, other: &Self) -> bool {
-        matches!(
-            (self, other),
-            (Self::Serialization(_), Self::Serialization(_))
-                | (Self::Deserialization(_), Self::Deserialization(_))
-                | (Self::BufferOverflow, Self::BufferOverflow)
-        )
-    }
-}
-
-impl Eq for NoError {}
-
-impl From<EncodeError> for NoError {
-    fn from(e: EncodeError) -> Self {
-        Self::Serialization(e)
-    }
-}
-
-impl From<DecodeError> for NoError {
-    fn from(e: DecodeError) -> Self {
-        Self::Deserialization(e)
-    }
-}
-
-impl From<BufferOverflowError> for NoError {
-    fn from(_: BufferOverflowError) -> Self {
-        Self::BufferOverflow
-    }
-}
-
-impl std::error::Error for NoError {}
 
 impl Storage for ManualStorage {
     type KeyUnifier = Configuration;
