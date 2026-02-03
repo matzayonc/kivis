@@ -1,5 +1,5 @@
 use crate::{
-    DatabaseEntry, RecordKey, Unifier, UnifierData,
+    BufferOverflowOr, DatabaseEntry, RecordKey, Unifier, UnifierData,
     wrap::{Subtable, WrapPrelude},
 };
 
@@ -17,9 +17,9 @@ pub(crate) struct DatabaseTransactionBuffer<U: Unifier> {
     /// Pending operations: writes and deletes
     pub(super) pending_ops: Vec<Op>,
     /// Key data buffer
-    pub(super) key_data: <U::K as UnifierData>::Owned,
+    pub(super) key_data: <U::K as UnifierData>::Buffer,
     /// Value data buffer
-    pub(super) value_data: <U::V as UnifierData>::Owned,
+    pub(super) value_data: <U::V as UnifierData>::Buffer,
     /// Serialization configuration
     serializer: U,
 }
@@ -28,8 +28,8 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
     pub(crate) fn new(serializer: U) -> Self {
         Self {
             pending_ops: Vec::new(),
-            key_data: <U::K as UnifierData>::Owned::default(),
-            value_data: <U::V as UnifierData>::Owned::default(),
+            key_data: <U::K as UnifierData>::Buffer::default(),
+            value_data: <U::V as UnifierData>::Buffer::default(),
             serializer,
         }
     }
@@ -50,7 +50,7 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
         &mut self,
         record: R,
         key: &R::Key,
-    ) -> Result<(), U::SerError>
+    ) -> Result<(), BufferOverflowOr<U::SerError>>
     where
         R::Key: RecordKey<Record = R>,
     {
@@ -61,20 +61,22 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
         let serializer = self.serializer();
         for discriminator in 0..R::INDEX_COUNT_HINT {
             // Write index entry directly to buffers
-            let mut prelude_buffer = <U::K as UnifierData>::Owned::default();
+            let mut prelude_buffer = <U::K as UnifierData>::Buffer::default();
             serializer.serialize_key(
                 &mut prelude_buffer,
                 WrapPrelude::new::<R>(Subtable::Index(discriminator)),
             )?;
 
-            U::K::extend(&mut self.key_data, prelude_buffer.as_ref());
+            U::K::extend(&mut self.key_data, prelude_buffer.as_ref())
+                .map_err(BufferOverflowOr::overflow)?;
 
             // Serialize the index key directly into the buffer
             record.index_key(&mut self.key_data, discriminator, &serializer)?;
             // Serialize key hash on first iteration or reuse from previous iterations
             if let Some((start, end)) = key_range {
                 // Reuse previously serialized key hash
-                U::K::duplicate_within(&mut self.key_data, start, end);
+                U::K::duplicate_within(&mut self.key_data, start, end)
+                    .map_err(BufferOverflowOr::overflow)?;
             } else {
                 // First iteration: serialize key hash and save indices
                 let start = U::K::len(&self.key_data);
@@ -88,7 +90,8 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
             // Serialize key value on first iteration or reuse from previous iterations
             if let Some((start, end)) = key_value_range {
                 // Reuse previously serialized key value
-                U::V::duplicate_within(&mut self.value_data, start, end);
+                U::V::duplicate_within(&mut self.value_data, start, end)
+                    .map_err(BufferOverflowOr::overflow)?;
             } else {
                 // First iteration: serialize key value and save indices
                 let start = U::V::len(&self.value_data);
@@ -107,7 +110,8 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
             .serialize_key(&mut self.key_data, WrapPrelude::new::<R>(Subtable::Main))?;
         if let Some((start, end)) = key_range {
             // Reuse previously serialized key hash
-            U::K::duplicate_within(&mut self.key_data, start, end);
+            U::K::duplicate_within(&mut self.key_data, start, end)
+                .map_err(BufferOverflowOr::overflow)?;
         } else {
             serializer.serialize_key_ref(&mut self.key_data, key)?;
         }
@@ -126,7 +130,7 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
         &mut self,
         record: &R,
         key: &R::Key,
-    ) -> Result<(), U::SerError>
+    ) -> Result<(), BufferOverflowOr<U::SerError>>
     where
         R::Key: RecordKey<Record = R>,
     {
@@ -136,20 +140,22 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
         let serializer = self.serializer();
         for discriminator in 0..R::INDEX_COUNT_HINT {
             // Write index delete key directly to buffer
-            let mut prelude_buffer = <U::K as UnifierData>::Owned::default();
+            let mut prelude_buffer = <U::K as UnifierData>::Buffer::default();
             serializer.serialize_key(
                 &mut prelude_buffer,
                 WrapPrelude::new::<R>(Subtable::Index(discriminator)),
             )?;
 
-            U::K::extend(&mut self.key_data, prelude_buffer.as_ref());
+            U::K::extend(&mut self.key_data, prelude_buffer.as_ref())
+                .map_err(BufferOverflowOr::overflow)?;
 
             // Serialize the index key directly into the buffer
             record.index_key(&mut self.key_data, discriminator, &serializer)?;
             // Serialize key on first iteration or reuse from previous iterations
             if let Some((start, end)) = key_bytes_range {
                 // Reuse previously serialized key
-                U::K::duplicate_within(&mut self.key_data, start, end);
+                U::K::duplicate_within(&mut self.key_data, start, end)
+                    .map_err(BufferOverflowOr::overflow)?;
             } else {
                 // First iteration: serialize key and save indices
                 let start = U::K::len(&self.key_data);
@@ -167,7 +173,8 @@ impl<U: Unifier + Copy> DatabaseTransactionBuffer<U> {
             .serialize_key(&mut self.key_data, WrapPrelude::new::<R>(Subtable::Main))?;
         if let Some((start, end)) = key_bytes_range {
             // Reuse previously serialized key
-            U::K::duplicate_within(&mut self.key_data, start, end);
+            U::K::duplicate_within(&mut self.key_data, start, end)
+                .map_err(BufferOverflowOr::overflow)?;
         } else {
             serializer.serialize_key_ref(&mut self.key_data, key)?;
         }

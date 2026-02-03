@@ -196,10 +196,10 @@ impl Generator {
 
                 fn index_key<U: ::kivis::Unifier>(
                     &self,
-                    buffer: &mut <U::K as ::kivis::UnifierData>::Owned,
+                    buffer: &mut <U::K as ::kivis::UnifierData>::Buffer,
                     discriminator: u8,
                     serializer: &U,
-                ) -> Result<(), U::SerError> {
+                ) -> Result<(), kivis::BufferOverflowOr<U::SerError>> {
                     match discriminator {
                         #(
                             #indices => {

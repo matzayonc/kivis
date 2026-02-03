@@ -2,7 +2,7 @@
 use alloc::vec::Vec;
 use core::{fmt::Display, ops::Range};
 
-use crate::{OpsIter, Unifier};
+use crate::{BufferOverflowError, OpsIter, Unifier, UnifierData};
 
 use core::fmt::Debug;
 
@@ -11,17 +11,21 @@ type KeysIteratorItem<S> = Result<
     <S as Storage>::StoreError,
 >;
 
+// type Key<S> = <<<S as Storage>::Serializer as Unifier>::K as crate::UnifierData>::Owned;
 type Value<S> = <<<S as Storage>::Serializer as Unifier>::V as crate::UnifierData>::Owned;
-type KeyRef<S> = <<S as Storage>::Serializer as Unifier>::K;
-type ValueRef<S> = <<S as Storage>::Serializer as Unifier>::V;
+type KeyRef<'a, S> = <<<S as Storage>::Serializer as Unifier>::K as UnifierData>::View<'a>;
+type ValueRef<'a, S> = <<<S as Storage>::Serializer as Unifier>::V as UnifierData>::View<'a>;
 pub type Deleted<S> = Vec<Option<Value<S>>>;
 
 /// Represents a batch operation: either insert or delete.
-pub enum BatchOp<'a, K: ?Sized, V: ?Sized> {
+pub enum BatchOp<'a, K: UnifierData + ?Sized, V: UnifierData + ?Sized> {
     /// Insert operation with key and value references
-    Insert { key: &'a K, value: &'a V },
+    Insert {
+        key: K::View<'a>,
+        value: V::View<'a>,
+    },
     /// Delete operation with key reference
-    Delete { key: &'a K },
+    Delete { key: K::View<'a> },
 }
 
 /// A trait defining a storage backend for the database.
@@ -40,32 +44,29 @@ pub trait Storage {
         + Eq
         + PartialEq
         + From<<<Self as Storage>::Serializer as Unifier>::SerError>
-        + From<<<Self as Storage>::Serializer as Unifier>::DeError>;
+        + From<<<Self as Storage>::Serializer as Unifier>::DeError>
+        + From<BufferOverflowError>;
 
     /// Should insert the given key-value pair into the storage.
     ///
     /// # Errors
     ///
     /// Returns an error if the underlying storage fails to insert the key-value pair.
-    fn insert(
-        &mut self,
-        key: &KeyRef<Self>,
-        value: &ValueRef<Self>,
-    ) -> Result<(), Self::StoreError>;
+    fn insert(&mut self, key: KeyRef<Self>, value: ValueRef<Self>) -> Result<(), Self::StoreError>;
 
     /// Should retrieve the value associated with the given key from the storage.
     ///
     /// # Errors
     ///
     /// Returns an error if the underlying storage fails while retrieving the value.
-    fn get(&self, key: &KeyRef<Self>) -> Result<Option<Value<Self>>, Self::StoreError>;
+    fn get(&self, key: KeyRef<Self>) -> Result<Option<Value<Self>>, Self::StoreError>;
 
     /// Should remove the value associated with the given key from the storage.
     ///
     /// # Errors
     ///
     /// Returns an error if the underlying storage fails while removing the value.
-    fn remove(&mut self, key: &KeyRef<Self>) -> Result<Option<Value<Self>>, Self::StoreError>;
+    fn remove(&mut self, key: KeyRef<Self>) -> Result<Option<Value<Self>>, Self::StoreError>;
 
     /// Should iterate over the keys in the storage that are in range.
     ///
@@ -74,7 +75,7 @@ pub trait Storage {
     /// Returns an error if the underlying storages fails during iteration.
     fn iter_keys(
         &self,
-        range: Range<<<Self::Serializer as Unifier>::K as crate::UnifierData>::Owned>,
+        range: Range<<<Self::Serializer as Unifier>::K as crate::UnifierData>::Buffer>,
     ) -> Result<impl Iterator<Item = KeysIteratorItem<Self>>, Self::StoreError>
     where
         Self: Sized;

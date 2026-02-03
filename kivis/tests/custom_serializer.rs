@@ -1,7 +1,7 @@
 // Test demonstrating custom key vs value serialization in Unifier trait
 
 use bincode::error::{DecodeError, EncodeError};
-use kivis::{Database, Record, Storage, Unifier, manifest};
+use kivis::{BufferOverflowError, BufferOverflowOr, Database, Record, Storage, Unifier, manifest};
 use serde::{Deserialize, Serialize};
 use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
@@ -19,7 +19,7 @@ impl Unifier for CustomUnifier {
         &self,
         buffer: &mut Vec<u8>,
         data: impl Serialize,
-    ) -> Result<(usize, usize), Self::SerError> {
+    ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
         // Keys are serialized with a "KEY:" prefix
         let start = buffer.len();
         buffer.extend_from_slice(b"KEY:");
@@ -33,7 +33,7 @@ impl Unifier for CustomUnifier {
         &self,
         buffer: &mut Vec<u8>,
         data: impl Serialize,
-    ) -> Result<(usize, usize), Self::SerError> {
+    ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
         // Values are serialized with a "VAL:" prefix
         let start = buffer.len();
         buffer.extend_from_slice(b"VAL:");
@@ -72,6 +72,7 @@ impl Unifier for CustomUnifier {
 pub enum CustomError {
     Serialization,
     Deserialization,
+    BufferOverflow,
 }
 
 impl Display for CustomError {
@@ -79,6 +80,7 @@ impl Display for CustomError {
         match self {
             Self::Serialization => write!(f, "Serialization error"),
             Self::Deserialization => write!(f, "Deserialization error"),
+            Self::BufferOverflow => write!(f, "Buffer overflow error"),
         }
     }
 }
@@ -92,6 +94,12 @@ impl From<EncodeError> for CustomError {
 impl From<DecodeError> for CustomError {
     fn from(_: DecodeError) -> Self {
         Self::Deserialization
+    }
+}
+
+impl From<BufferOverflowError> for CustomError {
+    fn from(_: BufferOverflowError) -> Self {
+        Self::BufferOverflow
     }
 }
 
@@ -207,7 +215,7 @@ fn test_default_value_serialization_uses_key_serialization() {
             &self,
             buffer: &mut Vec<u8>,
             data: impl Serialize,
-        ) -> Result<(usize, usize), Self::SerError> {
+        ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
             let start = buffer.len();
             let encoded = bincode::serde::encode_to_vec(data, bincode::config::standard())?;
             buffer.extend(encoded);
@@ -219,7 +227,7 @@ fn test_default_value_serialization_uses_key_serialization() {
             &self,
             buffer: &mut Vec<u8>,
             data: impl Serialize,
-        ) -> Result<(usize, usize), Self::SerError> {
+        ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
             let start = buffer.len();
             let encoded = bincode::serde::encode_to_vec(data, bincode::config::standard())?;
             buffer.extend(encoded);

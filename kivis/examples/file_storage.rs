@@ -11,6 +11,7 @@ enum FileStoreError {
     Io,
     Serialization,
     Deserialization,
+    BufferOverflow,
 }
 
 impl Display for FileStoreError {
@@ -19,6 +20,7 @@ impl Display for FileStoreError {
             Self::Io => write!(f, "IO error"),
             Self::Serialization => write!(f, "Serialization error"),
             Self::Deserialization => write!(f, "Deserialization error"),
+            Self::BufferOverflow => write!(f, "Buffer overflow error"),
         }
     }
 }
@@ -32,6 +34,12 @@ impl From<EncodeError> for FileStoreError {
 impl From<DecodeError> for FileStoreError {
     fn from(_: DecodeError) -> Self {
         Self::Deserialization
+    }
+}
+
+impl From<kivis::BufferOverflowError> for FileStoreError {
+    fn from(_: kivis::BufferOverflowError) -> Self {
+        Self::BufferOverflow
     }
 }
 
