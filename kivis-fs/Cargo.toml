@@ -11,3 +11,4 @@ csv = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+thiserror = { workspace = true }

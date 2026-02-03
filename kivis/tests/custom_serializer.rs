@@ -5,7 +5,7 @@ use kivis::{
     BufferOverflowError, BufferOverflowOr, Database, Record, Repository, Storage, Unifier, manifest,
 };
 use serde::{Deserialize, Serialize};
-use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
+use std::{cmp::Reverse, collections::BTreeMap, ops::Range};
 
 /// Trait for providing a constant prefix
 pub trait Prefix {
@@ -72,42 +72,15 @@ pub type CustomKeyUnifier = PrefixUnifier<KeyPrefix>;
 /// Type alias for value unifier with "VAL:" prefix
 pub type CustomValueUnifier = PrefixUnifier<ValuePrefix>;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, thiserror::Error)]
 pub enum CustomError {
-    Serialization,
-    Deserialization,
-    BufferOverflow,
+    #[error("Serialization error")]
+    Serialization(#[from] EncodeError),
+    #[error("Deserialization error")]
+    Deserialization(#[from] DecodeError),
+    #[error("Buffer overflow error")]
+    BufferOverflow(#[from] BufferOverflowError),
 }
-
-impl Display for CustomError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Serialization => write!(f, "Serialization error"),
-            Self::Deserialization => write!(f, "Deserialization error"),
-            Self::BufferOverflow => write!(f, "Buffer overflow error"),
-        }
-    }
-}
-
-impl From<EncodeError> for CustomError {
-    fn from(_: EncodeError) -> Self {
-        Self::Serialization
-    }
-}
-
-impl From<DecodeError> for CustomError {
-    fn from(_: DecodeError) -> Self {
-        Self::Deserialization
-    }
-}
-
-impl From<BufferOverflowError> for CustomError {
-    fn from(_: BufferOverflowError) -> Self {
-        Self::BufferOverflow
-    }
-}
-
-impl std::error::Error for CustomError {}
 
 #[derive(Debug, Default)]
 pub struct CustomStorage {

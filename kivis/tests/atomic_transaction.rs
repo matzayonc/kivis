@@ -1,7 +1,7 @@
 // Note: test functions return Result and avoid using `unwrap()`
 #[cfg(test)]
 mod tests {
-    use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
+    use std::{cmp::Reverse, collections::BTreeMap, ops::Range};
 
     use bincode::{
         config::Configuration,
@@ -13,43 +13,17 @@ mod tests {
         BatchOp, BufferOverflowError, Database, DatabaseTransaction, Record, Repository, Storage,
         manifest,
     };
+    use thiserror::Error;
 
-    #[derive(Debug, PartialEq, Eq)]
+    #[derive(Debug, Error)]
     pub enum MockError {
-        Serialization,
-        Deserialization,
-        BufferOverflow,
+        #[error("Serialization error")]
+        Serialization(#[from] EncodeError),
+        #[error("Deserialization error")]
+        Deserialization(#[from] DecodeError),
+        #[error("Buffer overflow error")]
+        BufferOverflow(#[from] BufferOverflowError),
     }
-
-    impl Display for MockError {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            match self {
-                Self::Serialization => write!(f, "Serialization error"),
-                Self::Deserialization => write!(f, "Deserialization error"),
-                Self::BufferOverflow => write!(f, "Buffer overflow error"),
-            }
-        }
-    }
-
-    impl From<EncodeError> for MockError {
-        fn from(_: EncodeError) -> Self {
-            Self::Serialization
-        }
-    }
-
-    impl From<DecodeError> for MockError {
-        fn from(_: DecodeError) -> Self {
-            Self::Deserialization
-        }
-    }
-
-    impl From<BufferOverflowError> for MockError {
-        fn from(_: BufferOverflowError) -> Self {
-            Self::BufferOverflow
-        }
-    }
-
-    impl std::error::Error for MockError {}
 
     #[derive(Debug, Record, PartialEq, Eq, Serialize, Deserialize)]
     pub struct MockRecord(#[key] u8, char);
