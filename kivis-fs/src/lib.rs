@@ -89,12 +89,11 @@ impl CsvSerializer {
 }
 
 impl Unifier for CsvSerializer {
-    type K = str;
-    type V = str;
+    type D = str;
     type SerError = csv::Error;
     type DeError = csv::Error;
 
-    fn serialize_key(
+    fn serialize(
         &self,
         buffer: &mut String,
         data: impl Serialize,
@@ -117,54 +116,11 @@ impl Unifier for CsvSerializer {
         Ok((start, buffer.len()))
     }
 
-    fn serialize_value(
-        &self,
-        buffer: &mut String,
-        data: impl Serialize,
-    ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
-        let start = buffer.len();
-        let mut writer = csv::WriterBuilder::new()
-            .has_headers(false)
-            .quote_style(csv::QuoteStyle::Necessary)
-            .from_writer(Vec::new());
-        writer.serialize(data)?;
-        writer.flush().map_err(Self::SerError::from)?;
-        let bytes = writer
-            .into_inner()
-            .map_err(|e| csv::Error::from(std::io::Error::other(e.to_string())))?;
-        let mut result = String::from_utf8_lossy(&bytes).into_owned();
-        if result.ends_with('\n') {
-            result.pop();
-        }
-        buffer.push_str(&Self::encode_for_filename(&result));
-        Ok((start, buffer.len()))
-    }
-
-    fn deserialize_key<T: DeserializeOwned>(&self, data: &String) -> Result<T, Self::DeError> {
+    fn deserialize<T: DeserializeOwned>(&self, data: &String) -> Result<T, Self::DeError> {
         let decoded = Self::decode_from_filename(data).ok_or_else(|| {
             csv::Error::from(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                "invalid encoded key",
-            ))
-        })?;
-
-        let mut reader = csv::ReaderBuilder::new()
-            .has_headers(false)
-            .from_reader(decoded.as_bytes());
-        let mut iter = reader.deserialize();
-        iter.next().ok_or_else(|| {
-            csv::Error::from(std::io::Error::new(
-                std::io::ErrorKind::UnexpectedEof,
-                "no data",
-            ))
-        })?
-    }
-
-    fn deserialize_value<T: DeserializeOwned>(&self, data: &String) -> Result<T, Self::DeError> {
-        let decoded = Self::decode_from_filename(data).ok_or_else(|| {
-            csv::Error::from(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "invalid encoded value",
+                "invalid encoded data",
             ))
         })?;
 
@@ -207,7 +163,8 @@ impl FileStore {
 }
 
 impl Storage for FileStore {
-    type Serializer = CsvSerializer;
+    type KeyUnifier = CsvSerializer;
+    type ValueUnifier = CsvSerializer;
 }
 
 impl Repository for FileStore {
