@@ -47,14 +47,14 @@ where
         self.serializer = config;
     }
 
-    /// Sets a fallback storage that will be used if the main storage does not contain the requested record.
-    /// The current storage then becomes the cache for the fallback storage.
-    pub fn set_fallback(
-        &mut self,
-        _fallback: Box<dyn Storage<Serializer = S::Serializer, StoreError = S::StoreError>>,
-    ) {
-        // self.fallback = Some(fallback);
-    }
+    // /// Sets a fallback storage that will be used if the main storage does not contain the requested record.
+    // /// The current storage then becomes the cache for the fallback storage.
+    // pub fn set_fallback(
+    //     &mut self,
+    //     _fallback: Box<dyn Storage<Serializer = S::Serializer, StoreError = S::StoreError>>,
+    // ) {
+    //     // self.fallback = Some(fallback);
+    // }
 
     /// Add a record with autoincremented key into the database, together with all related index entries.
     ///
@@ -153,7 +153,7 @@ where
         Ok(Some(
             self.serializer
                 .deserialize_value(&value)
-                .map_err(|e| DatabaseError::Storage(e.into()))?,
+                .map_err(DatabaseError::Deserialization)?,
         ))
     }
 
@@ -210,9 +210,10 @@ where
             <<<S as Storage>::Serializer as Unifier>::K as UnifierData>::Buffer::default();
         wrap::<K::Record, S::Serializer>(&range.end, &self.serializer, &mut end)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
+
         let raw_iter = self
             .store
-            .iter_keys(start..end)
+            .iter_keys(translate_range::<<<S as Storage>::Serializer as Unifier>::K>(start..end))
             .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| {
@@ -221,10 +222,10 @@ where
                 Err(e) => return Err(DatabaseError::Storage(e)),
             };
 
-            let deserialized: Wrap<K> = match self.serializer.deserialize_key(&value) {
-                Ok(deserialized) => deserialized,
-                Err(e) => return Err(DatabaseError::Storage(e.into())),
-            };
+            let deserialized: Wrap<K> = self
+                .serializer
+                .deserialize_key(&value)
+                .map_err(DatabaseError::Deserialization)?;
 
             Ok(deserialized.key)
         }))
@@ -248,7 +249,7 @@ where
             .map_err(DatabaseError::from_buffer_overflow_or)?;
         let raw_iter = self
             .store
-            .iter_keys(start..end)
+            .iter_keys(translate_range::<<<S as Storage>::Serializer as Unifier>::K>(start..end))
             .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| {
@@ -257,10 +258,10 @@ where
                 Err(e) => return Err(DatabaseError::Storage(e)),
             };
 
-            let deserialized: Wrap<K> = match self.serializer.deserialize_key(&value) {
-                Ok(deserialized) => deserialized,
-                Err(e) => return Err(DatabaseError::Storage(e.into())),
-            };
+            let deserialized: Wrap<K> = self
+                .serializer
+                .deserialize_key(&value)
+                .map_err(DatabaseError::Deserialization)?;
 
             Ok(deserialized.key)
         }))
@@ -303,7 +304,7 @@ where
             )
             .map_err(DatabaseError::from_buffer_overflow_or)?;
         let mut end = <<S as Storage>::Serializer as Unifier>::K::duplicate(start.as_ref())
-            .expect("Clone should be enough");
+            .map_err(|e| DatabaseError::from_buffer_overflow_or(BufferOverflowOr::overflow(e)))?;
 
         self.serializer()
             .serialize_key(&mut start, range.start)
@@ -314,7 +315,7 @@ where
 
         let raw_iter = self
             .store
-            .iter_keys(start..end)
+            .iter_keys(translate_range::<<<S as Storage>::Serializer as Unifier>::K>(start..end))
             .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| self.process_iter_result(elem)))
@@ -346,12 +347,12 @@ where
             .serialize_key(&mut start, index_key)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
         let mut end = <S::Serializer as Unifier>::K::duplicate(start.as_ref())
-            .expect("Clone should be enough");
+            .map_err(|e| DatabaseError::from_buffer_overflow_or(BufferOverflowOr::overflow(e)))?;
         <S::Serializer as Unifier>::K::next(&mut end);
 
         let raw_iter = self
             .store
-            .iter_keys(start..end)
+            .iter_keys(translate_range::<<<S as Storage>::Serializer as Unifier>::K>(start..end))
             .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| self.process_iter_result(elem)))
@@ -370,7 +371,7 @@ where
     /// Helper function to process iterator results and get deserialized values
     fn process_iter_result<T: Unifiable>(
         &self,
-        result: Result<<<S::Serializer as Unifier>::K as UnifierData>::Owned, S::StoreError>,
+        result: Result<<<S::Serializer as Unifier>::K as UnifierData>::Owned, S::Error>,
     ) -> Result<T, DatabaseError<S>> {
         let key: <<<S as Storage>::Serializer as Unifier>::K as UnifierData>::Owned =
             result.map_err(DatabaseError::Storage)?;
@@ -389,7 +390,7 @@ where
 
         self.serializer
             .deserialize_value(&value)
-            .map_err(|e| DatabaseError::Storage(e.into()))
+            .map_err(DatabaseError::Deserialization)
     }
 }
 
@@ -402,4 +403,13 @@ fn wrap<R: DatabaseEntry, U: Unifier>(
     unifier.serialize_key(buffer, WrapPrelude::new::<R>(Subtable::Main))?;
     unifier.serialize_key_ref(buffer, item_key)?;
     Ok(())
+}
+
+fn translate_range<D: UnifierData + ?Sized>(
+    buffer: Range<<D as UnifierData>::Buffer>,
+) -> Range<<D as UnifierData>::Owned> {
+    let start = <D as UnifierData>::Owned::from(buffer.start.as_ref());
+    let end = <D as UnifierData>::Owned::from(buffer.end.as_ref());
+    // Return owned range
+    start..end
 }

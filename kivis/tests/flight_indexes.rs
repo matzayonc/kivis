@@ -23,7 +23,7 @@ manifest![Manifest: Flight];
 fn test_insertion_and_deletion() -> anyhow::Result<()> {
     let mut store = Database::<_, Manifest>::new(MemoryStorage::default())?;
 
-    let flights = vec![
+    let flights = [
         Flight {
             flight_number: "AA100".into(),
             departure_airport: "JFK".into(),

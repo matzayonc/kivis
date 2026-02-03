@@ -1,4 +1,4 @@
-use kivis::{BufferOverflowError, BufferOverflowOr, Storage, Unifier};
+use kivis::{BufferOverflowError, BufferOverflowOr, Repository, Storage, Unifier};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{fmt::Display, fs, path::PathBuf};
 
@@ -30,6 +30,7 @@ impl Display for FileStoreError {
         }
     }
 }
+impl std::error::Error for FileStoreError {}
 
 impl From<csv::Error> for FileStoreError {
     fn from(e: csv::Error) -> Self {
@@ -207,15 +208,20 @@ impl FileStore {
 
 impl Storage for FileStore {
     type Serializer = CsvSerializer;
-    type StoreError = FileStoreError;
+}
 
-    fn insert(&mut self, key: &str, value: &str) -> Result<(), Self::StoreError> {
+impl Repository for FileStore {
+    type K = str;
+    type V = str;
+    type Error = FileStoreError;
+
+    fn insert(&mut self, key: &str, value: &str) -> Result<(), Self::Error> {
         let file_path = self.key_to_filename(key);
         fs::write(file_path, value)?;
         Ok(())
     }
 
-    fn get(&self, key: &str) -> Result<Option<String>, Self::StoreError> {
+    fn get(&self, key: &str) -> Result<Option<String>, Self::Error> {
         let file_path = self.key_to_filename(key);
         match fs::read_to_string(file_path) {
             Ok(data) => Ok(Some(data)),
@@ -224,7 +230,7 @@ impl Storage for FileStore {
         }
     }
 
-    fn remove(&mut self, key: &str) -> Result<Option<String>, Self::StoreError> {
+    fn remove(&mut self, key: &str) -> Result<Option<String>, Self::Error> {
         let file_path = self.key_to_filename(key);
         match fs::read_to_string(&file_path) {
             Ok(data) => {
@@ -239,7 +245,7 @@ impl Storage for FileStore {
     fn iter_keys(
         &self,
         range: std::ops::Range<String>,
-    ) -> Result<impl Iterator<Item = Result<String, Self::StoreError>>, Self::StoreError> {
+    ) -> Result<impl Iterator<Item = Result<String, Self::Error>>, Self::Error> {
         let entries = fs::read_dir(&self.data_dir)?;
 
         let mut keys: Vec<String> = Vec::new();

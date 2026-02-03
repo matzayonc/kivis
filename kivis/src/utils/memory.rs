@@ -1,11 +1,17 @@
-use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
+use std::{
+    cmp::Reverse,
+    collections::BTreeMap,
+    error::Error,
+    fmt::{Debug, Display},
+    ops::Range,
+};
 
 use bincode::{
     config::Configuration,
     error::{DecodeError, EncodeError},
 };
 
-use crate::{BufferOverflowError, Storage};
+use crate::{BufferOverflowError, Repository, Storage};
 
 /// A memory-based storage implementation using a [`BTreeMap`].
 ///
@@ -23,6 +29,8 @@ pub enum MemoryStorageError {
     /// Buffer overflow error
     BufferOverflow,
 }
+
+impl Error for MemoryStorageError {}
 
 impl Display for MemoryStorageError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -66,25 +74,30 @@ impl From<BufferOverflowError> for MemoryStorageError {
 
 impl Storage for MemoryStorage {
     type Serializer = Configuration;
-    type StoreError = MemoryStorageError;
+}
 
-    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::StoreError> {
+impl Repository for MemoryStorage {
+    type K = [u8];
+    type V = [u8];
+    type Error = MemoryStorageError;
+
+    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
         self.insert(Reverse(key.to_vec()), value.to_vec());
         Ok(())
     }
 
-    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self.get(&Reverse(key.to_vec())).cloned())
     }
 
-    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self.remove(&Reverse(key.to_vec())))
     }
 
     fn iter_keys(
         &self,
         range: Range<Vec<u8>>,
-    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError> {
+    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {
         let reverse_range = Reverse(range.end)..Reverse(range.start);
 
         let iter = self.range(reverse_range);

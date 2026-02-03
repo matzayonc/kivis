@@ -1,7 +1,9 @@
 // Test demonstrating custom key vs value serialization in Unifier trait
 
 use bincode::error::{DecodeError, EncodeError};
-use kivis::{BufferOverflowError, BufferOverflowOr, Database, Record, Storage, Unifier, manifest};
+use kivis::{
+    BufferOverflowError, BufferOverflowOr, Database, Record, Repository, Storage, Unifier, manifest,
+};
 use serde::{Deserialize, Serialize};
 use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
@@ -103,6 +105,8 @@ impl From<BufferOverflowError> for CustomError {
     }
 }
 
+impl std::error::Error for CustomError {}
+
 #[derive(Debug, Default)]
 pub struct CustomStorage {
     data: BTreeMap<Reverse<Vec<u8>>, Vec<u8>>,
@@ -120,25 +124,30 @@ impl CustomStorage {
 
 impl Storage for CustomStorage {
     type Serializer = CustomUnifier;
-    type StoreError = CustomError;
+}
 
-    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::StoreError> {
+impl Repository for CustomStorage {
+    type K = [u8];
+    type V = [u8];
+    type Error = CustomError;
+
+    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
         self.data.insert(Reverse(key.to_vec()), value.to_vec());
         Ok(())
     }
 
-    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self.data.get(&Reverse(key.to_vec())).cloned())
     }
 
-    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self.data.remove(&Reverse(key.to_vec())))
     }
 
     fn iter_keys(
         &self,
         range: Range<Vec<u8>>,
-    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError> {
+    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {
         let reverse_range = Reverse(range.end)..Reverse(range.start);
         let iter = self.data.range(reverse_range);
         Ok(iter.map(|(k, _v)| Ok(k.0.clone())))

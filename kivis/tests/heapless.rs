@@ -9,7 +9,13 @@ struct Bytes([u8; BUFFER_SIZE], usize);
 
 impl AsRef<Bytes> for Bytes {
     fn as_ref(&self) -> &Bytes {
-        &self
+        self
+    }
+}
+
+impl From<&Bytes> for Bytes {
+    fn from(slice: &Bytes) -> Self {
+        Bytes(slice.0, slice.1)
     }
 }
 

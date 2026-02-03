@@ -1,14 +1,12 @@
 use crate::{
     BufferOverflowOr, Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, Manifest,
-    Manifests, RecordKey, Storage, Unifier,
+    Manifests, RecordKey, Storage, Unifier, transaction::buffer::DatabaseTransactionBuffer,
 };
 
 use core::marker::PhantomData;
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-
-use super::buffer::DatabaseTransactionBuffer;
 
 /// A database transaction that accumulates low-level byte operations (writes and deletes)
 /// without immediately applying them to storage.

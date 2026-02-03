@@ -182,8 +182,12 @@ impl Generator {
         let name = &self.0.name;
         let (impl_generics, ty_generics, where_clause) = self.0.generics.split_for_impl();
 
-        let index_count = index_values.len();
-        let indices = (0..index_count).map(|i| i as u8);
+        let Ok(index_count) = u8::try_from(index_values.len()) else {
+            return quote! {
+                compile_error!("Too many indexes: maximum of 256 indexes allowed per record");
+            };
+        };
+        let indices = 0..index_count;
 
         quote! {
             impl #impl_generics ::kivis::RecordKey for #key_type #ty_generics #where_clause {

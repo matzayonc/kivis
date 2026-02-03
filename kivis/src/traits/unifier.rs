@@ -18,7 +18,7 @@ use std::fmt::Display;
 pub struct BufferOverflowError;
 impl Display for BufferOverflowError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 impl Error for BufferOverflowError {}
@@ -55,7 +55,7 @@ impl<E: Display + Debug> Error for BufferOverflowOr<E> {}
 
 pub trait UnifierData {
     /// The owned type for this data (e.g., Vec<u8> for [u8], String for str)
-    type Owned: Default + Clone + AsRef<Self>;
+    type Owned: Default + Clone + AsRef<Self> + for<'a> From<&'a Self>;
     type Buffer: Default + Clone + AsRef<Self> + From<Self::Owned>;
     type View<'a>;
 
@@ -63,6 +63,10 @@ pub trait UnifierData {
     fn next(buffer: &mut Self::Buffer);
 
     /// Appends a single part to the buffer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the buffer overflows.
     fn extend(buffer: &mut Self::Buffer, part: &Self) -> Result<(), BufferOverflowError>;
 
     /// Returns the current length of the buffer.
@@ -71,14 +75,17 @@ pub trait UnifierData {
     /// Extracts a range from the owned buffer as a reference.
     /// This is used to extract individual values from buffered data.
     #[must_use]
-    fn extract_range<'a>(buffer: &'a Self::Buffer, start: usize, end: usize) -> Self::View<'a>;
+    fn extract_range(buffer: &Self::Buffer, start: usize, end: usize) -> Self::View<'_>;
     // TODO: consider removing
-    fn extract_full<'a>(buffer: &'a Self::Buffer) -> Self::View<'a> {
+    fn extract_full(buffer: &Self::Buffer) -> Self::View<'_> {
         Self::extract_range(buffer, 0, Self::len(buffer))
     }
 
     /// Duplicates data by cloning the owned buffer.
-    #[must_use]
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the buffer overflows.
     fn duplicate(data: &Self) -> Result<Self::Buffer, BufferOverflowError>
     where
         Self::Buffer: Clone + AsRef<Self>,
@@ -89,7 +96,10 @@ pub trait UnifierData {
     }
 
     /// Duplicates a range from the buffer and appends it to the same buffer.
-    /// Equivalent to extract_range + to_owned + extend combined.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the buffer overflows.
     fn duplicate_within(
         buffer: &mut Self::Buffer,
         start: usize,
@@ -129,7 +139,7 @@ impl UnifierData for [u8] {
         buffer.len()
     }
 
-    fn extract_range<'a>(buffer: &'a Self::Buffer, start: usize, end: usize) -> Self::View<'a> {
+    fn extract_range(buffer: &Self::Buffer, start: usize, end: usize) -> Self::View<'_> {
         &buffer[start..end]
     }
 
@@ -182,7 +192,7 @@ impl UnifierData for str {
         buffer.len()
     }
 
-    fn extract_range<'a>(buffer: &'a Self::Owned, start: usize, end: usize) -> Self::View<'a> {
+    fn extract_range(buffer: &Self::Owned, start: usize, end: usize) -> Self::View<'_> {
         &buffer[start..end]
     }
 
@@ -208,8 +218,8 @@ impl<T: Serialize + DeserializeOwned + Clone> UnifiableRef for T {}
 pub trait Unifier {
     type K: UnifierData + ?Sized;
     type V: UnifierData + ?Sized;
-    type SerError: Debug;
-    type DeError: Debug;
+    type SerError: Debug + Display + Error;
+    type DeError: Debug + Display + Error;
 
     /// Serializes a key directly into an existing buffer and returns the start and end positions.
     /// # Errors
