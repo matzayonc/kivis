@@ -1,12 +1,10 @@
 use crate::{
-    BufferOverflowOr, DatabaseEntry, RecordKey, Unifier, UnifierData,
+    BufferOverflowOr, DatabaseEntry, OpsIter, RecordKey, Unifier, UnifierData,
     wrap::{Subtable, WrapPrelude},
 };
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-
-use super::iter::OpsIter;
 
 pub enum Op {
     Write { key_end: usize, value_end: usize },

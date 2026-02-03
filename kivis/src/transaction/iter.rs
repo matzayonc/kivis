@@ -1,6 +1,4 @@
-use crate::{BatchOp, Unifier, UnifierData};
-
-use super::buffer::{DatabaseTransactionBuffer, Op};
+use crate::{BatchOp, Op, Unifier, UnifierData, transaction::buffer::DatabaseTransactionBuffer};
 
 pub struct OpsIter<'a, U: Unifier> {
     pub(super) transaction: &'a DatabaseTransactionBuffer<U>,

@@ -1,7 +1,7 @@
 // Client that communicates with the remote storage server via HTTP
 // This demonstrates how to implement the Storage trait using HTTP requests
 
-use kivis::{BufferOverflowError, Storage};
+use kivis::{BufferOverflowError, Repository, Storage};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::ops::Range;
@@ -72,6 +72,8 @@ impl From<BufferOverflowError> for ClientError {
     }
 }
 
+impl std::error::Error for ClientError {}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct InsertRequest {
     key: String,
@@ -105,9 +107,12 @@ impl Client {
 
 impl Storage for Client {
     type Serializer = bincode::config::Configuration;
-    type StoreError = ClientError;
-
-    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::StoreError> {
+}
+impl Repository for Client {
+    type K = [u8];
+    type V = [u8];
+    type Error = ClientError;
+    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
         let request = InsertRequest {
             key: hex::encode(key),
             value: hex::encode(value),
@@ -130,7 +135,7 @@ impl Storage for Client {
         }
     }
 
-    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let key_hex = hex::encode(key);
 
         let response = self
@@ -157,7 +162,7 @@ impl Storage for Client {
         }
     }
 
-    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let key_hex = hex::encode(key);
 
         let response = self
@@ -187,7 +192,7 @@ impl Storage for Client {
     fn iter_keys(
         &self,
         range: Range<Vec<u8>>,
-    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError> {
+    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {
         // Use hex encoding for binary data to avoid URL encoding issues
         let start = hex::encode(&range.start);
         let end = hex::encode(&range.end);

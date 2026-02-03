@@ -10,7 +10,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use kivis::{
-        BatchOp, BufferOverflowError, Database, DatabaseTransaction, OpsIter, Record, Storage,
+        BatchOp, BufferOverflowError, Database, DatabaseTransaction, Record, Repository, Storage,
         manifest,
     };
 
@@ -49,6 +49,8 @@ mod tests {
         }
     }
 
+    impl std::error::Error for MockError {}
+
     #[derive(Debug, Record, PartialEq, Eq, Serialize, Deserialize)]
     pub struct MockRecord(#[key] u8, char);
 
@@ -70,36 +72,39 @@ mod tests {
 
     impl Storage for MockAtomicStorage {
         type Serializer = Configuration;
-        type StoreError = MockError;
+    }
 
-        fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::StoreError> {
+    impl Repository for MockAtomicStorage {
+        type K = [u8];
+        type V = [u8];
+        type Error = MockError;
+
+        fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
             self.data.insert(Reverse(key.to_vec()), value.to_vec());
             Ok(())
         }
 
-        fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+        fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
             Ok(self.data.get(&Reverse(key.to_vec())).cloned())
         }
 
-        fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+        fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
             Ok(self.data.remove(&Reverse(key.to_vec())))
         }
 
         fn iter_keys(
             &self,
             range: Range<Vec<u8>>,
-        ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError>
-        {
+        ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {
             let reverse_range = Reverse(range.end)..Reverse(range.start);
             let iter = self.data.range(reverse_range);
             Ok(iter.map(|(k, _v)| Ok(k.0.clone())))
         }
 
-        // Override the default batch_mixed implementation for better performance
         fn batch_mixed<'a>(
             &mut self,
-            operations: OpsIter<'a, Self::Serializer>,
-        ) -> Result<Vec<Option<Vec<u8>>>, Self::StoreError> {
+            operations: impl Iterator<Item = BatchOp<'a, [u8], [u8]>>,
+        ) -> Result<Vec<Option<<[u8] as kivis::UnifierData>::Owned>>, Self::Error> {
             // In a real implementation, this could be atomic
             let mut deleted = Vec::new();
             for op in operations {
@@ -112,7 +117,6 @@ mod tests {
                     }
                 }
             }
-
             Ok(deleted)
         }
     }

@@ -1,4 +1,4 @@
-use super::Incrementable;
+use crate::Incrementable;
 
 impl Incrementable for u128 {
     fn next_id(&self) -> Option<Self> {

@@ -2,7 +2,7 @@ use bincode::{
     config::Configuration,
     error::{DecodeError, EncodeError},
 };
-use kivis::{Database, DatabaseError, Record, Storage, manifest};
+use kivis::{Database, DatabaseError, Record, Repository, Storage, manifest};
 use std::path::PathBuf;
 use std::{fmt::Display, fs};
 
@@ -42,6 +42,8 @@ impl From<kivis::BufferOverflowError> for FileStoreError {
         Self::BufferOverflow
     }
 }
+
+impl std::error::Error for FileStoreError {}
 
 /// A user record with an indexed name field
 #[derive(
@@ -86,15 +88,19 @@ impl FileStore {
 
 impl Storage for FileStore {
     type Serializer = Configuration;
-    type StoreError = FileStoreError;
+}
 
-    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::StoreError> {
+impl Repository for FileStore {
+    type K = [u8];
+    type V = [u8];
+    type Error = FileStoreError;
+    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
         let file_path = self.key_to_filename(key);
         fs::write(file_path, value).map_err(|_| FileStoreError::Io)?;
         Ok(())
     }
 
-    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let file_path = self.key_to_filename(key);
         match fs::read(file_path) {
             Ok(data) => Ok(Some(data)),
@@ -103,7 +109,7 @@ impl Storage for FileStore {
         }
     }
 
-    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         let file_path = self.key_to_filename(key);
         match fs::read(&file_path) {
             Ok(data) => {
@@ -118,7 +124,7 @@ impl Storage for FileStore {
     fn iter_keys(
         &self,
         range: std::ops::Range<Vec<u8>>,
-    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError> {
+    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {
         let entries = fs::read_dir(&self.data_dir).map_err(|_| FileStoreError::Io)?;
 
         let mut keys: Vec<Vec<u8>> = Vec::new();
