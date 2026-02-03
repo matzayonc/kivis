@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, fmt::Display, ops::Range};
 
 use kivis::{
     BufferOverflowError, BufferOverflowOr, Database, DatabaseEntry, DeriveKey, Incrementable,
-    Index, RecordKey, Scope, Storage,
+    Index, RecordKey, Repository, Scope, Storage,
 };
 
 // Define a record type for an User.
@@ -38,11 +38,8 @@ impl kivis::DatabaseEntry for User {
         discriminator: u8,
         serializer: &U,
     ) -> Result<(), BufferOverflowOr<U::SerError>> {
-        match discriminator {
-            0 => {
-                serializer.serialize_key_ref(buffer, &self.name)?;
-            }
-            _ => {}
+        if discriminator == 0 {
+            serializer.serialize_key_ref(buffer, &self.name)?;
         }
         Ok(())
     }
@@ -180,27 +177,33 @@ impl From<BufferOverflowError> for NoError {
     }
 }
 
+impl std::error::Error for NoError {}
+
 impl Storage for ManualStorage {
     type Serializer = Configuration;
-    type StoreError = NoError;
+}
 
-    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::StoreError> {
+impl Repository for ManualStorage {
+    type K = [u8];
+    type V = [u8];
+    type Error = NoError;
+    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
         self.data.insert(key.to_vec(), value.to_vec());
         Ok(())
     }
 
-    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self.data.get(key).cloned())
     }
 
-    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::StoreError> {
+    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self.data.remove(key))
     }
 
     fn iter_keys(
         &self,
         range: Range<Vec<u8>>,
-    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::StoreError>>, Self::StoreError> {
+    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {
         let iter = self.data.range(range);
         Ok(iter.map(|(k, _v)| Ok(k.clone())))
     }
