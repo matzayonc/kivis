@@ -4,7 +4,6 @@
 use bincode::config::Configuration;
 use kivis::{BufferOverflowError, Repository, Storage};
 use serde::{Deserialize, Serialize};
-use std::fmt;
 use std::ops::Range;
 
 /// A client that connects to a remote storage server via HTTP
@@ -15,65 +14,21 @@ pub struct Client {
 }
 
 /// Error type for Client operations
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum ClientError {
-    /// HTTP request error
+    #[error("HTTP error: {0}")]
     Http(String),
-    /// Serialization error
-    Serialization(String),
-    /// Deserialization error
-    Deserialization(String),
-    /// Server error
+    #[error("Serialization error: {0:?}")]
+    Serialization(#[from] bincode::error::EncodeError),
+    #[error("Deserialization error: {0:?}")]
+    Deserialization(#[from] bincode::error::DecodeError),
+    #[error("JSON error: {0}")]
+    Json(String),
+    #[error("Server error: {0}")]
     Server(String),
-    /// Buffer overflow error (if applicable)
-    BufferOverflow,
+    #[error("Buffer overflow error")]
+    BufferOverflow(#[from] BufferOverflowError),
 }
-
-impl fmt::Display for ClientError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Http(e) => write!(f, "HTTP error: {}", e),
-            Self::Serialization(e) => write!(f, "Serialization error: {}", e),
-            Self::Deserialization(e) => write!(f, "Deserialization error: {}", e),
-            Self::Server(e) => write!(f, "Server error: {}", e),
-            Self::BufferOverflow => write!(f, "Buffer overflow error"),
-        }
-    }
-}
-
-impl PartialEq for ClientError {
-    fn eq(&self, other: &Self) -> bool {
-        matches!(
-            (self, other),
-            (Self::Http(_), Self::Http(_))
-                | (Self::Serialization(_), Self::Serialization(_))
-                | (Self::Deserialization(_), Self::Deserialization(_))
-                | (Self::Server(_), Self::Server(_))
-        )
-    }
-}
-
-impl Eq for ClientError {}
-
-impl From<bincode::error::EncodeError> for ClientError {
-    fn from(e: bincode::error::EncodeError) -> Self {
-        Self::Serialization(format!("{:?}", e))
-    }
-}
-
-impl From<bincode::error::DecodeError> for ClientError {
-    fn from(e: bincode::error::DecodeError) -> Self {
-        Self::Deserialization(format!("{:?}", e))
-    }
-}
-
-impl From<BufferOverflowError> for ClientError {
-    fn from(_: BufferOverflowError) -> Self {
-        Self::BufferOverflow
-    }
-}
-
-impl std::error::Error for ClientError {}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct InsertRequest {
@@ -149,7 +104,7 @@ impl Repository for Client {
         if response.status().is_success() {
             let get_response: GetResponse = response
                 .json()
-                .map_err(|e| ClientError::Deserialization(e.to_string()))?;
+                .map_err(|e| ClientError::Json(e.to_string()))?;
 
             Ok(get_response
                 .value
@@ -176,7 +131,7 @@ impl Repository for Client {
         if response.status().is_success() {
             let remove_response: RemoveResponse = response
                 .json()
-                .map_err(|e| ClientError::Deserialization(e.to_string()))?;
+                .map_err(|e| ClientError::Json(e.to_string()))?;
 
             Ok(remove_response
                 .value
@@ -208,7 +163,7 @@ impl Repository for Client {
         if response.status().is_success() {
             let keys_response: KeysResponse = response
                 .json()
-                .map_err(|e| ClientError::Deserialization(e.to_string()))?;
+                .map_err(|e| ClientError::Json(e.to_string()))?;
 
             let keys: Vec<Result<Vec<u8>, ClientError>> = keys_response
                 .keys
