@@ -32,14 +32,14 @@ impl Scope for User {
 impl kivis::DatabaseEntry for User {
     type Key = UserKey;
     const INDEX_COUNT_HINT: u8 = 1;
-    fn index_key<U: kivis::Unifier>(
+    fn index_key<KU: kivis::Unifier>(
         &self,
-        buffer: &mut <U::K as kivis::UnifierData>::Buffer,
+        buffer: &mut <KU::D as kivis::UnifierData>::Buffer,
         discriminator: u8,
-        serializer: &U,
-    ) -> Result<(), BufferOverflowOr<U::SerError>> {
+        serializer: &KU,
+    ) -> Result<(), BufferOverflowOr<KU::SerError>> {
         if discriminator == 0 {
-            serializer.serialize_key_ref(buffer, &self.name)?;
+            serializer.serialize_ref(buffer, &self.name)?;
         }
         Ok(())
     }
@@ -180,7 +180,8 @@ impl From<BufferOverflowError> for NoError {
 impl std::error::Error for NoError {}
 
 impl Storage for ManualStorage {
-    type Serializer = Configuration;
+    type KeyUnifier = Configuration;
+    type ValueUnifier = Configuration;
 }
 
 impl Repository for ManualStorage {

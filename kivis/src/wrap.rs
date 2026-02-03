@@ -2,9 +2,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{BufferOverflowOr, DatabaseEntry, Unifier, UnifierData};
 
-type KeyRange<U> = (
-    <<U as Unifier>::K as UnifierData>::Buffer,
-    <<U as Unifier>::K as UnifierData>::Buffer,
+type KeyRange<KU> = (
+    <<KU as Unifier>::D as UnifierData>::Buffer,
+    <<KU as Unifier>::D as UnifierData>::Buffer,
 );
 
 /// Internal enum representing different subtables within a database scope.
@@ -76,26 +76,20 @@ pub(crate) struct Wrap<R> {
     pub key: R,
 }
 
-// /// Wraps a database entry key with scope and subtable information for storage.
-// pub(crate) fn wrap<R: DatabaseEntry, U: Unifier>(
-//     item_key: &R::Key,
-//     unifier: &U,
-//     buffer: &mut <U::K as UnifierData>::Owned,
-// ) -> Result<(), U::SerError> {
-//     unifier.serialize_key(
-//         buffer,
-//         WrapPrelude {
-//             scope: R::SCOPE,
-//             subtable: Subtable::Main,
-//         },
-//     )?;
-//     unifier.serialize_key_ref(buffer, item_key)?;
-//     Ok(())
-// }
+/// Wraps a database entry key with scope and subtable information for storage.
+pub(crate) fn wrap<R: DatabaseEntry, KU: Unifier>(
+    item_key: &R::Key,
+    unifier: &KU,
+    buffer: &mut <KU::D as UnifierData>::Buffer,
+) -> Result<(), BufferOverflowOr<KU::SerError>> {
+    unifier.serialize(buffer, WrapPrelude::new::<R>(Subtable::Main))?;
+    unifier.serialize_ref(buffer, item_key)?;
+    Ok(())
+}
 
-pub(crate) fn empty_wrap<R: DatabaseEntry, U: Unifier>(
-    config: &U,
-) -> Result<KeyRange<U>, BufferOverflowOr<U::SerError>> {
+pub(crate) fn empty_wrap<R: DatabaseEntry, KU: Unifier>(
+    config: &KU,
+) -> Result<KeyRange<KU>, BufferOverflowOr<KU::SerError>> {
     let start = Wrap {
         prelude: WrapPrelude {
             scope: R::SCOPE,
@@ -112,11 +106,11 @@ pub(crate) fn empty_wrap<R: DatabaseEntry, U: Unifier>(
         key: (),
     };
 
-    let mut start_buffer = <U::K as UnifierData>::Buffer::default();
-    config.serialize_key(&mut start_buffer, start)?;
+    let mut start_buffer = <KU::D as UnifierData>::Buffer::default();
+    config.serialize(&mut start_buffer, start)?;
 
-    let mut end_buffer = <U::K as UnifierData>::Buffer::default();
-    config.serialize_key(&mut end_buffer, end)?;
+    let mut end_buffer = <KU::D as UnifierData>::Buffer::default();
+    config.serialize(&mut end_buffer, end)?;
 
     Ok((start_buffer, end_buffer))
 }

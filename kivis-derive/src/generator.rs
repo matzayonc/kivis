@@ -198,16 +198,16 @@ impl Generator {
                 type Key = #key_type;
                 const INDEX_COUNT_HINT: u8 = #index_count as u8;
 
-                fn index_key<U: ::kivis::Unifier>(
+                fn index_key<KU: ::kivis::Unifier>(
                     &self,
-                    buffer: &mut <U::K as ::kivis::UnifierData>::Buffer,
+                    buffer: &mut <KU::D as ::kivis::UnifierData>::Buffer,
                     discriminator: u8,
-                    serializer: &U,
-                ) -> Result<(), kivis::BufferOverflowOr<U::SerError>> {
+                    serializer: &KU,
+                ) -> Result<(), kivis::BufferOverflowOr<KU::SerError>> {
                     match discriminator {
                         #(
                             #indices => {
-                                serializer.serialize_key_ref(buffer, #index_values)?;
+                                serializer.serialize_ref(buffer, #index_values)?;
                             }
                         )*
                         _ => {}

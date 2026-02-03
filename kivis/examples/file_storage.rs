@@ -87,7 +87,8 @@ impl FileStore {
 }
 
 impl Storage for FileStore {
-    type Serializer = Configuration;
+    type KeyUnifier = Configuration;
+    type ValueUnifier = Configuration;
 }
 
 impl Repository for FileStore {

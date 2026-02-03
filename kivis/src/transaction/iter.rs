@@ -1,14 +1,14 @@
 use crate::{BatchOp, Op, Unifier, UnifierData, transaction::buffer::DatabaseTransactionBuffer};
 
-pub struct OpsIter<'a, U: Unifier> {
-    pub(super) transaction: &'a DatabaseTransactionBuffer<U>,
+pub struct OpsIter<'a, KU: Unifier, VU: Unifier> {
+    pub(super) transaction: &'a DatabaseTransactionBuffer<KU, VU>,
     pub(super) current_op: usize,
     pub(super) prev_key_end: usize,
     pub(super) prev_value_end: usize,
 }
 
-impl<'a, U: Unifier> OpsIter<'a, U> {
-    pub(crate) fn new(transaction: &'a DatabaseTransactionBuffer<U>) -> Self {
+impl<'a, KU: Unifier, VU: Unifier> OpsIter<'a, KU, VU> {
+    pub(crate) fn new(transaction: &'a DatabaseTransactionBuffer<KU, VU>) -> Self {
         Self {
             transaction,
             current_op: 0,
@@ -18,8 +18,8 @@ impl<'a, U: Unifier> OpsIter<'a, U> {
     }
 }
 
-impl<'a, U: Unifier> Iterator for OpsIter<'a, U> {
-    type Item = BatchOp<'a, U::K, U::V>;
+impl<'a, KU: Unifier, VU: Unifier> Iterator for OpsIter<'a, KU, VU> {
+    type Item = BatchOp<'a, KU::D, VU::D>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let op = self.current_op;
@@ -27,8 +27,8 @@ impl<'a, U: Unifier> Iterator for OpsIter<'a, U> {
         self.transaction.pending_ops.get(op).map(|op| match op {
             Op::Write { key_end, value_end } => {
                 let key =
-                    U::K::extract_range(&self.transaction.key_data, self.prev_key_end, *key_end);
-                let value = U::V::extract_range(
+                    KU::D::extract_range(&self.transaction.key_data, self.prev_key_end, *key_end);
+                let value = VU::D::extract_range(
                     &self.transaction.value_data,
                     self.prev_value_end,
                     *value_end,
@@ -39,7 +39,7 @@ impl<'a, U: Unifier> Iterator for OpsIter<'a, U> {
             }
             Op::Delete { key_end } => {
                 let key =
-                    U::K::extract_range(&self.transaction.key_data, self.prev_key_end, *key_end);
+                    KU::D::extract_range(&self.transaction.key_data, self.prev_key_end, *key_end);
                 self.prev_key_end = *key_end;
                 crate::BatchOp::Delete { key }
             }
