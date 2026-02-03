@@ -23,10 +23,13 @@ pub enum BatchOp<'a, K: UnifierData + ?Sized, V: UnifierData + ?Sized> {
 /// All storage operations are defined over serialized byte data.
 pub trait Storage:
     Repository<
-        K = <<Self as Storage>::Serializer as Unifier>::K,
-        V = <<Self as Storage>::Serializer as Unifier>::V,
+        K = <<Self as Storage>::KeyUnifier as Unifier>::D,
+        V = <<Self as Storage>::ValueUnifier as Unifier>::D,
     >
 {
-    /// Serializer type used to convert data to/from bytes.
-    type Serializer: Unifier + Default + Copy;
+    /// Unifier type used to serialize/deserialize keys.
+    type KeyUnifier: Unifier + Default + Copy;
+
+    /// Unifier type used to serialize/deserialize values.
+    type ValueUnifier: Unifier + Default + Copy;
 }

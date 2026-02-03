@@ -1,6 +1,7 @@
 // Client that communicates with the remote storage server via HTTP
 // This demonstrates how to implement the Storage trait using HTTP requests
 
+use bincode::config::Configuration;
 use kivis::{BufferOverflowError, Repository, Storage};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -106,7 +107,8 @@ impl Client {
 }
 
 impl Storage for Client {
-    type Serializer = bincode::config::Configuration;
+    type KeyUnifier = Configuration;
+    type ValueUnifier = Configuration;
 }
 impl Repository for Client {
     type K = [u8];

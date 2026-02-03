@@ -71,7 +71,8 @@ mod tests {
     }
 
     impl Storage for MockAtomicStorage {
-        type Serializer = Configuration;
+        type KeyUnifier = Configuration;
+        type ValueUnifier = Configuration;
     }
 
     impl Repository for MockAtomicStorage {
@@ -123,7 +124,10 @@ mod tests {
 
     #[test]
     fn test_transaction_new() -> anyhow::Result<()> {
-        let tx = DatabaseTransaction::<Manifest, _>::new_with_serializer(Configuration::default());
+        let tx = DatabaseTransaction::<Manifest, _, _>::new_with_serializers(
+            Configuration::default(),
+            Configuration::default(),
+        );
         assert!(tx.is_empty());
         Ok(())
     }
@@ -209,7 +213,10 @@ mod tests {
     #[test]
     fn test_empty_transaction_commit() -> anyhow::Result<()> {
         let mut storage = MockAtomicStorage::new();
-        let tx = DatabaseTransaction::<Manifest, _>::new_with_serializer(Default::default());
+        let tx = DatabaseTransaction::<Manifest, _, _>::new_with_serializers(
+            Default::default(),
+            Default::default(),
+        );
 
         // Empty transaction should succeed and return empty vector
         let result = tx.commit(&mut storage)?;

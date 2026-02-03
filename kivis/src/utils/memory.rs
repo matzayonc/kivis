@@ -73,7 +73,8 @@ impl From<BufferOverflowError> for MemoryStorageError {
 }
 
 impl Storage for MemoryStorage {
-    type Serializer = Configuration;
+    type KeyUnifier = Configuration;
+    type ValueUnifier = Configuration;
 }
 
 impl Repository for MemoryStorage {

@@ -7,68 +7,70 @@ use kivis::{
 use serde::{Deserialize, Serialize};
 use std::{cmp::Reverse, collections::BTreeMap, fmt::Display, ops::Range};
 
-/// A custom unifier that serializes and deserializes keys and values differently
-#[derive(Debug, Clone, Copy, Default)]
-pub struct CustomUnifier;
+/// Trait for providing a constant prefix
+pub trait Prefix {
+    fn prefix() -> &'static [u8];
+}
 
-impl Unifier for CustomUnifier {
-    type K = [u8];
-    type V = [u8];
+/// A generic unifier that adds a constant prefix to serialized data
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PrefixUnifier<P: Prefix>(std::marker::PhantomData<P>);
+
+impl<P: Prefix> Unifier for PrefixUnifier<P> {
+    type D = [u8];
     type SerError = EncodeError;
     type DeError = DecodeError;
 
-    fn serialize_key(
+    fn serialize(
         &self,
         buffer: &mut Vec<u8>,
         data: impl Serialize,
     ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
-        // Keys are serialized with a "KEY:" prefix
         let start = buffer.len();
-        buffer.extend_from_slice(b"KEY:");
+        buffer.extend_from_slice(P::prefix());
         let encoded = bincode::serde::encode_to_vec(data, bincode::config::standard())?;
         buffer.extend(encoded);
         let end = buffer.len();
         Ok((start, end))
     }
 
-    fn serialize_value(
-        &self,
-        buffer: &mut Vec<u8>,
-        data: impl Serialize,
-    ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
-        // Values are serialized with a "VAL:" prefix
-        let start = buffer.len();
-        buffer.extend_from_slice(b"VAL:");
-        let encoded = bincode::serde::encode_to_vec(data, bincode::config::standard())?;
-        buffer.extend(encoded);
-        let end = buffer.len();
-        Ok((start, end))
-    }
-
-    fn deserialize_key<T: serde::de::DeserializeOwned>(
+    fn deserialize<T: serde::de::DeserializeOwned>(
         &self,
         data: &Vec<u8>,
     ) -> Result<T, Self::DeError> {
-        // Strip the "KEY:" prefix and deserialize
-        if !data.starts_with(b"KEY:") {
+        // Strip the prefix and deserialize
+        let prefix = P::prefix();
+        if !data.starts_with(prefix) {
             return Err(DecodeError::UnexpectedEnd { additional: 0 });
         }
-        let data_without_prefix = &data[4..];
-        Ok(bincode::serde::decode_from_slice(data_without_prefix, bincode::config::standard())?.0)
-    }
-
-    fn deserialize_value<T: serde::de::DeserializeOwned>(
-        &self,
-        data: &Vec<u8>,
-    ) -> Result<T, Self::DeError> {
-        // Strip the "VAL:" prefix and deserialize
-        if !data.starts_with(b"VAL:") {
-            return Err(DecodeError::UnexpectedEnd { additional: 0 });
-        }
-        let data_without_prefix = &data[4..];
+        let data_without_prefix = &data[prefix.len()..];
         Ok(bincode::serde::decode_from_slice(data_without_prefix, bincode::config::standard())?.0)
     }
 }
+
+/// Prefix for keys
+#[derive(Debug, Clone, Copy, Default)]
+pub struct KeyPrefix;
+impl Prefix for KeyPrefix {
+    fn prefix() -> &'static [u8] {
+        b"KEY:"
+    }
+}
+
+/// Prefix for values
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ValuePrefix;
+impl Prefix for ValuePrefix {
+    fn prefix() -> &'static [u8] {
+        b"VAL:"
+    }
+}
+
+/// Type alias for key unifier with "KEY:" prefix
+pub type CustomKeyUnifier = PrefixUnifier<KeyPrefix>;
+
+/// Type alias for value unifier with "VAL:" prefix
+pub type CustomValueUnifier = PrefixUnifier<ValuePrefix>;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum CustomError {
@@ -123,7 +125,8 @@ impl CustomStorage {
 }
 
 impl Storage for CustomStorage {
-    type Serializer = CustomUnifier;
+    type KeyUnifier = CustomKeyUnifier;
+    type ValueUnifier = CustomValueUnifier;
 }
 
 impl Repository for CustomStorage {
@@ -178,49 +181,52 @@ fn test_custom_key_value_serialization() -> anyhow::Result<()> {
     let retrieved = db.get(&key)?;
     assert_eq!(retrieved, Some(record.clone()));
 
-    // The test verifies that the custom serializer works by successfully
-    // storing and retrieving data. The prefixes are being used internally
-    // even though we can't directly inspect them without exposing internals.
+    // Now verify that keys and values use different prefixes
+    let key_unifier = CustomKeyUnifier::default();
+    let value_unifier = CustomValueUnifier::default();
 
-    // We can verify the serializer behavior works by checking that serialization
-    // produces different outputs for keys vs values
-    let unifier = CustomUnifier;
-    let mut test_key_buffer = Vec::new();
-    let mut test_val_buffer = Vec::new();
-    let (start, end) = unifier
-        .serialize_key(&mut test_key_buffer, "key_data".to_string())
+    let mut key_buffer = Vec::new();
+    let (start, end) = key_unifier
+        .serialize(&mut key_buffer, "test_key".to_string())
         .unwrap();
-    let test_key = &test_key_buffer[start..end];
-    let (start, end) = unifier
-        .serialize_value(&mut test_val_buffer, "val_data".to_string())
+    let key_data = &key_buffer[start..end];
+
+    let mut value_buffer = Vec::new();
+    let (start, end) = value_unifier
+        .serialize(&mut value_buffer, "test_value".to_string())
         .unwrap();
-    let test_val = &test_val_buffer[start..end];
+    let value_data = &value_buffer[start..end];
 
     assert!(
-        test_key.starts_with(b"KEY:"),
+        key_data.starts_with(b"KEY:"),
         "Keys should have KEY: prefix"
     );
     assert!(
-        test_val.starts_with(b"VAL:"),
+        value_data.starts_with(b"VAL:"),
         "Values should have VAL: prefix"
+    );
+
+    // Verify they're different
+    assert_ne!(
+        key_data, value_data,
+        "Key and value serialization should differ"
     );
 
     Ok(())
 }
 
 #[test]
-fn test_default_value_serialization_uses_key_serialization() {
-    // Create a test unifier that only implements serialize_key and deserialize_key
+fn test_unifier_consistency() {
+    // Create a test unifier
     #[derive(Debug, Clone, Copy, Default)]
     struct TestUnifier;
 
     impl Unifier for TestUnifier {
-        type K = [u8];
-        type V = [u8];
+        type D = [u8];
         type SerError = EncodeError;
         type DeError = DecodeError;
 
-        fn serialize_key(
+        fn serialize(
             &self,
             buffer: &mut Vec<u8>,
             data: impl Serialize,
@@ -232,26 +238,7 @@ fn test_default_value_serialization_uses_key_serialization() {
             Ok((start, end))
         }
 
-        fn serialize_value(
-            &self,
-            buffer: &mut Vec<u8>,
-            data: impl Serialize,
-        ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
-            let start = buffer.len();
-            let encoded = bincode::serde::encode_to_vec(data, bincode::config::standard())?;
-            buffer.extend(encoded);
-            let end = buffer.len();
-            Ok((start, end))
-        }
-
-        fn deserialize_key<T: serde::de::DeserializeOwned>(
-            &self,
-            data: &Vec<u8>,
-        ) -> Result<T, Self::DeError> {
-            Ok(bincode::serde::decode_from_slice(data, bincode::config::standard())?.0)
-        }
-
-        fn deserialize_value<T: serde::de::DeserializeOwned>(
+        fn deserialize<T: serde::de::DeserializeOwned>(
             &self,
             data: &Vec<u8>,
         ) -> Result<T, Self::DeError> {
@@ -261,27 +248,15 @@ fn test_default_value_serialization_uses_key_serialization() {
 
     let unifier = TestUnifier;
 
-    // Test that serialize_value uses serialize_key by default
-    let mut key_buffer = Vec::new();
-    let mut value_buffer = Vec::new();
-    let (k_start, k_end) = unifier.serialize_key(&mut key_buffer, 42u32).unwrap();
-    let (v_start, v_end) = unifier.serialize_value(&mut value_buffer, 42u32).unwrap();
-    let key_result = &key_buffer[k_start..k_end];
-    let value_result = &value_buffer[v_start..v_end];
+    // Test serialization
+    let mut buffer = Vec::new();
+    let (start, end) = unifier.serialize(&mut buffer, 42u32).unwrap();
+    let result = &buffer[start..end];
 
-    assert_eq!(
-        key_result, value_result,
-        "Default serialize_value should produce the same output as serialize_key"
-    );
-
-    // Test that deserialize_value uses deserialize_key by default
+    // Test deserialization
     let test_data = bincode::serde::encode_to_vec(42u32, bincode::config::standard()).unwrap();
-    let key_deser: u32 = unifier.deserialize_key(&test_data).unwrap();
-    let value_deser: u32 = unifier.deserialize_value(&test_data).unwrap();
+    let deser: u32 = unifier.deserialize(&test_data).unwrap();
 
-    assert_eq!(
-        key_deser, value_deser,
-        "Default deserialize_value should produce the same output as deserialize_key"
-    );
-    assert_eq!(key_deser, 42);
+    assert_eq!(deser, 42);
+    assert_eq!(result, test_data.as_slice());
 }

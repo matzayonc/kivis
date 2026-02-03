@@ -216,81 +216,48 @@ impl<T: Serialize + DeserializeOwned> Unifiable for T {}
 impl<T: Serialize + DeserializeOwned + Clone> UnifiableRef for T {}
 
 pub trait Unifier {
-    type K: UnifierData + ?Sized;
-    type V: UnifierData + ?Sized;
+    type D: UnifierData + ?Sized;
     type SerError: Debug + Display + Error;
     type DeError: Debug + Display + Error;
 
-    /// Serializes a key directly into an existing buffer and returns the start and end positions.
+    /// Serializes data directly into an existing buffer and returns the start and end positions.
     /// # Errors
     ///
     /// Returns an error if serialization fails.
-    fn serialize_key(
+    fn serialize(
         &self,
-        buffer: &mut <Self::K as UnifierData>::Buffer,
+        buffer: &mut <Self::D as UnifierData>::Buffer,
         data: impl Unifiable,
     ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>>;
 
-    /// Serializes a borrowed key directly into an existing buffer and returns the start and end positions.
+    /// Serializes borrowed data directly into an existing buffer and returns the start and end positions.
     /// # Errors
     ///
     /// Returns an error if serialization fails.
-    fn serialize_key_ref<R: UnifiableRef>(
+    fn serialize_ref<R: UnifiableRef>(
         &self,
-        buffer: &mut <Self::K as UnifierData>::Buffer,
+        buffer: &mut <Self::D as UnifierData>::Buffer,
         data: &R,
     ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
-        self.serialize_key(buffer, data.clone())
+        self.serialize(buffer, data.clone())
     }
 
-    /// Serializes a value directly into an existing buffer and returns the start and end positions.
-    /// # Errors
-    ///
-    /// Returns an error if serialization fails.
-    fn serialize_value(
-        &self,
-        buffer: &mut <Self::V as UnifierData>::Buffer,
-        data: impl Unifiable,
-    ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>>;
-
-    /// Serializes a borrowed value directly into an existing buffer and returns the start and end positions.
-    /// # Errors
-    ///
-    /// Returns an error if serialization fails.
-    fn serialize_value_ref<R: UnifiableRef>(
-        &self,
-        buffer: &mut <Self::V as UnifierData>::Buffer,
-        data: &R,
-    ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
-        self.serialize_value(buffer, data.clone())
-    }
-
-    /// Deserializes a key from the given data.
+    /// Deserializes data from the given buffer.
     /// # Errors
     ///
     /// Returns an error if deserialization fails.
-    fn deserialize_key<T: Unifiable>(
+    fn deserialize<T: Unifiable>(
         &self,
-        data: &<Self::K as UnifierData>::Owned,
-    ) -> Result<T, Self::DeError>;
-
-    /// Deserializes a value from the given data.
-    /// # Errors
-    ///
-    /// Returns an error if deserialization fails.
-    fn deserialize_value<T: Unifiable>(
-        &self,
-        data: &<Self::V as UnifierData>::Owned,
+        data: &<Self::D as UnifierData>::Owned,
     ) -> Result<T, Self::DeError>;
 }
 
 impl Unifier for Configuration {
-    type K = [u8];
-    type V = [u8];
+    type D = [u8];
     type SerError = EncodeError;
     type DeError = DecodeError;
 
-    fn serialize_key(
+    fn serialize(
         &self,
         buffer: &mut Vec<u8>,
         data: impl Serialize,
@@ -301,22 +268,7 @@ impl Unifier for Configuration {
         Ok((start, <[u8]>::len(buffer)))
     }
 
-    fn serialize_value(
-        &self,
-        buffer: &mut Vec<u8>,
-        data: impl Serialize,
-    ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
-        let start = <[u8]>::len(buffer);
-        let serialized = encode_to_vec(data, Self::default())?;
-        <[u8]>::extend(buffer, &serialized).map_err(BufferOverflowOr::overflow)?;
-        Ok((start, <[u8]>::len(buffer)))
-    }
-
-    fn deserialize_key<T: DeserializeOwned>(&self, data: &Vec<u8>) -> Result<T, Self::DeError> {
-        Ok(decode_from_slice(data, Self::default())?.0)
-    }
-
-    fn deserialize_value<T: DeserializeOwned>(&self, data: &Vec<u8>) -> Result<T, Self::DeError> {
+    fn deserialize<T: DeserializeOwned>(&self, data: &Vec<u8>) -> Result<T, Self::DeError> {
         Ok(decode_from_slice(data, Self::default())?.0)
     }
 }
