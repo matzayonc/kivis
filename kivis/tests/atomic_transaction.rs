@@ -7,12 +7,11 @@ mod tests {
         config::Configuration,
         error::{DecodeError, EncodeError},
     };
-    use serde::{Deserialize, Serialize};
-
     use kivis::{
         BatchOp, BufferOverflowError, Database, DatabaseTransaction, Record, Repository, Storage,
         manifest,
     };
+    use serde::{Deserialize, Serialize};
     use thiserror::Error;
 
     #[derive(Debug, Error)]

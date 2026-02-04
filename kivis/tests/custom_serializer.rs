@@ -6,6 +6,7 @@ use kivis::{
 };
 use serde::{Deserialize, Serialize};
 use std::{cmp::Reverse, collections::BTreeMap, ops::Range};
+use thiserror::Error;
 
 /// Trait for providing a constant prefix
 pub trait Prefix {
@@ -72,7 +73,7 @@ pub type CustomKeyUnifier = PrefixUnifier<KeyPrefix>;
 /// Type alias for value unifier with "VAL:" prefix
 pub type CustomValueUnifier = PrefixUnifier<ValuePrefix>;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 pub enum CustomError {
     #[error("Serialization error")]
     Serialization(#[from] EncodeError),

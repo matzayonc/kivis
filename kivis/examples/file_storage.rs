@@ -5,8 +5,9 @@ use bincode::{
 use kivis::{Database, DatabaseError, Record, Repository, Storage, manifest};
 use std::fs;
 use std::path::PathBuf;
+use thiserror::Error;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 enum FileStoreError {
     #[error("IO error")]
     Io(#[from] std::io::Error),

@@ -1,7 +1,7 @@
 use crate::{
     Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, Manifest, Manifests,
-    RecordKey, Storage, Unifier,
-    transaction::buffer::{DatabaseTransactionBuffer, TransactionError},
+    RecordKey, Storage, Unifier, transaction::buffer::DatabaseTransactionBuffer,
+    transaction::errors::TransactionError,
 };
 
 use core::marker::PhantomData;

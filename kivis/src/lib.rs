@@ -54,7 +54,9 @@ pub use paste::paste;
 pub use traits::*;
 pub use utils::*;
 
-pub use crate::errors::{DatabaseError, InternalDatabaseError};
+pub use crate::errors::{
+    BufferOverflowError, BufferOverflowOr, DatabaseError, InternalDatabaseError,
+};
 
 #[cfg(feature = "atomic")]
 // Database transaction is only usefull if atomic storage is enabled.
