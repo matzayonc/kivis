@@ -5,6 +5,7 @@ use bincode::config::Configuration;
 use kivis::{BufferOverflowError, Repository, Storage};
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
+use thiserror::Error;
 
 /// A client that connects to a remote storage server via HTTP
 #[derive(Debug, Clone)]
@@ -14,7 +15,7 @@ pub struct Client {
 }
 
 /// Error type for Client operations
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 pub enum ClientError {
     #[error("HTTP error: {0}")]
     Http(String),

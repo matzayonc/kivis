@@ -1,14 +1,53 @@
 use core::{
     error::Error,
-    fmt::{self, Debug},
+    fmt::{self, Debug, Display},
 };
 
 use bincode::config::Configuration;
 
-use crate::{BufferOverflowError, BufferOverflowOr, Storage, Unifier};
+use crate::{Storage, Unifier};
 
 #[cfg(feature = "atomic")]
 use crate::transaction::TransactionError;
+
+#[derive(Debug)]
+pub struct BufferOverflowError;
+impl Display for BufferOverflowError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+impl Error for BufferOverflowError {}
+
+pub struct BufferOverflowOr<E>(pub Option<E>);
+impl<E> BufferOverflowOr<E> {
+    pub fn overflow(_: BufferOverflowError) -> Self {
+        BufferOverflowOr(None)
+    }
+}
+
+impl<E> From<E> for BufferOverflowOr<E> {
+    fn from(e: E) -> Self {
+        BufferOverflowOr(Some(e))
+    }
+}
+impl<E: Debug> Debug for BufferOverflowOr<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            Some(ref e) => write!(f, "Error({e:?})"),
+            None => write!(f, "BufferOverflow"),
+        }
+    }
+}
+impl<E: Display> Display for BufferOverflowOr<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            Some(ref e) => e.fmt(f),
+            None => Display::fmt(&BufferOverflowError, f),
+        }
+    }
+}
+impl<E: Display + Debug> Error for BufferOverflowOr<E> {}
 
 /// Errors that can occur while interacting with the database.
 ///
