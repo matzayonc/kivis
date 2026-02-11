@@ -5,10 +5,12 @@ extern crate alloc;
 use alloc::vec::Vec;
 use core::ops::Range;
 use ekv::flash::{Flash, PageID};
+use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use kivis::{
     BufferOverflowError, BufferOverflowOr, Record, Repository, Storage, Unifier, UnifierData,
     manifest,
 };
+use ouroboros::self_referencing;
 use serde::Serialize;
 
 /// A simple sensor reading with fixed-size data
@@ -246,38 +248,23 @@ impl<const SIZE: usize> Repository for EkvStorage<SIZE> {
         &self,
         range: Range<Vec<u8>>,
     ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {
-        // Collect all keys within the range using ekv's read_range cursor
-        let keys = futures::executor::block_on(async {
-            let txn = self.db.read_transaction().await;
-            let mut collected_keys = Vec::new();
+        let iter = CursorIterBuilder {
+            db: &self.db,
+            range,
+            txn_builder: |db| futures::executor::block_on(db.read_transaction()),
+            cursor_builder: |txn, range| {
+                futures::executor::block_on(
+                    txn.read_range(range.start.as_slice()..range.end.as_slice()),
+                )
+                .map_err(|e| match e {
+                    ekv::Error::Corrupted => ekv::CursorError::Corrupted,
+                    ekv::Error::Flash(_) => unreachable!(),
+                })
+            },
+        }
+        .build();
 
-            // Get a cursor for the range
-            let start_bound = range.start.as_slice();
-            let end_bound = range.end.as_slice();
-            let mut cursor = txn.read_range(start_bound..end_bound).await.ok();
-
-            if let Some(cursor) = cursor.as_mut() {
-                // Iterate through all keys in the range
-                loop {
-                    let mut key_buf = [0u8; 256];
-                    let mut value_buf = [0u8; 1024];
-                    match cursor.next(&mut key_buf, &mut value_buf).await {
-                        Ok(Some((key_len, _value_len))) => {
-                            collected_keys.push(Ok(key_buf[..key_len].to_vec()));
-                        }
-                        Ok(None) => break, // No more keys
-                        Err(e) => {
-                            collected_keys.push(Err(EkvError::from(e)));
-                            break;
-                        }
-                    }
-                }
-            }
-
-            collected_keys
-        });
-
-        Ok(keys.into_iter())
+        Ok(iter)
     }
 
     fn batch_mixed<'a>(
@@ -328,6 +315,42 @@ impl<const SIZE: usize> Repository for EkvStorage<SIZE> {
         })?;
 
         Ok(deleted)
+    }
+}
+
+#[self_referencing]
+struct CursorIter<'a, const SIZE: usize> {
+    db: &'a ekv::Database<MockFlash<SIZE>, NoopRawMutex>,
+    range: Range<Vec<u8>>,
+    #[borrows(db)]
+    #[not_covariant]
+    txn: ekv::ReadTransaction<'this, MockFlash<SIZE>, NoopRawMutex>,
+    #[borrows(txn, range)]
+    #[not_covariant]
+    cursor: Result<
+        ekv::Cursor<'this, MockFlash<SIZE>, NoopRawMutex>,
+        ekv::CursorError<core::convert::Infallible>,
+    >,
+}
+
+impl<const SIZE: usize> Iterator for CursorIter<'_, SIZE> {
+    type Item = Result<Vec<u8>, EkvError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut key_buf = [0u8; 256];
+        let mut value_buf = [0u8; 1024];
+        self.with_cursor_mut(|cursor| {
+            match cursor {
+                Ok(cursor) => {
+                    match futures::executor::block_on(cursor.next(&mut key_buf, &mut value_buf)) {
+                        Ok(Some((key_len, _value_len))) => Some(Ok(key_buf[..key_len].to_vec())),
+                        Ok(None) => None, // No more keys
+                        Err(e) => Some(Err(EkvError::from(e))),
+                    }
+                }
+                Err(_) => None,
+            }
+        })
     }
 }
 
