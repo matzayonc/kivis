@@ -1,0 +1,5 @@
+[alias]
+c = "check --workspace --all-targets --all-features --tests"
+t = "nextest run --workspace --all-targets --all-features --no-fail-fast"
+fmt = "fmt --all"
+clippy = "clippy --all-targets --all-features"
