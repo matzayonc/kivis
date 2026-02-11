@@ -63,8 +63,17 @@ impl Client {
 }
 
 impl Storage for Client {
+    type Repo = Self;
     type KeyUnifier = Configuration;
     type ValueUnifier = Configuration;
+
+    fn repository(&self) -> &Self::Repo {
+        self
+    }
+
+    fn repository_mut(&mut self) -> &mut Self::Repo {
+        self
+    }
 }
 impl Repository for Client {
     type K = [u8];

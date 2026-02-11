@@ -5,7 +5,7 @@ use core::{
 
 use bincode::config::Configuration;
 
-use crate::{Storage, Unifier};
+use crate::{Repository, Storage, Unifier};
 
 #[cfg(feature = "atomic")]
 use crate::transaction::TransactionError;
@@ -56,7 +56,7 @@ impl<E: Display + Debug> Error for BufferOverflowOr<E> {}
 pub enum DatabaseError<S: Storage> {
     /// Storage errors that occur while interacting with the storage backend.
     /// This includes IO errors, serialization errors, and deserialization errors.
-    Storage(S::Error),
+    Storage(<S::Repo as Repository>::Error),
     KeySerialization(<S::KeyUnifier as Unifier>::SerError),
     ValueSerialization(<S::ValueUnifier as Unifier>::SerError),
     KeyDeserialization(<S::KeyUnifier as Unifier>::DeError),
@@ -69,7 +69,7 @@ pub enum DatabaseError<S: Storage> {
 
 impl<S: Storage> Debug for DatabaseError<S>
 where
-    S::Error: Debug,
+    <S::Repo as Repository>::Error: Debug,
     <S::KeyUnifier as Unifier>::SerError: Debug,
     <S::ValueUnifier as Unifier>::SerError: Debug,
     <S::KeyUnifier as Unifier>::DeError: Debug,

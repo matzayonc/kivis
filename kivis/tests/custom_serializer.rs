@@ -99,8 +99,17 @@ impl CustomStorage {
 }
 
 impl Storage for CustomStorage {
+    type Repo = Self;
     type KeyUnifier = CustomKeyUnifier;
     type ValueUnifier = CustomValueUnifier;
+
+    fn repository(&self) -> &Self::Repo {
+        self
+    }
+
+    fn repository_mut(&mut self) -> &mut Self::Repo {
+        self
+    }
 }
 
 impl Repository for CustomStorage {

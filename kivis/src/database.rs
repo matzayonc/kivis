@@ -3,8 +3,8 @@ use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
 use crate::wrap::{Subtable, Wrap, WrapPrelude, empty_wrap, wrap};
 use crate::{
-    BufferOverflowOr, DeriveKey, Incrementable, Manifest, Manifests, RecordKey, Unifiable, Unifier,
-    UnifierData,
+    BufferOverflowOr, DeriveKey, Incrementable, Manifest, Manifests, RecordKey, Repository,
+    Unifiable, Unifier, UnifierData,
 };
 use core::ops::Range;
 
@@ -15,7 +15,7 @@ type DatabaseIteratorItem<R, S> = Result<<R as DatabaseEntry>::Key, DatabaseErro
 
 /// The `kivis` database type. All interactions with the database are done through this type.
 pub struct Database<S: Storage, M: Manifest> {
-    pub(crate) store: S,
+    pub(crate) storage: S,
     // fallback: Option<Box<dyn StorageInner<StoreError = S::StoreError>>>,
     pub(crate) manifest: M,
     pub(crate) key_serializer: <S as Storage>::KeyUnifier,
@@ -34,7 +34,7 @@ where
     /// Returns a [`DatabaseError`] if the manifest fails to load during initialization.
     pub fn new(store: S) -> Result<Self, DatabaseError<S>> {
         let mut db = Database {
-            store,
+            storage: store,
             // fallback: None,
             manifest: M::default(),
             key_serializer: S::KeyUnifier::default(),
@@ -118,7 +118,7 @@ where
         &mut self,
         transaction: DatabaseTransaction<M, S::KeyUnifier, S::ValueUnifier>,
     ) -> Result<(), DatabaseError<S>> {
-        transaction.commit(&mut self.store)?;
+        transaction.commit(&mut self.storage)?;
         Ok(())
     }
 
@@ -145,7 +145,12 @@ where
             &serialized_key,
         );
 
-        let Some(value) = self.store.get(key).map_err(DatabaseError::Storage)? else {
+        let Some(value) = self
+            .storage
+            .repository()
+            .get(key)
+            .map_err(DatabaseError::Storage)?
+        else {
             // let Some(fallback) = &self.fallback else {
             //     return Ok(None);
             // };
@@ -219,7 +224,8 @@ where
             .map_err(DatabaseError::from_buffer_overflow_or)?;
 
         let raw_iter = self
-            .store
+            .storage
+            .repository()
             .iter_keys(translate_range::<<<S as Storage>::KeyUnifier as Unifier>::D>(start..end))
             .map_err(DatabaseError::Storage)?;
 
@@ -255,7 +261,8 @@ where
         let (start, end) = empty_wrap::<K::Record, S::KeyUnifier>(&self.key_serializer)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
         let raw_iter = self
-            .store
+            .storage
+            .repository()
             .iter_keys(translate_range::<<<S as Storage>::KeyUnifier as Unifier>::D>(start..end))
             .map_err(DatabaseError::Storage)?;
 
@@ -321,7 +328,8 @@ where
             .map_err(DatabaseError::from_buffer_overflow_or)?;
 
         let raw_iter = self
-            .store
+            .storage
+            .repository()
             .iter_keys(translate_range::<<<S as Storage>::KeyUnifier as Unifier>::D>(start..end))
             .map_err(DatabaseError::Storage)?;
 
@@ -358,7 +366,8 @@ where
         <S::KeyUnifier as Unifier>::D::next(&mut end);
 
         let raw_iter = self
-            .store
+            .storage
+            .repository()
             .iter_keys(translate_range::<<<S as Storage>::KeyUnifier as Unifier>::D>(start..end))
             .map_err(DatabaseError::Storage)?;
 
@@ -367,7 +376,7 @@ where
 
     /// Consumes the database and returns the underlying storage.
     pub fn dissolve(self) -> S {
-        self.store
+        self.storage
     }
 
     /// Returns the current key and value serializers used by the database.
@@ -378,14 +387,17 @@ where
     /// Helper function to process iterator results and get deserialized values
     fn process_iter_result<T: Unifiable>(
         &self,
-        result: Result<<<S::KeyUnifier as Unifier>::D as UnifierData>::Owned, S::Error>,
+        result: Result<
+            <<S::KeyUnifier as Unifier>::D as UnifierData>::Owned,
+            <S::Repo as Repository>::Error,
+        >,
     ) -> Result<T, DatabaseError<S>> {
         let key: <<<S as Storage>::KeyUnifier as Unifier>::D as UnifierData>::Owned =
             result.map_err(DatabaseError::Storage)?;
         let buff = <<<S as Storage>::KeyUnifier as Unifier>::D as UnifierData>::Buffer::from(key);
         let key = <<<S as Storage>::KeyUnifier as Unifier>::D as UnifierData>::extract_full(&buff);
 
-        let value = match self.store.get(key) {
+        let value = match self.storage.repository().get(key) {
             Ok(Some(data)) => data,
             Ok(None) => {
                 return Err(DatabaseError::Internal(

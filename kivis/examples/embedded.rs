@@ -332,8 +332,17 @@ impl<const SIZE: usize> Repository for EkvStorage<SIZE> {
 }
 
 impl<const SIZE: usize> Storage for EkvStorage<SIZE> {
+    type Repo = Self;
     type KeyUnifier = PostcardUnifier;
     type ValueUnifier = PostcardUnifier;
+
+    fn repository(&self) -> &Self::Repo {
+        self
+    }
+
+    fn repository_mut(&mut self) -> &mut Self::Repo {
+        self
+    }
 }
 
 fn main() {

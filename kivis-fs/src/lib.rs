@@ -163,8 +163,17 @@ impl FileStore {
 }
 
 impl Storage for FileStore {
+    type Repo = Self;
     type KeyUnifier = CsvSerializer;
     type ValueUnifier = CsvSerializer;
+
+    fn repository(&self) -> &Self::Repo {
+        self
+    }
+
+    fn repository_mut(&mut self) -> &mut Self::Repo {
+        self
+    }
 }
 
 impl Repository for FileStore {

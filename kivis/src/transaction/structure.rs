@@ -1,6 +1,6 @@
 use crate::{
     Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, Manifest, Manifests,
-    RecordKey, Storage, Unifier, transaction::buffer::DatabaseTransactionBuffer,
+    RecordKey, Repository, Storage, Unifier, transaction::buffer::DatabaseTransactionBuffer,
     transaction::errors::TransactionError,
 };
 
@@ -125,7 +125,10 @@ impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy> DatabaseTransaction<M,
 
         let iter = self.buffer.iter();
 
-        storage.batch_mixed(iter).map_err(DatabaseError::Storage)
+        storage
+            .repository_mut()
+            .batch_mixed(iter)
+            .map_err(DatabaseError::Storage)
     }
 
     /// Discards all pending operations without applying them.
