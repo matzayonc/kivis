@@ -39,3 +39,4 @@ ekv = { workspace = true }
 postcard = { workspace = true }
 futures = { workspace = true }
 embassy-sync = { workspace = true }
+ouroboros = "0.18"
