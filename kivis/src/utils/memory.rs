@@ -87,8 +87,8 @@ impl Storage for MemoryStorage {
 }
 
 impl Repository for MemoryStorage {
-    type K = [u8];
-    type V = [u8];
+    type K = Vec<u8>;
+    type V = Vec<u8>;
     type Error = MemoryStorageError;
 
     fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
@@ -96,18 +96,18 @@ impl Repository for MemoryStorage {
         Ok(())
     }
 
-    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    fn get(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
         Ok(self.get(&Reverse(key.to_vec())).cloned())
     }
 
-    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    fn remove(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
         Ok(self.remove(&Reverse(key.to_vec())))
     }
 
     fn iter_keys(
         &self,
-        range: Range<Vec<u8>>,
-    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {
+        range: Range<Self::K>,
+    ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
         let reverse_range = Reverse(range.end)..Reverse(range.start);
 
         let iter = self.range(reverse_range);

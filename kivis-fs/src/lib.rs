@@ -1,4 +1,4 @@
-use kivis::{BufferOverflowError, BufferOverflowOr, Repository, Storage, Unifier};
+use kivis::{BufferOverflowError, BufferOverflowOr, Repository, Storage, Unifier, UnifierData};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{fmt::Display, fs, path::PathBuf};
 
@@ -89,13 +89,13 @@ impl CsvSerializer {
 }
 
 impl Unifier for CsvSerializer {
-    type D = str;
+    type D = String;
     type SerError = csv::Error;
     type DeError = csv::Error;
 
     fn serialize(
         &self,
-        buffer: &mut String,
+        buffer: &mut Self::D,
         data: impl Serialize,
     ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
         let start = buffer.len();
@@ -116,7 +116,7 @@ impl Unifier for CsvSerializer {
         Ok((start, buffer.len()))
     }
 
-    fn deserialize<T: DeserializeOwned>(&self, data: &String) -> Result<T, Self::DeError> {
+    fn deserialize<T: DeserializeOwned>(&self, data: &Self::D) -> Result<T, Self::DeError> {
         let decoded = Self::decode_from_filename(data).ok_or_else(|| {
             csv::Error::from(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -177,17 +177,21 @@ impl Storage for FileStore {
 }
 
 impl Repository for FileStore {
-    type K = str;
-    type V = str;
+    type K = String;
+    type V = String;
     type Error = FileStoreError;
 
-    fn insert(&mut self, key: &str, value: &str) -> Result<(), Self::Error> {
+    fn insert(
+        &mut self,
+        key: <Self::K as UnifierData>::View<'_>,
+        value: <Self::V as UnifierData>::View<'_>,
+    ) -> Result<(), Self::Error> {
         let file_path = self.key_to_filename(key);
         fs::write(file_path, value)?;
         Ok(())
     }
 
-    fn get(&self, key: &str) -> Result<Option<String>, Self::Error> {
+    fn get(&self, key: <Self::K as UnifierData>::View<'_>) -> Result<Option<Self::V>, Self::Error> {
         let file_path = self.key_to_filename(key);
         match fs::read_to_string(file_path) {
             Ok(data) => Ok(Some(data)),
@@ -196,7 +200,10 @@ impl Repository for FileStore {
         }
     }
 
-    fn remove(&mut self, key: &str) -> Result<Option<String>, Self::Error> {
+    fn remove(
+        &mut self,
+        key: <Self::K as UnifierData>::View<'_>,
+    ) -> Result<Option<Self::V>, Self::Error> {
         let file_path = self.key_to_filename(key);
         match fs::read_to_string(&file_path) {
             Ok(data) => {
@@ -210,8 +217,8 @@ impl Repository for FileStore {
 
     fn iter_keys(
         &self,
-        range: std::ops::Range<String>,
-    ) -> Result<impl Iterator<Item = Result<String, Self::Error>>, Self::Error> {
+        range: std::ops::Range<Self::K>,
+    ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
         let entries = fs::read_dir(&self.data_dir)?;
 
         let mut keys: Vec<String> = Vec::new();

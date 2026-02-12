@@ -17,9 +17,9 @@ pub(crate) struct DatabaseTransactionBuffer<KU: Unifier, VU: Unifier> {
     /// Pending operations: writes and deletes
     pub(super) pending_ops: Vec<Op>,
     /// Key data buffer
-    pub(super) key_data: <KU::D as UnifierData>::Buffer,
+    pub(super) key_data: KU::D,
     /// Value data buffer
-    pub(super) value_data: <VU::D as UnifierData>::Buffer,
+    pub(super) value_data: VU::D,
     /// Key serialization configuration
     key_serializer: KU,
     /// Value serialization configuration
@@ -30,8 +30,8 @@ impl<KU: Unifier + Copy, VU: Unifier + Copy> DatabaseTransactionBuffer<KU, VU> {
     pub(crate) fn new(key_serializer: KU, value_serializer: VU) -> Self {
         Self {
             pending_ops: Vec::new(),
-            key_data: <KU::D as UnifierData>::Buffer::default(),
-            value_data: <VU::D as UnifierData>::Buffer::default(),
+            key_data: KU::D::default(),
+            value_data: VU::D::default(),
             key_serializer,
             value_serializer,
         }
@@ -69,13 +69,14 @@ impl<KU: Unifier + Copy, VU: Unifier + Copy> DatabaseTransactionBuffer<KU, VU> {
         let value_serializer = self.value_serializer();
         for discriminator in 0..R::INDEX_COUNT_HINT {
             // Write index entry directly to buffers
-            let mut prelude_buffer = <KU::D as UnifierData>::Buffer::default();
+            let mut prelude_buffer = KU::D::default();
             key_serializer.serialize(
                 &mut prelude_buffer,
                 WrapPrelude::new::<R>(Subtable::Index(discriminator)),
             )?;
 
-            KU::D::extend(&mut self.key_data, prelude_buffer.as_ref())
+            self.key_data
+                .extend(prelude_buffer.as_view())
                 .map_err(BufferOverflowOr::overflow)?;
 
             // Serialize the index key directly into the buffer
@@ -151,13 +152,14 @@ impl<KU: Unifier + Copy, VU: Unifier + Copy> DatabaseTransactionBuffer<KU, VU> {
         let key_serializer = self.key_serializer();
         for discriminator in 0..R::INDEX_COUNT_HINT {
             // Write index delete key directly to buffer
-            let mut prelude_buffer = <KU::D as UnifierData>::Buffer::default();
+            let mut prelude_buffer = KU::D::default();
             key_serializer.serialize(
                 &mut prelude_buffer,
                 WrapPrelude::new::<R>(Subtable::Index(discriminator)),
             )?;
 
-            KU::D::extend(&mut self.key_data, prelude_buffer.as_ref())
+            self.key_data
+                .extend(prelude_buffer.as_view())
                 .map_err(BufferOverflowOr::overflow)?;
 
             // Serialize the index key directly into the buffer

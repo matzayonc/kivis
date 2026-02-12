@@ -18,13 +18,13 @@ pub trait Prefix {
 pub struct PrefixUnifier<P: Prefix>(std::marker::PhantomData<P>);
 
 impl<P: Prefix> Unifier for PrefixUnifier<P> {
-    type D = [u8];
+    type D = Vec<u8>;
     type SerError = EncodeError;
     type DeError = DecodeError;
 
     fn serialize(
         &self,
-        buffer: &mut Vec<u8>,
+        buffer: &mut Self::D,
         data: impl Serialize,
     ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
         let start = buffer.len();
@@ -37,7 +37,7 @@ impl<P: Prefix> Unifier for PrefixUnifier<P> {
 
     fn deserialize<T: serde::de::DeserializeOwned>(
         &self,
-        data: &Vec<u8>,
+        data: &Self::D,
     ) -> Result<T, Self::DeError> {
         // Strip the prefix and deserialize
         let prefix = P::prefix();
@@ -113,8 +113,8 @@ impl Storage for CustomStorage {
 }
 
 impl Repository for CustomStorage {
-    type K = [u8];
-    type V = [u8];
+    type K = Vec<u8>;
+    type V = Vec<u8>;
     type Error = CustomError;
 
     fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
@@ -122,18 +122,18 @@ impl Repository for CustomStorage {
         Ok(())
     }
 
-    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    fn get(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
         Ok(self.data.get(&Reverse(key.to_vec())).cloned())
     }
 
-    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    fn remove(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
         Ok(self.data.remove(&Reverse(key.to_vec())))
     }
 
     fn iter_keys(
         &self,
-        range: Range<Vec<u8>>,
-    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {
+        range: Range<Self::K>,
+    ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
         let reverse_range = Reverse(range.end)..Reverse(range.start);
         let iter = self.data.range(reverse_range);
         Ok(iter.map(|(k, _v)| Ok(k.0.clone())))
@@ -205,13 +205,13 @@ fn test_unifier_consistency() {
     struct TestUnifier;
 
     impl Unifier for TestUnifier {
-        type D = [u8];
+        type D = Vec<u8>;
         type SerError = EncodeError;
         type DeError = DecodeError;
 
         fn serialize(
             &self,
-            buffer: &mut Vec<u8>,
+            buffer: &mut Self::D,
             data: impl Serialize,
         ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
             let start = buffer.len();
@@ -223,7 +223,7 @@ fn test_unifier_consistency() {
 
         fn deserialize<T: serde::de::DeserializeOwned>(
             &self,
-            data: &Vec<u8>,
+            data: &Self::D,
         ) -> Result<T, Self::DeError> {
             Ok(bincode::serde::decode_from_slice(data, bincode::config::standard())?.0)
         }

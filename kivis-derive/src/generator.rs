@@ -200,7 +200,7 @@ impl Generator {
 
                 fn index_key<KU: ::kivis::Unifier>(
                     &self,
-                    buffer: &mut <KU::D as ::kivis::UnifierData>::Buffer,
+                    buffer: &mut KU::D,
                     discriminator: u8,
                     serializer: &KU,
                 ) -> Result<(), kivis::BufferOverflowOr<KU::SerError>> {

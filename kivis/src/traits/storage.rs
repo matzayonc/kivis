@@ -3,10 +3,10 @@ use alloc::vec::Vec;
 
 use crate::{Repository, Unifier, UnifierData};
 
-pub type Deleted<S> = Vec<Option<<<<S as Storage>::Repo as Repository>::V as UnifierData>::Owned>>;
+pub type Deleted<S> = Vec<Option<<<S as Storage>::Repo as Repository>::V>>;
 
 /// Represents a batch operation: either insert or delete.
-pub enum BatchOp<'a, K: UnifierData + ?Sized, V: UnifierData + ?Sized> {
+pub enum BatchOp<'a, K: UnifierData, V: UnifierData> {
     /// Insert operation with key and value references
     Insert {
         key: K::View<'a>,
