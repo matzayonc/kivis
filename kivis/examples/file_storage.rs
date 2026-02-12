@@ -75,8 +75,8 @@ impl Storage for FileStore {
 }
 
 impl Repository for FileStore {
-    type K = [u8];
-    type V = [u8];
+    type K = Vec<u8>;
+    type V = Vec<u8>;
     type Error = FileStoreError;
     fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
         let file_path = self.key_to_filename(key);
@@ -84,7 +84,7 @@ impl Repository for FileStore {
         Ok(())
     }
 
-    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    fn get(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
         let file_path = self.key_to_filename(key);
         match fs::read(file_path) {
             Ok(data) => Ok(Some(data)),
@@ -93,7 +93,7 @@ impl Repository for FileStore {
         }
     }
 
-    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    fn remove(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
         let file_path = self.key_to_filename(key);
         match fs::read(&file_path) {
             Ok(data) => {

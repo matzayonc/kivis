@@ -1,11 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{BufferOverflowOr, DatabaseEntry, Unifier, UnifierData};
+use crate::{BufferOverflowOr, DatabaseEntry, Unifier};
 
-type KeyRange<KU> = (
-    <<KU as Unifier>::D as UnifierData>::Buffer,
-    <<KU as Unifier>::D as UnifierData>::Buffer,
-);
+type KeyRange<KU> = (<KU as Unifier>::D, <KU as Unifier>::D);
 
 /// Internal enum representing different subtables within a database scope.
 #[derive(Debug)]
@@ -80,7 +77,7 @@ pub(crate) struct Wrap<R> {
 pub(crate) fn wrap<R: DatabaseEntry, KU: Unifier>(
     item_key: &R::Key,
     unifier: &KU,
-    buffer: &mut <KU::D as UnifierData>::Buffer,
+    buffer: &mut KU::D,
 ) -> Result<(), BufferOverflowOr<KU::SerError>> {
     unifier.serialize(buffer, WrapPrelude::new::<R>(Subtable::Main))?;
     unifier.serialize_ref(buffer, item_key)?;
@@ -106,10 +103,10 @@ pub(crate) fn empty_wrap<R: DatabaseEntry, KU: Unifier>(
         key: (),
     };
 
-    let mut start_buffer = <KU::D as UnifierData>::Buffer::default();
+    let mut start_buffer = KU::D::default();
     config.serialize(&mut start_buffer, start)?;
 
-    let mut end_buffer = <KU::D as UnifierData>::Buffer::default();
+    let mut end_buffer = KU::D::default();
     config.serialize(&mut end_buffer, end)?;
 
     Ok((start_buffer, end_buffer))

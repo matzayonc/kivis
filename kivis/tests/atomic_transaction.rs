@@ -58,8 +58,8 @@ mod tests {
     }
 
     impl Repository for MockAtomicStorage {
-        type K = [u8];
-        type V = [u8];
+        type K = Vec<u8>;
+        type V = Vec<u8>;
         type Error = MockError;
 
         fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
@@ -67,18 +67,18 @@ mod tests {
             Ok(())
         }
 
-        fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        fn get(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
             Ok(self.data.get(&Reverse(key.to_vec())).cloned())
         }
 
-        fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+        fn remove(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
             Ok(self.data.remove(&Reverse(key.to_vec())))
         }
 
         fn iter_keys(
             &self,
-            range: Range<Vec<u8>>,
-        ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {
+            range: Range<Self::K>,
+        ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
             let reverse_range = Reverse(range.end)..Reverse(range.start);
             let iter = self.data.range(reverse_range);
             Ok(iter.map(|(k, _v)| Ok(k.0.clone())))
@@ -86,8 +86,8 @@ mod tests {
 
         fn batch_mixed<'a>(
             &mut self,
-            operations: impl Iterator<Item = BatchOp<'a, [u8], [u8]>>,
-        ) -> Result<Vec<Option<<[u8] as kivis::UnifierData>::Owned>>, Self::Error> {
+            operations: impl Iterator<Item = BatchOp<'a, Self::K, Self::V>>,
+        ) -> Result<Vec<Option<Self::V>>, Self::Error> {
             // In a real implementation, this could be atomic
             let mut deleted = Vec::new();
             for op in operations {

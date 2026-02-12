@@ -35,7 +35,7 @@ impl kivis::DatabaseEntry for User {
     const INDEX_COUNT_HINT: u8 = 1;
     fn index_key<KU: kivis::Unifier>(
         &self,
-        buffer: &mut <KU::D as kivis::UnifierData>::Buffer,
+        buffer: &mut KU::D,
         discriminator: u8,
         serializer: &KU,
     ) -> Result<(), BufferOverflowOr<KU::SerError>> {
@@ -155,8 +155,8 @@ impl Storage for ManualStorage {
 }
 
 impl Repository for ManualStorage {
-    type K = [u8];
-    type V = [u8];
+    type K = Vec<u8>;
+    type V = Vec<u8>;
     type Error = NoError;
     fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
         self.data.insert(key.to_vec(), value.to_vec());

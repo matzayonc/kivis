@@ -135,15 +135,12 @@ where
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
     {
-        let mut serialized_key =
-            <<<S as Storage>::KeyUnifier as Unifier>::D as UnifierData>::Buffer::default();
+        let mut serialized_key = <<S as Storage>::KeyUnifier as Unifier>::D::default();
 
         wrap::<K::Record, S::KeyUnifier>(key, &self.key_serializer, &mut serialized_key)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
 
-        let key = <<<S as Storage>::KeyUnifier as Unifier>::D as UnifierData>::extract_full(
-            &serialized_key,
-        );
+        let key = serialized_key.as_view();
 
         let Some(value) = self
             .storage
@@ -214,19 +211,17 @@ where
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
     {
-        let mut start =
-            <<<S as Storage>::KeyUnifier as Unifier>::D as UnifierData>::Buffer::default();
+        let mut start = <<S as Storage>::KeyUnifier as Unifier>::D::default();
         wrap::<K::Record, S::KeyUnifier>(&range.start, &self.key_serializer, &mut start)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
-        let mut end =
-            <<<S as Storage>::KeyUnifier as Unifier>::D as UnifierData>::Buffer::default();
+        let mut end = <<S as Storage>::KeyUnifier as Unifier>::D::default();
         wrap::<K::Record, S::KeyUnifier>(&range.end, &self.key_serializer, &mut end)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
 
         let raw_iter = self
             .storage
             .repository()
-            .iter_keys(translate_range::<<<S as Storage>::KeyUnifier as Unifier>::D>(start..end))
+            .iter_keys(start..end)
             .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| {
@@ -263,7 +258,7 @@ where
         let raw_iter = self
             .storage
             .repository()
-            .iter_keys(translate_range::<<<S as Storage>::KeyUnifier as Unifier>::D>(start..end))
+            .iter_keys(start..end)
             .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| {
@@ -309,15 +304,14 @@ where
         impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S, M>,
         DatabaseError<S>,
     > {
-        let mut start =
-            <<<S as Storage>::KeyUnifier as Unifier>::D as UnifierData>::Buffer::default();
+        let mut start = <<S as Storage>::KeyUnifier as Unifier>::D::default();
         self.key_serializer
             .serialize(
                 &mut start,
                 WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX)),
             )
             .map_err(DatabaseError::from_buffer_overflow_or)?;
-        let mut end = <<S as Storage>::KeyUnifier as Unifier>::D::duplicate(start.as_ref())
+        let mut end = <<S as Storage>::KeyUnifier as Unifier>::D::duplicate(start.as_view())
             .map_err(|e| DatabaseError::from_buffer_overflow_or(BufferOverflowOr::overflow(e)))?;
 
         self.key_serializer
@@ -330,7 +324,7 @@ where
         let raw_iter = self
             .storage
             .repository()
-            .iter_keys(translate_range::<<<S as Storage>::KeyUnifier as Unifier>::D>(start..end))
+            .iter_keys(start..end)
             .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| self.process_iter_result(elem)))
@@ -352,8 +346,7 @@ where
         DatabaseError<S>,
     > {
         let index_prelude = WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX));
-        let mut start =
-            <<<S as Storage>::KeyUnifier as Unifier>::D as UnifierData>::Buffer::default();
+        let mut start = <<S as Storage>::KeyUnifier as Unifier>::D::default();
         self.key_serializer
             .serialize(&mut start, index_prelude)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
@@ -361,14 +354,14 @@ where
         self.key_serializer
             .serialize(&mut start, index_key)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
-        let mut end = <S::KeyUnifier as Unifier>::D::duplicate(start.as_ref())
+        let mut end = <S::KeyUnifier as Unifier>::D::duplicate(start.as_view())
             .map_err(|e| DatabaseError::from_buffer_overflow_or(BufferOverflowOr::overflow(e)))?;
-        <S::KeyUnifier as Unifier>::D::next(&mut end);
+        end.next();
 
         let raw_iter = self
             .storage
             .repository()
-            .iter_keys(translate_range::<<<S as Storage>::KeyUnifier as Unifier>::D>(start..end))
+            .iter_keys(start..end)
             .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| self.process_iter_result(elem)))
@@ -387,17 +380,11 @@ where
     /// Helper function to process iterator results and get deserialized values
     fn process_iter_result<T: Unifiable>(
         &self,
-        result: Result<
-            <<S::KeyUnifier as Unifier>::D as UnifierData>::Owned,
-            <S::Repo as Repository>::Error,
-        >,
+        result: Result<<S::KeyUnifier as Unifier>::D, <S::Repo as Repository>::Error>,
     ) -> Result<T, DatabaseError<S>> {
-        let key: <<<S as Storage>::KeyUnifier as Unifier>::D as UnifierData>::Owned =
-            result.map_err(DatabaseError::Storage)?;
-        let buff = <<<S as Storage>::KeyUnifier as Unifier>::D as UnifierData>::Buffer::from(key);
-        let key = <<<S as Storage>::KeyUnifier as Unifier>::D as UnifierData>::extract_full(&buff);
+        let key = result.map_err(DatabaseError::Storage)?;
 
-        let value = match self.storage.repository().get(key) {
+        let value = match self.storage.repository().get(key.as_view()) {
             Ok(Some(data)) => data,
             Ok(None) => {
                 return Err(DatabaseError::Internal(
@@ -411,13 +398,4 @@ where
             .deserialize(&value)
             .map_err(DatabaseError::ValueDeserialization)
     }
-}
-
-fn translate_range<D: UnifierData + ?Sized>(
-    buffer: Range<<D as UnifierData>::Buffer>,
-) -> Range<<D as UnifierData>::Owned> {
-    let start = <D as UnifierData>::Owned::from(buffer.start.as_ref());
-    let end = <D as UnifierData>::Owned::from(buffer.end.as_ref());
-    // Return owned range
-    start..end
 }

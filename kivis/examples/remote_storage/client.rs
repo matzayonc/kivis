@@ -76,8 +76,8 @@ impl Storage for Client {
     }
 }
 impl Repository for Client {
-    type K = [u8];
-    type V = [u8];
+    type K = Vec<u8>;
+    type V = Vec<u8>;
     type Error = ClientError;
     fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
         let request = InsertRequest {
@@ -102,7 +102,7 @@ impl Repository for Client {
         }
     }
 
-    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    fn get(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
         let key_hex = hex::encode(key);
 
         let response = self
@@ -129,7 +129,7 @@ impl Repository for Client {
         }
     }
 
-    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    fn remove(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
         let key_hex = hex::encode(key);
 
         let response = self
@@ -158,8 +158,8 @@ impl Repository for Client {
 
     fn iter_keys(
         &self,
-        range: Range<Vec<u8>>,
-    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {
+        range: Range<Self::K>,
+    ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
         // Use hex encoding for binary data to avoid URL encoding issues
         let start = hex::encode(&range.start);
         let end = hex::encode(&range.end);

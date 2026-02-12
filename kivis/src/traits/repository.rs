@@ -11,11 +11,11 @@ use crate::{BatchOp, BufferOverflowError, UnifierData};
 /// without knowledge of how they are serialized. This allows for better
 /// separation of concerns between data storage and serialization logic.
 pub trait Repository {
-    /// Key type for the repository.
-    type K: UnifierData + ?Sized;
+    /// Key type for the repository (the buffer type, e.g., Vec<u8> or String).
+    type K: UnifierData;
 
-    /// Value type for the repository.
-    type V: UnifierData + ?Sized;
+    /// Value type for the repository (the buffer type, e.g., Vec<u8> or String).
+    type V: UnifierData;
 
     /// Error type returned by repository operations.
     type Error: Debug + Error + From<BufferOverflowError>;
@@ -36,10 +36,7 @@ pub trait Repository {
     /// # Errors
     ///
     /// Returns an error if the underlying storage fails while retrieving the value.
-    fn get(
-        &self,
-        key: <Self::K as UnifierData>::View<'_>,
-    ) -> Result<Option<<Self::V as UnifierData>::Owned>, Self::Error>;
+    fn get(&self, key: <Self::K as UnifierData>::View<'_>) -> Result<Option<Self::V>, Self::Error>;
 
     /// Remove the value associated with the given key from the repository.
     ///
@@ -49,7 +46,7 @@ pub trait Repository {
     fn remove(
         &mut self,
         key: <Self::K as UnifierData>::View<'_>,
-    ) -> Result<Option<<Self::V as UnifierData>::Owned>, Self::Error>;
+    ) -> Result<Option<Self::V>, Self::Error>;
     /// Iterate over the keys in the repository that are in range.
     ///
     /// # Errors
@@ -57,7 +54,7 @@ pub trait Repository {
     /// Returns an error if the underlying storage fails during iteration.
     fn iter_keys(
         &self,
-        range: Range<<Self::K as UnifierData>::Owned>,
+        range: Range<Self::K>,
     ) -> Result<impl Iterator<Item = IterationItem<Self::K, Self::Error>>, Self::Error>;
 
     /// Execute mixed insert and delete operations.
@@ -85,5 +82,5 @@ pub trait Repository {
     }
 }
 
-type BatchMixedResult<V> = Vec<Option<<V as UnifierData>::Owned>>;
-type IterationItem<K, E> = Result<<K as UnifierData>::Owned, E>;
+type BatchMixedResult<V> = Vec<Option<V>>;
+type IterationItem<K, E> = Result<K, E>;

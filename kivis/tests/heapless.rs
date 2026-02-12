@@ -20,51 +20,52 @@ impl From<&Bytes> for Bytes {
 }
 
 impl UnifierData for Bytes {
-    type Owned = Bytes;
-    type Buffer = Bytes;
     type View<'a> = &'a [u8];
 
-    fn next(buffer: &mut Self) {
-        let mut owned = buffer.0.to_vec();
-        <[u8] as UnifierData>::next(&mut owned);
+    fn from_view(data: &[u8]) -> Self {
+        let mut bytes = Bytes::default();
+        bytes.extend(data).unwrap();
+        bytes
+    }
+
+    fn next(&mut self) {
+        let mut owned = self.0[..self.1].to_vec();
+        Vec::next(&mut owned);
         if owned.len() <= BUFFER_SIZE {
-            buffer.0[..owned.len()].copy_from_slice(owned.as_slice());
+            self.0[..owned.len()].copy_from_slice(owned.as_slice());
+            self.1 = owned.len();
         } else {
             panic!("Buffer overflow in Bytes UnifierData implementation");
         }
     }
 
-    fn extend(buffer: &mut Self, part: &Self) -> Result<(), BufferOverflowError> {
-        let current_len = buffer.1;
-        let part_len = part.1;
+    fn extend(&mut self, part: &[u8]) -> Result<(), BufferOverflowError> {
+        let current_len = self.1;
+        let part_len = part.len();
         if current_len + part_len <= BUFFER_SIZE {
-            buffer.0[current_len..current_len + part_len].copy_from_slice(&part.0[..part_len]);
-            buffer.1 += part_len;
+            self.0[current_len..current_len + part_len].copy_from_slice(part);
+            self.1 += part_len;
         } else {
             return Err(BufferOverflowError);
         }
         Ok(())
     }
 
-    fn len(buffer: &Self) -> usize {
-        buffer.1
+    fn len(&self) -> usize {
+        self.1
     }
 
-    fn extract_range(buffer: &Self, _start: usize, _end: usize) -> &[u8] {
-        &buffer.0[..buffer.1]
+    fn extract_range(&self, start: usize, end: usize) -> &[u8] {
+        &self.0[start..end]
     }
 
-    fn duplicate_within(
-        buffer: &mut Self,
-        start: usize,
-        end: usize,
-    ) -> Result<(), BufferOverflowError> {
+    fn duplicate_within(&mut self, start: usize, end: usize) -> Result<(), BufferOverflowError> {
         let part_len = end - start;
-        if buffer.1 + part_len > BUFFER_SIZE {
+        if self.1 + part_len > BUFFER_SIZE {
             return Err(BufferOverflowError);
         }
-        buffer.0.copy_within(start..end, buffer.1);
-        buffer.1 += part_len;
+        self.0.copy_within(start..end, self.1);
+        self.1 += part_len;
         Ok(())
     }
 }

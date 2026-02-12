@@ -14,45 +14,47 @@ use std::fmt::Display;
 
 use crate::{BufferOverflowError, BufferOverflowOr};
 
-pub trait UnifierData {
-    /// The owned type for this data (e.g., Vec<u8> for [u8], String for str)
-    type Owned: Default + Clone + AsRef<Self> + for<'a> From<&'a Self>;
-    type Buffer: Default + Clone + AsRef<Self> + From<Self::Owned>;
+pub trait UnifierData: Default + Clone {
+    /// The borrowed view type for this buffer (e.g., &[u8] for Vec<u8>, &str for String)
     type View<'a>;
 
+    /// Converts the buffer to a view with explicit lifetime
+    fn as_view(&self) -> Self::View<'_> {
+        self.extract_range(0, self.len())
+    }
+
+    /// Creates a buffer from a view
+    fn from_view(data: Self::View<'_>) -> Self;
+
     /// Increments the buffer to the next value.
-    fn next(buffer: &mut Self::Buffer);
+    fn next(&mut self);
 
     /// Appends a single part to the buffer.
     ///
     /// # Errors
     ///
     /// Returns an error if the buffer overflows.
-    fn extend(buffer: &mut Self::Buffer, part: &Self) -> Result<(), BufferOverflowError>;
+    fn extend(&mut self, part: Self::View<'_>) -> Result<(), BufferOverflowError>;
 
     /// Returns the current length of the buffer.
-    fn len(buffer: &Self::Buffer) -> usize;
-
-    /// Extracts a range from the owned buffer as a reference.
-    /// This is used to extract individual values from buffered data.
-    #[must_use]
-    fn extract_range(buffer: &Self::Buffer, start: usize, end: usize) -> Self::View<'_>;
-    // TODO: consider removing
-    fn extract_full(buffer: &Self::Buffer) -> Self::View<'_> {
-        Self::extract_range(buffer, 0, Self::len(buffer))
+    fn len(&self) -> usize;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
-    /// Duplicates data by cloning the owned buffer.
+    /// Extracts a range from the buffer as a reference.
+    /// This is used to extract individual values from buffered data.
+    #[must_use]
+    fn extract_range(&self, start: usize, end: usize) -> Self::View<'_>;
+
+    /// Duplicates data by cloning the buffer.
     ///
     /// # Errors
     ///
     /// Returns an error if the buffer overflows.
-    fn duplicate(data: &Self) -> Result<Self::Buffer, BufferOverflowError>
-    where
-        Self::Buffer: Clone + AsRef<Self>,
-    {
-        let mut result = Self::Buffer::default();
-        Self::extend(&mut result, data)?;
+    fn duplicate(data: Self::View<'_>) -> Result<Self, BufferOverflowError> {
+        let mut result = Self::default();
+        result.extend(data)?;
         Ok(result)
     }
 
@@ -61,76 +63,70 @@ pub trait UnifierData {
     /// # Errors
     ///
     /// Returns an error if the buffer overflows.
-    fn duplicate_within(
-        buffer: &mut Self::Buffer,
-        start: usize,
-        end: usize,
-    ) -> Result<(), BufferOverflowError>;
+    fn duplicate_within(&mut self, start: usize, end: usize) -> Result<(), BufferOverflowError>;
 }
 
-impl UnifierData for [u8] {
-    type Owned = Vec<u8>;
-    type Buffer = Vec<u8>;
+impl UnifierData for Vec<u8> {
     type View<'a> = &'a [u8];
 
-    fn next(buffer: &mut Self::Owned) {
-        for i in (0..buffer.len()).rev() {
+    fn from_view(data: Self::View<'_>) -> Self {
+        data.to_vec()
+    }
+
+    fn next(&mut self) {
+        for i in (0..self.len()).rev() {
             // Add one if possible
-            if buffer[i] < 255 {
-                buffer[i] += 1;
+            if self[i] < 255 {
+                self[i] += 1;
                 return;
             }
             // Otherwise, set to zero and carry over
-            buffer[i] = 0;
+            self[i] = 0;
         }
 
         // If all bytes were 255, we need to add a new byte
-        buffer.push(0);
+        self.push(0);
     }
 
-    fn extend(buffer: &mut Self::Buffer, part: &Self) -> Result<(), BufferOverflowError> {
-        buffer
-            .try_reserve(part.len())
+    fn extend(&mut self, part: Self::View<'_>) -> Result<(), BufferOverflowError> {
+        self.try_reserve(part.len())
             .map_err(|_| BufferOverflowError)?;
-        buffer.extend_from_slice(part);
+        self.extend_from_slice(part);
         Ok(())
     }
 
-    fn len(buffer: &Self::Buffer) -> usize {
-        buffer.len()
+    fn len(&self) -> usize {
+        self.len()
     }
 
-    fn extract_range(buffer: &Self::Buffer, start: usize, end: usize) -> Self::View<'_> {
-        &buffer[start..end]
+    fn extract_range(&self, start: usize, end: usize) -> Self::View<'_> {
+        &self[start..end]
     }
 
-    fn duplicate_within(
-        buffer: &mut Self::Buffer,
-        start: usize,
-        end: usize,
-    ) -> Result<(), BufferOverflowError> {
-        let len = buffer.len();
+    fn duplicate_within(&mut self, start: usize, end: usize) -> Result<(), BufferOverflowError> {
+        let len = self.len();
         let part_len = end - start;
-        buffer
-            .try_reserve(part_len)
+        self.try_reserve(part_len)
             .map_err(|_| BufferOverflowError)?;
-        buffer.resize(len + part_len, 0);
-        buffer.copy_within(start..end, len);
+        self.resize(len + part_len, 0);
+        self.copy_within(start..end, len);
         Ok(())
     }
 }
 
 #[cfg(feature = "std")]
-impl UnifierData for str {
-    type Owned = String;
-    type Buffer = String;
+impl UnifierData for String {
     type View<'a> = &'a str;
 
-    fn next(buffer: &mut Self::Owned) {
-        let mut bytes = buffer.as_bytes().to_vec();
+    fn from_view(data: Self::View<'_>) -> Self {
+        data.to_string()
+    }
+
+    fn next(&mut self) {
+        let mut bytes = self.as_bytes().to_vec();
 
         let next_valid_string = loop {
-            <[u8]>::next(&mut bytes);
+            bytes.next();
 
             if let Ok(parsed_back) = String::from_utf8(bytes.clone()) {
                 // If the bytes are not valid UTF-8, increment and try again.
@@ -138,34 +134,28 @@ impl UnifierData for str {
             }
         };
 
-        *buffer = next_valid_string;
+        *self = next_valid_string;
     }
 
-    fn extend(buffer: &mut Self::Owned, part: &Self) -> Result<(), BufferOverflowError> {
-        buffer
-            .try_reserve(part.len())
+    fn extend(&mut self, part: Self::View<'_>) -> Result<(), BufferOverflowError> {
+        self.try_reserve(part.len())
             .map_err(|_| BufferOverflowError)?;
-        buffer.push_str(part);
+        self.push_str(part);
         Ok(())
     }
 
-    fn len(buffer: &Self::Owned) -> usize {
-        buffer.len()
+    fn len(&self) -> usize {
+        self.len()
     }
 
-    fn extract_range(buffer: &Self::Owned, start: usize, end: usize) -> Self::View<'_> {
-        &buffer[start..end]
+    fn extract_range(&self, start: usize, end: usize) -> Self::View<'_> {
+        &self[start..end]
     }
 
-    fn duplicate_within(
-        buffer: &mut Self::Owned,
-        start: usize,
-        end: usize,
-    ) -> Result<(), BufferOverflowError> {
-        buffer
-            .try_reserve(end - start)
+    fn duplicate_within(&mut self, start: usize, end: usize) -> Result<(), BufferOverflowError> {
+        self.try_reserve(end - start)
             .map_err(|_| BufferOverflowError)?;
-        buffer.extend_from_within(start..end);
+        self.extend_from_within(start..end);
         Ok(())
     }
 }
@@ -177,7 +167,7 @@ impl<T: Serialize + DeserializeOwned> Unifiable for T {}
 impl<T: Serialize + DeserializeOwned + Clone> UnifiableRef for T {}
 
 pub trait Unifier {
-    type D: UnifierData + ?Sized;
+    type D: UnifierData;
     type SerError: Debug + Display + Error;
     type DeError: Debug + Display + Error;
 
@@ -187,7 +177,7 @@ pub trait Unifier {
     /// Returns an error if serialization fails.
     fn serialize(
         &self,
-        buffer: &mut <Self::D as UnifierData>::Buffer,
+        buffer: &mut Self::D,
         data: impl Unifiable,
     ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>>;
 
@@ -197,7 +187,7 @@ pub trait Unifier {
     /// Returns an error if serialization fails.
     fn serialize_ref<R: UnifiableRef>(
         &self,
-        buffer: &mut <Self::D as UnifierData>::Buffer,
+        buffer: &mut Self::D,
         data: &R,
     ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
         self.serialize(buffer, data.clone())
@@ -207,14 +197,11 @@ pub trait Unifier {
     /// # Errors
     ///
     /// Returns an error if deserialization fails.
-    fn deserialize<T: Unifiable>(
-        &self,
-        data: &<Self::D as UnifierData>::Owned,
-    ) -> Result<T, Self::DeError>;
+    fn deserialize<T: Unifiable>(&self, data: &Self::D) -> Result<T, Self::DeError>;
 }
 
 impl Unifier for Configuration {
-    type D = [u8];
+    type D = Vec<u8>;
     type SerError = EncodeError;
     type DeError = DecodeError;
 
@@ -223,10 +210,10 @@ impl Unifier for Configuration {
         buffer: &mut Vec<u8>,
         data: impl Serialize,
     ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
-        let start = <[u8]>::len(buffer);
+        let start = buffer.len();
         let serialized = encode_to_vec(data, Self::default())?;
-        <[u8]>::extend(buffer, &serialized).map_err(BufferOverflowOr::overflow)?;
-        Ok((start, <[u8]>::len(buffer)))
+        UnifierData::extend(buffer, &serialized).map_err(BufferOverflowOr::overflow)?;
+        Ok((start, buffer.len()))
     }
 
     fn deserialize<T: DeserializeOwned>(&self, data: &Vec<u8>) -> Result<T, Self::DeError> {

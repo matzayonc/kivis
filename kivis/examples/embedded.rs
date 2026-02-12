@@ -42,24 +42,24 @@ manifest![EmbeddedManifest: SensorReading, DeviceConfig];
 pub struct PostcardUnifier;
 
 impl Unifier for PostcardUnifier {
-    type D = [u8];
+    type D = Vec<u8>;
     type SerError = postcard::Error;
     type DeError = postcard::Error;
 
     fn serialize(
         &self,
-        buffer: &mut Vec<u8>,
+        buffer: &mut Self::D,
         data: impl Serialize,
     ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
         let start = buffer.len();
         let serialized = postcard::to_allocvec(&data)?;
-        <[u8]>::extend(buffer, &serialized).map_err(BufferOverflowOr::overflow)?;
+        UnifierData::extend(buffer, &serialized).map_err(BufferOverflowOr::overflow)?;
         Ok((start, buffer.len()))
     }
 
     fn deserialize<T: serde::de::DeserializeOwned>(
         &self,
-        data: &Vec<u8>,
+        data: &Self::D,
     ) -> Result<T, Self::DeError> {
         postcard::from_bytes(data)
     }
@@ -207,8 +207,8 @@ impl<const SIZE: usize> EkvStorage<SIZE> {
 }
 
 impl<const SIZE: usize> Repository for EkvStorage<SIZE> {
-    type K = [u8];
-    type V = [u8];
+    type K = Vec<u8>;
+    type V = Vec<u8>;
     type Error = EkvError;
 
     fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
@@ -220,7 +220,7 @@ impl<const SIZE: usize> Repository for EkvStorage<SIZE> {
         })
     }
 
-    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    fn get(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
         futures::executor::block_on(async {
             let mut buffer = [0u8; 1024];
             let txn = self.db.read_transaction().await;
@@ -231,7 +231,7 @@ impl<const SIZE: usize> Repository for EkvStorage<SIZE> {
         })
     }
 
-    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    fn remove(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
         let existing = self.get(key)?;
         if existing.is_some() {
             futures::executor::block_on(async {
@@ -246,8 +246,8 @@ impl<const SIZE: usize> Repository for EkvStorage<SIZE> {
 
     fn iter_keys(
         &self,
-        range: Range<Vec<u8>>,
-    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {
+        range: Range<Self::K>,
+    ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
         let iter = CursorIterBuilder {
             db: &self.db,
             range,
@@ -270,7 +270,7 @@ impl<const SIZE: usize> Repository for EkvStorage<SIZE> {
     fn batch_mixed<'a>(
         &mut self,
         operations: impl Iterator<Item = kivis::BatchOp<'a, Self::K, Self::V>>,
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error> {
+    ) -> Result<Vec<Option<Self::V>>, Self::Error> {
         let mut deleted = Vec::new();
 
         // Collect operations into a vector so we can sort them
