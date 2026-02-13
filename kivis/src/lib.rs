@@ -11,6 +11,14 @@
 //! - **Foreign key relationships**: Type-safe references between records
 //! - **Layered cache architectures**: Compose multiple storage implementations
 //!
+//! ## Feature Flags
+//!
+//! - `std` (default): Enable standard library support
+//! - `atomic` (default): Enable atomic transaction support
+//! - `memory-storage` (default): Include in-memory storage implementation
+//! - `heapless`: Enable `UnifierData` implementation for `heapless::Vec<u8, N>`, allowing fixed-capacity
+//!   stack-allocated vectors for embedded environments
+//!
 //! ## Quick Start
 //!
 //! ```rust

@@ -356,7 +356,8 @@ where
             .map_err(DatabaseError::from_buffer_overflow_or)?;
         let mut end = <S::KeyUnifier as Unifier>::D::duplicate(start.as_view())
             .map_err(|e| DatabaseError::from_buffer_overflow_or(BufferOverflowOr::overflow(e)))?;
-        end.next();
+        end.next()
+            .map_err(|e| DatabaseError::from_buffer_overflow_or(BufferOverflowOr::overflow(e)))?;
 
         let raw_iter = self
             .storage
