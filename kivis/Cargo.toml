@@ -15,6 +15,7 @@ readme = "../readme.md"
 [features]
 default = ["std", "atomic", "memory-storage"]
 std = []
+alloc = []
 atomic = []
 memory-storage = ["std"]
 heapless = ["dep:heapless"]
@@ -27,7 +28,6 @@ paste = { workspace = true }
 heapless = { workspace = true, optional = true }
 
 [dev-dependencies]
-kivis = { workspace = true, features = ["heapless"] }
 hex = { workspace = true }
 trybuild = { workspace = true }
 anyhow = { workspace = true }
@@ -44,3 +44,7 @@ futures = { workspace = true }
 embassy-sync = { workspace = true }
 ouroboros = "0.18"
 heapless = { workspace = true }
+
+[[example]]
+name = "embedded"
+required-features = ["heapless", "atomic"]

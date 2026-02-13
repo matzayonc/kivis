@@ -1,7 +1,5 @@
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
 use core::ops::Range;
-use std::{error::Error, fmt::Debug};
+use core::{error::Error, fmt::Debug};
 
 use crate::{BatchOp, BufferOverflowError, UnifierData};
 
@@ -65,22 +63,20 @@ pub trait Repository {
     fn batch_mixed<'a>(
         &mut self,
         operations: impl Iterator<Item = BatchOp<'a, Self::K, Self::V>>,
-    ) -> Result<BatchMixedResult<Self::V>, Self::Error> {
-        let mut deleted = Vec::new();
+    ) -> Result<(), Self::Error> {
         for op in operations {
             match op {
                 BatchOp::Insert { key, value } => {
                     self.insert(key, value)?;
                 }
                 BatchOp::Delete { key } => {
-                    deleted.push(self.remove(key)?);
+                    self.remove(key)?;
                 }
             }
         }
 
-        Ok(deleted)
+        Ok(())
     }
 }
 
-type BatchMixedResult<V> = Vec<Option<V>>;
 type IterationItem<K, E> = Result<K, E>;

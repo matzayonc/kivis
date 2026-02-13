@@ -6,9 +6,6 @@ use crate::{
 
 use core::marker::PhantomData;
 
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
-
 /// A database transaction that accumulates low-level byte operations (writes and deletes)
 /// without immediately applying them to storage.
 ///
@@ -115,12 +112,12 @@ impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy> DatabaseTransaction<M,
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if any storage operation fails.
-    pub fn commit<S>(self, storage: &mut S) -> Result<crate::Deleted<S>, DatabaseError<S>>
+    pub fn commit<S>(self, storage: &mut S) -> Result<(), DatabaseError<S>>
     where
         S: Storage<KeyUnifier = KU, ValueUnifier = VU>,
     {
         if self.is_empty() {
-            return Ok(Vec::with_capacity(0));
+            return Ok(());
         }
 
         let iter = self.buffer.iter();

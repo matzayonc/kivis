@@ -3,14 +3,13 @@ use bincode::{
     serde::{decode_from_slice, encode_to_vec},
 };
 
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+use alloc::{string::String, vec::Vec};
 
 use bincode::config::Configuration;
-use core::fmt::Debug;
+use core::error::Error;
+use core::fmt::{Debug, Display};
 use serde::{Serialize, de::DeserializeOwned};
-use std::error::Error;
-use std::fmt::Display;
 
 use crate::{BufferOverflowError, BufferOverflowOr};
 
@@ -70,6 +69,7 @@ pub trait UnifierData: Default + Clone {
     fn duplicate_within(&mut self, start: usize, end: usize) -> Result<(), BufferOverflowError>;
 }
 
+#[cfg(any(feature = "std", feature = "alloc"))]
 impl UnifierData for Vec<u8> {
     type View<'a> = &'a [u8];
 
@@ -193,7 +193,7 @@ impl<const N: usize> UnifierData for heapless::Vec<u8, N> {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(any(feature = "std", feature = "alloc"))]
 impl UnifierData for String {
     type View<'a> = &'a str;
 
@@ -280,6 +280,7 @@ pub trait Unifier {
     fn deserialize<T: Unifiable>(&self, data: &Self::D) -> Result<T, Self::DeError>;
 }
 
+#[cfg(any(feature = "std", feature = "alloc"))]
 impl Unifier for Configuration {
     type D = Vec<u8>;
     type SerError = EncodeError;

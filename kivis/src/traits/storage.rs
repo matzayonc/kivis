@@ -1,9 +1,4 @@
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
-
 use crate::{Repository, Unifier, UnifierData};
-
-pub type Deleted<S> = Vec<Option<<<S as Storage>::Repo as Repository>::V>>;
 
 /// Represents a batch operation: either insert or delete.
 pub enum BatchOp<'a, K: UnifierData, V: UnifierData> {

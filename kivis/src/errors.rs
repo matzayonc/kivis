@@ -13,7 +13,7 @@ use crate::transaction::TransactionError;
 #[derive(Debug, PartialEq, Eq)]
 pub struct BufferOverflowError;
 impl Display for BufferOverflowError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{self:?}")
     }
 }
@@ -32,7 +32,7 @@ impl<E> From<E> for BufferOverflowOr<E> {
     }
 }
 impl<E: Debug> Debug for BufferOverflowOr<E> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self.0 {
             Some(ref e) => write!(f, "Error({e:?})"),
             None => write!(f, "BufferOverflow"),
@@ -40,7 +40,7 @@ impl<E: Debug> Debug for BufferOverflowOr<E> {
     }
 }
 impl<E: Display> Display for BufferOverflowOr<E> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self.0 {
             Some(ref e) => e.fmt(f),
             None => Display::fmt(&BufferOverflowError, f),

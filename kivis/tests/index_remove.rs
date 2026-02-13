@@ -1,11 +1,11 @@
 use anyhow::Context;
-use kivis::{Database, LexicographicString, MemoryStorage, Record, manifest};
+use kivis::{Database, Lexicographic, MemoryStorage, Record, manifest};
 
 // Define a record type for a Pet.
 #[derive(Record, Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct Pet {
     #[index]
-    name: LexicographicString,
+    name: Lexicographic<String>,
     color: Color,
 }
 
@@ -30,7 +30,7 @@ fn test_index_after_remove() -> anyhow::Result<()> {
     ];
     for name in names {
         store.put(Pet {
-            name: LexicographicString::from(name),
+            name: Lexicographic::from(name),
             color: Color::Brown,
         })?;
     }

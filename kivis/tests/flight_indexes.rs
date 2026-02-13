@@ -1,15 +1,15 @@
-use kivis::{Database, LexicographicString, MemoryStorage, Record, manifest};
+use kivis::{Database, Lexicographic, MemoryStorage, Record, manifest};
 
 #[derive(
     Record, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
 )]
 pub struct Flight {
     #[index]
-    flight_number: LexicographicString,
+    flight_number: Lexicographic<String>,
     #[index]
-    departure_airport: LexicographicString,
+    departure_airport: Lexicographic<String>,
     #[index]
-    arrival_airport: LexicographicString,
+    arrival_airport: Lexicographic<String>,
     airline: String,
     departure_time: u64,
     arrival_time: u64,

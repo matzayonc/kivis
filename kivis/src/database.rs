@@ -8,9 +8,6 @@ use crate::{
 };
 use core::ops::Range;
 
-#[cfg(not(feature = "std"))]
-use alloc::boxed::Box;
-
 type DatabaseIteratorItem<R, S> = Result<<R as DatabaseEntry>::Key, DatabaseError<S>>;
 
 /// The `kivis` database type. All interactions with the database are done through this type.

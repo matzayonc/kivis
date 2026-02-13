@@ -13,8 +13,9 @@
 //!
 //! ## Feature Flags
 //!
-//! - `std` (default): Enable standard library support
-//! - `atomic` (default): Enable atomic transaction support
+//! - `std` (default): Enable standard library support (implies `alloc`)
+//! - `alloc`: Enable `Vec` and `String` support without requiring the full standard library
+//! - `atomic` (default): Enable atomic transaction support (requires `alloc`)
 //! - `memory-storage` (default): Include in-memory storage implementation
 //! - `heapless`: Enable `UnifierData` implementation for `heapless::Vec<u8, N>`, allowing fixed-capacity
 //!   stack-allocated vectors for embedded environments
@@ -48,6 +49,9 @@
 #![warn(clippy::pedantic)]
 #![deny(clippy::unwrap_used)]
 #![deny(clippy::expect_used)]
+
+#[cfg(all(feature = "alloc", not(feature = "std")))]
+extern crate alloc;
 
 mod database;
 mod errors;

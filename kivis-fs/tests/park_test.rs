@@ -1,4 +1,4 @@
-use kivis::{Database, LexicographicString, Record, manifest};
+use kivis::{Database, Lexicographic, Record, manifest};
 use kivis_fs::FileStore;
 
 /// A user record with an indexed name field
@@ -7,7 +7,7 @@ use kivis_fs::FileStore;
 )]
 pub struct User {
     #[index]
-    name: LexicographicString,
+    name: Lexicographic<String>,
     email: String,
 }
 
