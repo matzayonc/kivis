@@ -1,14 +1,9 @@
 #![no_std]
 
-extern crate alloc;
-
-// Repository K/V types now use heapless::Vec with const generic capacity parameters
-// Temporary buffers also use heapless::Vec for stack allocation to avoid heap fragmentation
-use alloc::vec::Vec as AllocVec;
 use core::ops::Range;
 use ekv::flash::{Flash, PageID};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
-use heapless::Vec as HeaplessVec;
+use heapless::Vec;
 use kivis::{
     BufferOverflowError, BufferOverflowOr, Record, Repository, Storage, Unifier, UnifierData,
     manifest,
@@ -45,7 +40,7 @@ manifest![EmbeddedManifest: SensorReading, DeviceConfig];
 pub struct PostcardUnifier<const N: usize>;
 
 impl<const N: usize> Unifier for PostcardUnifier<N> {
-    type D = HeaplessVec<u8, N>;
+    type D = Vec<u8, N>;
     type SerError = postcard::Error;
     type DeError = postcard::Error;
 
@@ -216,8 +211,8 @@ impl<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize>
 impl<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> Repository
     for EkvStorage<SIZE, KEY_SIZE, VALUE_SIZE>
 {
-    type K = HeaplessVec<u8, KEY_SIZE>;
-    type V = HeaplessVec<u8, VALUE_SIZE>;
+    type K = Vec<u8, KEY_SIZE>;
+    type V = Vec<u8, VALUE_SIZE>;
     type Error = EkvError;
 
     fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
@@ -231,12 +226,12 @@ impl<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> Reposito
 
     fn get(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
         futures::executor::block_on(async {
-            let mut buffer = HeaplessVec::<u8, VALUE_SIZE>::new();
+            let mut buffer = Vec::<u8, VALUE_SIZE>::new();
             buffer.resize(VALUE_SIZE, 0).ok();
 
             let txn = self.db.read_transaction().await;
             match txn.read(key, buffer.as_mut_slice()).await {
-                Ok(len) => HeaplessVec::from_slice(&buffer[..len])
+                Ok(len) => Vec::from_slice(&buffer[..len])
                     .map(Some)
                     .map_err(|_| EkvError::BufferOverflow(BufferOverflowError)),
                 Err(_) => Ok(None), // Treat any read error as key not found for simplicity
@@ -283,61 +278,31 @@ impl<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> Reposito
     fn batch_mixed<'a>(
         &mut self,
         operations: impl Iterator<Item = kivis::BatchOp<'a, Self::K, Self::V>>,
-    ) -> Result<AllocVec<Option<Self::V>>, Self::Error> {
-        let mut deleted = AllocVec::new();
-
-        // Collect operations into a vector so we can sort them
-        let mut ops: AllocVec<_> = operations
-            .map(|op| match op {
-                kivis::BatchOp::Insert { key, value } => (key, Some(value)),
-                kivis::BatchOp::Delete { key } => (key, None),
-            })
-            .collect();
-
-        // Sort operations by key (required by ekv)
-        ops.sort_by(|a, b| a.0.cmp(b.0));
-
+    ) -> Result<(), Self::Error> {
         futures::executor::block_on(async {
             let mut txn = self.db.write_transaction().await;
 
-            for (key, value_opt) in ops {
-                match value_opt {
-                    Some(value) => {
+            for op in operations {
+                match op {
+                    kivis::BatchOp::Insert { key, value } => {
                         txn.write(key, value).await?;
-                        deleted.push(None);
                     }
-                    None => {
-                        // Get the value before deleting using heapless buffer
-                        let existing = {
-                            let mut buffer: HeaplessVec<u8, VALUE_SIZE> =
-                                HeaplessVec::<u8, VALUE_SIZE>::new();
-                            buffer.resize(VALUE_SIZE, 0).ok();
-
-                            let read_txn = self.db.read_transaction().await;
-                            match read_txn.read(key, buffer.as_mut_slice()).await {
-                                Ok(len) => HeaplessVec::from_slice(&buffer[..len]).ok(),
-                                Err(_) => None,
-                            }
-                        };
-
+                    kivis::BatchOp::Delete { key } => {
                         txn.delete(key).await?;
-                        deleted.push(existing);
                     }
                 }
             }
 
             txn.commit().await?;
             Ok::<_, EkvError>(())
-        })?;
-
-        Ok(deleted)
+        })
     }
 }
 
 #[self_referencing]
 struct CursorIter<'a, const SIZE: usize, const KEY_SIZE: usize> {
     db: &'a ekv::Database<MockFlash<SIZE>, NoopRawMutex>,
-    range: Range<HeaplessVec<u8, KEY_SIZE>>,
+    range: Range<Vec<u8, KEY_SIZE>>,
     #[borrows(db)]
     #[not_covariant]
     txn: ekv::ReadTransaction<'this, MockFlash<SIZE>, NoopRawMutex>,
@@ -350,12 +315,12 @@ struct CursorIter<'a, const SIZE: usize, const KEY_SIZE: usize> {
 }
 
 impl<const SIZE: usize, const KEY_SIZE: usize> Iterator for CursorIter<'_, SIZE, KEY_SIZE> {
-    type Item = Result<HeaplessVec<u8, KEY_SIZE>, EkvError>;
+    type Item = Result<Vec<u8, KEY_SIZE>, EkvError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         // Use heapless vecs as stack-allocated buffers
-        let mut key_buf = HeaplessVec::<u8, KEY_SIZE>::new();
-        let mut value_buf = HeaplessVec::<u8, 1024>::new();
+        let mut key_buf = Vec::<u8, KEY_SIZE>::new();
+        let mut value_buf = Vec::<u8, 1024>::new();
         key_buf.resize(KEY_SIZE, 0).ok();
         value_buf.resize(1024, 0).ok();
 
@@ -365,12 +330,10 @@ impl<const SIZE: usize, const KEY_SIZE: usize> Iterator for CursorIter<'_, SIZE,
                     match futures::executor::block_on(
                         cursor.next(key_buf.as_mut_slice(), value_buf.as_mut_slice()),
                     ) {
-                        Ok(Some((key_len, _value_len))) => {
-                            HeaplessVec::from_slice(&key_buf[..key_len])
-                                .map(Ok)
-                                .ok()
-                                .or(Some(Err(EkvError::BufferOverflow(BufferOverflowError))))
-                        }
+                        Ok(Some((key_len, _value_len))) => Vec::from_slice(&key_buf[..key_len])
+                            .map(Ok)
+                            .ok()
+                            .or(Some(Err(EkvError::BufferOverflow(BufferOverflowError)))),
                         Ok(None) => None, // No more keys
                         Err(e) => Some(Err(EkvError::from(e))),
                     }
@@ -443,10 +406,10 @@ fn main() {
     assert_ne!(read1, read2);
 
     // 3. Iterate all (should see 4 values)
-    let all_keys: HeaplessVec<_, 10> = db
+    let all_keys: Vec<_, 10> = db
         .iter_keys(SensorReadingKey(0)..SensorReadingKey(255))
         .unwrap()
-        .collect::<Result<HeaplessVec<_, 10>, _>>()
+        .collect::<Result<Vec<_, 10>, _>>()
         .unwrap();
 
     assert_eq!(all_keys.len(), 4);
@@ -457,10 +420,10 @@ fn main() {
 
     // 4. Iterate over a range where only the 2 inner values should be shown
     // Keys are 1, 2, 3, 4, so range [2..4) should give us keys 2 and 3
-    let range_keys: HeaplessVec<_, 10> = db
+    let range_keys: Vec<_, 10> = db
         .iter_keys(SensorReadingKey(2)..SensorReadingKey(4))
         .unwrap()
-        .collect::<Result<HeaplessVec<_, 10>, _>>()
+        .collect::<Result<Vec<_, 10>, _>>()
         .unwrap();
 
     assert_eq!(range_keys.len(), 2);
@@ -471,10 +434,10 @@ fn main() {
     db.remove(&key1).unwrap();
     db.remove(&key4).unwrap();
 
-    let remaining_keys: HeaplessVec<_, 10> = db
+    let remaining_keys: Vec<_, 10> = db
         .iter_keys(SensorReadingKey(0)..SensorReadingKey(255))
         .unwrap()
-        .collect::<Result<HeaplessVec<_, 10>, _>>()
+        .collect::<Result<Vec<_, 10>, _>>()
         .unwrap();
 
     assert_eq!(remaining_keys.len(), 2);

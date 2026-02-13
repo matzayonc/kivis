@@ -778,7 +778,6 @@ dependencies = [
  "futures",
  "heapless",
  "hex",
- "kivis",
  "kivis-derive",
  "ouroboros",
  "paste",

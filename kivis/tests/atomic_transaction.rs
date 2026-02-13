@@ -87,20 +87,19 @@ mod tests {
         fn batch_mixed<'a>(
             &mut self,
             operations: impl Iterator<Item = BatchOp<'a, Self::K, Self::V>>,
-        ) -> Result<Vec<Option<Self::V>>, Self::Error> {
+        ) -> Result<(), Self::Error> {
             // In a real implementation, this could be atomic
-            let mut deleted = Vec::new();
             for op in operations {
                 match op {
                     BatchOp::Insert { key, value } => {
                         self.data.insert(Reverse(key.to_vec()), value.to_vec());
                     }
                     BatchOp::Delete { key } => {
-                        deleted.push(self.data.remove(&Reverse(key.to_vec())));
+                        self.data.remove(&Reverse(key.to_vec()));
                     }
                 }
             }
-            Ok(deleted)
+            Ok(())
         }
     }
 
@@ -200,9 +199,8 @@ mod tests {
             Default::default(),
         );
 
-        // Empty transaction should succeed and return empty vector
-        let result = tx.commit(&mut storage)?;
-        assert!(result.is_empty());
+        // Empty transaction should succeed
+        tx.commit(&mut storage)?;
         Ok(())
     }
 }
