@@ -10,7 +10,7 @@ use crate::{Repository, Storage, Unifier};
 #[cfg(feature = "atomic")]
 use crate::transaction::TransactionError;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct BufferOverflowError;
 impl Display for BufferOverflowError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

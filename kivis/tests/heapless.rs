@@ -28,14 +28,15 @@ impl UnifierData for Bytes {
         bytes
     }
 
-    fn next(&mut self) {
+    fn next(&mut self) -> Result<(), BufferOverflowError> {
         let mut owned = self.0[..self.1].to_vec();
-        Vec::next(&mut owned);
+        Vec::next(&mut owned)?;
         if owned.len() <= BUFFER_SIZE {
             self.0[..owned.len()].copy_from_slice(owned.as_slice());
             self.1 = owned.len();
+            Ok(())
         } else {
-            panic!("Buffer overflow in Bytes UnifierData implementation");
+            Err(BufferOverflowError)
         }
     }
 
