@@ -26,7 +26,7 @@ csv = "1.4"
 
 # Dependencies for embedded example (no_std)
 heapless = "0.9"
-ekv = { git = "https://github.com/embassy-rs/ekv", default-features = false }
+ekv = { version = "1.0", default-features = false }
 postcard = { version = "1.0", default-features = false }
 futures = { version = "0.3", default-features = false, features = ["executor"] }
 embassy-sync = { version = "0.7", default-features = false }
