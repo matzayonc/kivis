@@ -53,6 +53,7 @@
 mod database;
 mod errors;
 mod impls;
+mod intergrations;
 mod traits;
 mod transaction;
 mod utils;
@@ -73,3 +74,6 @@ pub use crate::errors::{
 pub use transaction::{
     BufferOp, BufferOpsContainer, DatabaseTransaction, OpsIter, TransactionError,
 };
+
+#[cfg(feature = "sled-storage")]
+pub use intergrations::{PostcardUnifier, SledStorage, SledStorageError};

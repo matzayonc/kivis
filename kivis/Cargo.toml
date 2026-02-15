@@ -19,6 +19,7 @@ alloc = []
 atomic = []
 memory-storage = ["std"]
 heapless = ["dep:heapless"]
+sled-storage = ["std", "dep:sled", "dep:postcard"]
 
 [dependencies]
 kivis-derive = { workspace = true }
@@ -26,12 +27,15 @@ serde = { workspace = true }
 bincode = { workspace = true }
 paste = { workspace = true }
 heapless = { workspace = true, optional = true }
+sled = { version = "0.34", optional = true }
+postcard = { workspace = true, optional = true, features = ["alloc"] }
 
 [dev-dependencies]
 hex = { workspace = true }
 trybuild = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
+tempfile = "3.0"
 axum = "0.7"
 tokio = { version = "1", features = ["full"] }
 serde_json = "1.0"
