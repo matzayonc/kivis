@@ -24,7 +24,7 @@ impl UnifierData for Bytes {
 
     fn from_view(data: &[u8]) -> Self {
         let mut bytes = Bytes::default();
-        bytes.extend(data).unwrap();
+        bytes.extend_from(data).unwrap();
         bytes
     }
 
@@ -40,7 +40,7 @@ impl UnifierData for Bytes {
         }
     }
 
-    fn extend(&mut self, part: &[u8]) -> Result<(), BufferOverflowError> {
+    fn extend_from(&mut self, part: &[u8]) -> Result<(), BufferOverflowError> {
         let current_len = self.1;
         let part_len = part.len();
         if current_len + part_len <= BUFFER_SIZE {

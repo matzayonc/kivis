@@ -37,7 +37,7 @@ pub trait UnifierData: Default + Clone {
     /// # Errors
     ///
     /// Returns an error if the buffer overflows.
-    fn extend(&mut self, part: Self::View<'_>) -> Result<(), BufferOverflowError>;
+    fn extend_from(&mut self, part: Self::View<'_>) -> Result<(), BufferOverflowError>;
 
     /// Returns the current length of the buffer.
     fn len(&self) -> usize;
@@ -57,7 +57,7 @@ pub trait UnifierData: Default + Clone {
     /// Returns an error if the buffer overflows.
     fn duplicate(data: Self::View<'_>) -> Result<Self, BufferOverflowError> {
         let mut result = Self::default();
-        result.extend(data)?;
+        result.extend_from(data)?;
         Ok(result)
     }
 
@@ -93,7 +93,7 @@ impl UnifierData for Vec<u8> {
         Ok(())
     }
 
-    fn extend(&mut self, part: Self::View<'_>) -> Result<(), BufferOverflowError> {
+    fn extend_from(&mut self, part: Self::View<'_>) -> Result<(), BufferOverflowError> {
         self.try_reserve(part.len())
             .map_err(|_| BufferOverflowError)?;
         self.extend_from_slice(part);
@@ -133,7 +133,7 @@ impl UnifierData for Vec<u8> {
 /// use kivis::UnifierData;
 ///
 /// let mut buffer = Vec::<u8, 256>::new();
-/// UnifierData::extend(&mut buffer, &[1, 2, 3]).unwrap();
+/// buffer.extend(&[1, 2, 3]).unwrap();
 /// assert_eq!(buffer.as_slice(), &[1, 2, 3]);
 /// ```
 #[cfg(feature = "heapless")]
@@ -161,7 +161,7 @@ impl<const N: usize> UnifierData for heapless::Vec<u8, N> {
         self.push(0).map_err(|_| BufferOverflowError)
     }
 
-    fn extend(&mut self, part: Self::View<'_>) -> Result<(), BufferOverflowError> {
+    fn extend_from(&mut self, part: Self::View<'_>) -> Result<(), BufferOverflowError> {
         self.extend_from_slice(part)
             .map_err(|()| BufferOverflowError)
     }
@@ -217,7 +217,7 @@ impl UnifierData for String {
         Ok(())
     }
 
-    fn extend(&mut self, part: Self::View<'_>) -> Result<(), BufferOverflowError> {
+    fn extend_from(&mut self, part: Self::View<'_>) -> Result<(), BufferOverflowError> {
         self.try_reserve(part.len())
             .map_err(|_| BufferOverflowError)?;
         self.push_str(part);
@@ -293,7 +293,9 @@ impl Unifier for Configuration {
     ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
         let start = buffer.len();
         let serialized = encode_to_vec(data, Self::default())?;
-        UnifierData::extend(buffer, &serialized).map_err(BufferOverflowOr::overflow)?;
+        buffer
+            .extend_from(&serialized)
+            .map_err(BufferOverflowOr::overflow)?;
         Ok((start, buffer.len()))
     }
 
@@ -312,17 +314,17 @@ mod tests {
         let mut vec = heapless::Vec::<u8, 256>::new();
 
         // Test extend
-        assert_eq!(UnifierData::extend(&mut vec, &[1, 2, 3]), Ok(()));
+        assert_eq!(vec.extend_from(&[1, 2, 3]), Ok(()));
         assert_eq!(vec.as_slice(), &[1, 2, 3]);
 
         // Test len
-        assert_eq!(UnifierData::len(&vec), 3);
+        assert_eq!(vec.len(), 3);
 
         // Test extract_range
-        assert_eq!(UnifierData::extract_range(&vec, 1, 3), &[2, 3]);
+        assert_eq!(vec.extract_range(1, 3), &[2, 3]);
 
         // Test next
-        UnifierData::next(&mut vec)?;
+        vec.next()?;
         assert_eq!(vec.as_slice(), &[1, 2, 4]);
 
         // Test from_view
@@ -344,13 +346,13 @@ mod tests {
         let mut vec5 = heapless::Vec::<u8, 4>::new();
         vec5.extend_from_slice(&[1, 2, 3, 4])
             .map_err(|()| BufferOverflowError)?;
-        assert!(UnifierData::extend(&mut vec5, &[5]).is_err());
+        assert!(vec5.extend_from(&[5]).is_err());
 
         // Test overflow on next
         let mut vec6 = heapless::Vec::<u8, 2>::new();
         vec6.extend_from_slice(&[255, 255])
             .map_err(|()| BufferOverflowError)?;
-        assert!(UnifierData::next(&mut vec6).is_err());
+        assert!(vec6.next().is_err());
 
         Ok(())
     }

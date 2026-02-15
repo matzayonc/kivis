@@ -1,4 +1,4 @@
-use kivis::{BufferOverflowError, BufferOverflowOr, Repository, Storage, Unifier, UnifierData};
+use kivis::{BufferOverflowError, BufferOverflowOr, Repository, Storage, Unifier};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{fmt::Display, fs, path::PathBuf};
 
@@ -181,17 +181,13 @@ impl Repository for FileStore {
     type V = String;
     type Error = FileStoreError;
 
-    fn insert(
-        &mut self,
-        key: <Self::K as UnifierData>::View<'_>,
-        value: <Self::V as UnifierData>::View<'_>,
-    ) -> Result<(), Self::Error> {
+    fn insert(&mut self, key: &str, value: &str) -> Result<(), Self::Error> {
         let file_path = self.key_to_filename(key);
         fs::write(file_path, value)?;
         Ok(())
     }
 
-    fn get(&self, key: <Self::K as UnifierData>::View<'_>) -> Result<Option<Self::V>, Self::Error> {
+    fn get(&self, key: &str) -> Result<Option<Self::V>, Self::Error> {
         let file_path = self.key_to_filename(key);
         match fs::read_to_string(file_path) {
             Ok(data) => Ok(Some(data)),
@@ -200,10 +196,7 @@ impl Repository for FileStore {
         }
     }
 
-    fn remove(
-        &mut self,
-        key: <Self::K as UnifierData>::View<'_>,
-    ) -> Result<Option<Self::V>, Self::Error> {
+    fn remove(&mut self, key: &str) -> Result<Option<Self::V>, Self::Error> {
         let file_path = self.key_to_filename(key);
         match fs::read_to_string(&file_path) {
             Ok(data) => {

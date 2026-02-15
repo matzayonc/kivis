@@ -51,7 +51,9 @@ impl<const N: usize> Unifier for PostcardUnifier<N> {
     ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
         let start = buffer.len();
         let serialized = postcard::to_allocvec(&data)?;
-        UnifierData::extend(buffer, &serialized).map_err(BufferOverflowOr::overflow)?;
+        buffer
+            .extend_from(&serialized)
+            .map_err(BufferOverflowOr::overflow)?;
         Ok((start, buffer.len()))
     }
 

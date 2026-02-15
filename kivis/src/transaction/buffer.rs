@@ -76,7 +76,7 @@ impl<KU: Unifier + Copy, VU: Unifier + Copy> DatabaseTransactionBuffer<KU, VU> {
             )?;
 
             self.key_data
-                .extend(prelude_buffer.as_view())
+                .extend_from(prelude_buffer.as_view())
                 .map_err(BufferOverflowOr::overflow)?;
 
             // Serialize the index key directly into the buffer
@@ -159,7 +159,7 @@ impl<KU: Unifier + Copy, VU: Unifier + Copy> DatabaseTransactionBuffer<KU, VU> {
             )?;
 
             self.key_data
-                .extend(prelude_buffer.as_view())
+                .extend_from(prelude_buffer.as_view())
                 .map_err(BufferOverflowOr::overflow)?;
 
             // Serialize the index key directly into the buffer
