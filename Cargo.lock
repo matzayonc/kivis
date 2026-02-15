@@ -826,7 +826,7 @@ dependencies = [
 
 [[package]]
 name = "kivis"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -852,7 +852,7 @@ dependencies = [
 
 [[package]]
 name = "kivis-derive"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "convert_case",
  "proc-macro2",
