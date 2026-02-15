@@ -50,9 +50,11 @@ impl<const N: usize> Unifier for PostcardUnifier<N> {
         data: impl Serialize,
     ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
         let start = buffer.len();
-        let serialized = postcard::to_allocvec(&data)?;
+        // Create a temporary buffer for serialization
+        let mut temp_buffer = [0u8; N];
+        let serialized = postcard::to_slice(&data, &mut temp_buffer)?;
         buffer
-            .extend_from(&serialized)
+            .extend_from(serialized)
             .map_err(BufferOverflowOr::overflow)?;
         Ok((start, buffer.len()))
     }
@@ -391,8 +393,12 @@ fn main() {
 
     let key1 = db.insert(reading1).unwrap();
     let key2 = db.insert(reading2).unwrap();
-    let key3 = db.insert(reading3).unwrap();
-    let key4 = db.insert(reading4).unwrap();
+
+    // Insert readings 3 and 4 using transaction API
+    let mut tx = db.create_transaction();
+    let key3 = tx.insert(reading3).unwrap();
+    let key4 = tx.insert(reading4).unwrap();
+    db.commit(tx).unwrap();
 
     assert_eq!(key1, SensorReadingKey(1));
     assert_eq!(key2, SensorReadingKey(2));

@@ -64,7 +64,7 @@ fn test_iter_by_flight_number() -> anyhow::Result<()> {
 
     for i in 1..=5 {
         store.put(Flight {
-            flight_number: format!("AA{}", i * 100).into(),
+            flight_number: format!("AA{}", i * 100).as_str().into(),
             departure_airport: "JFK".into(),
             arrival_airport: "LAX".into(),
             airline: "American Airlines".to_string(),
@@ -92,7 +92,7 @@ fn test_iter_by_departure_airport() -> anyhow::Result<()> {
     let airports = ["JFK", "JFK", "ATL", "ORD"];
     for (i, airport) in airports.iter().enumerate() {
         store.put(Flight {
-            flight_number: format!("FL{}", i).into(),
+            flight_number: format!("FL{}", i).as_str().into(),
             departure_airport: (*airport).into(),
             arrival_airport: "LAX".into(),
             airline: "Test Airlines".to_string(),
@@ -118,7 +118,7 @@ fn test_iter_by_arrival_airport() -> anyhow::Result<()> {
     let destinations = ["LAX", "SFO", "LAX", "MIA"];
     for (i, dest) in destinations.iter().enumerate() {
         store.put(Flight {
-            flight_number: format!("FL{}", i).into(),
+            flight_number: format!("FL{}", i).as_str().into(),
             departure_airport: "JFK".into(),
             arrival_airport: (*dest).into(),
             airline: "Test Airlines".to_string(),

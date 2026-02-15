@@ -2,15 +2,15 @@ use core::fmt;
 use core::ops::{Deref, DerefMut};
 use std::marker::PhantomData;
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::{string::String, string::ToString, vec::Vec};
-
 use serde::{Serialize, de::Visitor, ser::SerializeTuple};
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Lexicographic<S>(S);
+pub struct Lexicographic<S: StringLike>(S);
 
-impl<S> Lexicographic<S> {
+pub trait StringLike: AsRef<str> + for<'a> From<&'a str> + for<'a> Extend<&'a str> {}
+impl<S: AsRef<str> + for<'a> From<&'a str> + for<'a> Extend<&'a str>> StringLike for S {}
+
+impl<S: StringLike> Lexicographic<S> {
     /// Creates a new `LexicographicString` from a `String`.
     #[must_use]
     pub fn new(s: S) -> Self {
@@ -18,46 +18,31 @@ impl<S> Lexicographic<S> {
     }
 }
 
-impl<S> PartialEq<str> for Lexicographic<S>
-where
-    S: AsRef<str>,
-{
+impl<S: StringLike> PartialEq<str> for Lexicographic<S> {
     fn eq(&self, other: &str) -> bool {
         self.0.as_ref() == other
     }
 }
 
-impl<S> PartialEq<&str> for Lexicographic<S>
-where
-    S: AsRef<str>,
-{
+impl<S: StringLike> PartialEq<&str> for Lexicographic<S> {
     fn eq(&self, other: &&str) -> bool {
         self.0.as_ref() == *other
     }
 }
 
-impl<S> AsRef<str> for Lexicographic<S>
-where
-    S: AsRef<str>,
-{
+impl<S: StringLike> AsRef<str> for Lexicographic<S> {
     fn as_ref(&self) -> &str {
         self.0.as_ref()
     }
 }
 
-impl<'a, S: From<&'a str>> From<&'a str> for Lexicographic<S> {
-    fn from(s: &'a str) -> Self {
+impl<S: StringLike> From<&str> for Lexicographic<S> {
+    fn from(s: &str) -> Self {
         Lexicographic(s.into())
     }
 }
 
-impl<S: From<String>> From<String> for Lexicographic<S> {
-    fn from(s: String) -> Self {
-        Lexicographic(s.into())
-    }
-}
-
-impl<S> Deref for Lexicographic<S> {
+impl<S: StringLike> Deref for Lexicographic<S> {
     type Target = S;
 
     fn deref(&self) -> &Self::Target {
@@ -65,13 +50,13 @@ impl<S> Deref for Lexicographic<S> {
     }
 }
 
-impl<S> DerefMut for Lexicographic<S> {
+impl<S: StringLike> DerefMut for Lexicographic<S> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl<S> Serialize for Lexicographic<S>
+impl<S: StringLike> Serialize for Lexicographic<S>
 where
     S: AsRef<str>,
 {
@@ -88,10 +73,7 @@ where
     }
 }
 
-impl<'de, S> serde::Deserialize<'de> for Lexicographic<S>
-where
-    S: for<'a> From<&'a str>,
-{
+impl<'de, S: StringLike> serde::Deserialize<'de> for Lexicographic<S> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -102,10 +84,7 @@ where
 
 struct LexicographicStringVisitor<S>(PhantomData<S>);
 
-impl<'de, S> Visitor<'de> for LexicographicStringVisitor<S>
-where
-    S: for<'a> From<&'a str>,
-{
+impl<'de, S: StringLike> Visitor<'de> for LexicographicStringVisitor<S> {
     type Value = Lexicographic<S>;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -116,21 +95,46 @@ where
     where
         A: serde::de::SeqAccess<'de>,
     {
-        let mut bytes = Vec::new();
+        let mut bytes = [0u8; 256];
+        let mut i = 0;
 
-        // Collect all bytes from the tuple sequence
+        let mut value = S::from("");
+
         while let Some(byte) = seq.next_element::<u8>()? {
             if byte == 0 {
-                // Found null terminator, stop collecting
                 break;
             }
-            bytes.push(byte);
+            bytes[i] = byte;
+            i += 1;
+
+            if i < bytes.len() {
+                continue;
+            }
+
+            let Some(utf8_chunk) = bytes.utf8_chunks().next() else {
+                return Err(serde::de::Error::custom("empty UTF-8 chunk"));
+            };
+
+            value.extend(core::iter::once(utf8_chunk.valid()));
+
+            let valid = utf8_chunk.valid().len();
+            bytes.copy_within(valid..i, 0);
+            i -= valid;
         }
 
-        // Convert bytes to string
-        let s =
-            core::str::from_utf8(&bytes).map_err(|_| serde::de::Error::custom("invalid UTF-8"))?;
-        Ok(Lexicographic::<S>(S::from(s)))
+        if i > 0 {
+            let Some(utf8_chunk) = bytes[..i].utf8_chunks().next() else {
+                return Err(serde::de::Error::custom("empty UTF-8 chunk"));
+            };
+
+            if !utf8_chunk.invalid().is_empty() {
+                return Err(serde::de::Error::custom("invalid UTF-8 at end of string"));
+            }
+
+            value.extend(core::iter::once(utf8_chunk.valid()));
+        }
+
+        Ok(Lexicographic::<S>(value))
     }
 }
 
@@ -140,13 +144,10 @@ mod tests {
 
     const CONFIG: bincode::config::Configuration = bincode::config::standard();
 
-    fn is_less<S>(
+    fn is_less<S: StringLike>(
         a: &Lexicographic<S>,
         b: &Lexicographic<S>,
-    ) -> Result<bool, Box<dyn std::error::Error>>
-    where
-        S: AsRef<str>,
-    {
+    ) -> Result<bool, Box<dyn std::error::Error>> {
         let a = bincode::serde::encode_to_vec(a, CONFIG)?;
         let b = bincode::serde::encode_to_vec(b, CONFIG)?;
         Ok(a < b)

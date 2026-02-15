@@ -50,11 +50,9 @@
 #![deny(clippy::unwrap_used)]
 #![deny(clippy::expect_used)]
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-extern crate alloc;
-
 mod database;
 mod errors;
+mod impls;
 mod traits;
 mod transaction;
 mod utils;
