@@ -80,7 +80,7 @@ impl Repository for Client {
     type K = Vec<u8>;
     type V = Vec<u8>;
     type Error = ClientError;
-    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
+    fn insert_entry(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
         let request = InsertRequest {
             key: hex::encode(key),
             value: hex::encode(value),
@@ -103,7 +103,7 @@ impl Repository for Client {
         }
     }
 
-    fn get(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
+    fn get_entry(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
         let key_hex = hex::encode(key);
 
         let response = self
@@ -130,7 +130,7 @@ impl Repository for Client {
         }
     }
 
-    fn remove(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
+    fn remove_entry(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
         let key_hex = hex::encode(key);
 
         let response = self
@@ -157,7 +157,7 @@ impl Repository for Client {
         }
     }
 
-    fn iter_keys(
+    fn scan_range(
         &self,
         range: Range<Self::K>,
     ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {

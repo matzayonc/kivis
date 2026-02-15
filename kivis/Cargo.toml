@@ -19,7 +19,7 @@ alloc = []
 atomic = []
 memory-storage = ["std"]
 heapless = ["dep:heapless"]
-sled-storage = ["std", "dep:sled", "dep:postcard"]
+sled = ["std", "dep:sled", "dep:postcard"]
 
 [dependencies]
 kivis-derive = { workspace = true }

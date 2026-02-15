@@ -126,7 +126,7 @@ impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy, C: BufferOpsContainer>
 
         storage
             .repository_mut()
-            .batch_mixed(iter)
+            .apply(iter)
             .map_err(DatabaseError::Storage)
     }
 

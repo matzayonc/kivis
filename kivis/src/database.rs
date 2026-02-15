@@ -144,7 +144,7 @@ where
         let Some(value) = self
             .storage
             .repository()
-            .get(key)
+            .get_entry(key)
             .map_err(DatabaseError::Storage)?
         else {
             // let Some(fallback) = &self.fallback else {
@@ -220,7 +220,7 @@ where
         let raw_iter = self
             .storage
             .repository()
-            .iter_keys(start..end)
+            .scan_range(start..end)
             .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| {
@@ -257,7 +257,7 @@ where
         let raw_iter = self
             .storage
             .repository()
-            .iter_keys(start..end)
+            .scan_range(start..end)
             .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| {
@@ -323,7 +323,7 @@ where
         let raw_iter = self
             .storage
             .repository()
-            .iter_keys(start..end)
+            .scan_range(start..end)
             .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| self.process_iter_result(elem)))
@@ -361,7 +361,7 @@ where
         let raw_iter = self
             .storage
             .repository()
-            .iter_keys(start..end)
+            .scan_range(start..end)
             .map_err(DatabaseError::Storage)?;
 
         Ok(raw_iter.map(|elem| self.process_iter_result(elem)))
@@ -384,7 +384,7 @@ where
     ) -> Result<T, DatabaseError<S>> {
         let key = result.map_err(DatabaseError::Storage)?;
 
-        let value = match self.storage.repository().get(key.as_view()) {
+        let value = match self.storage.repository().get_entry(key.as_view()) {
             Ok(Some(data)) => data,
             Ok(None) => {
                 return Err(DatabaseError::Internal(

@@ -119,20 +119,20 @@ impl Repository for CustomStorage {
     type V = Vec<u8>;
     type Error = CustomError;
 
-    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
+    fn insert_entry(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
         self.data.insert(Reverse(key.to_vec()), value.to_vec());
         Ok(())
     }
 
-    fn get(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
+    fn get_entry(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
         Ok(self.data.get(&Reverse(key.to_vec())).cloned())
     }
 
-    fn remove(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
+    fn remove_entry(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
         Ok(self.data.remove(&Reverse(key.to_vec())))
     }
 
-    fn iter_keys(
+    fn scan_range(
         &self,
         range: Range<Self::K>,
     ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {

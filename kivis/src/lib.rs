@@ -75,5 +75,5 @@ pub use transaction::{
     BufferOp, BufferOpsContainer, DatabaseTransaction, OpsIter, TransactionError,
 };
 
-#[cfg(feature = "sled-storage")]
-pub use intergrations::{PostcardUnifier, SledStorage, SledStorageError};
+#[cfg(feature = "sled")]
+pub use intergrations::{PostcardUnifier, SledStorageError};

@@ -159,20 +159,20 @@ impl Repository for ManualStorage {
     type K = Vec<u8>;
     type V = Vec<u8>;
     type Error = NoError;
-    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
+    fn insert_entry(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
         self.data.insert(key.to_vec(), value.to_vec());
         Ok(())
     }
 
-    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    fn get_entry(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self.data.get(key).cloned())
     }
 
-    fn remove(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+    fn remove_entry(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
         Ok(self.data.remove(key))
     }
 
-    fn iter_keys(
+    fn scan_range(
         &self,
         range: Range<Vec<u8>>,
     ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {

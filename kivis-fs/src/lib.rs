@@ -182,13 +182,13 @@ impl Repository for FileStore {
     type V = String;
     type Error = FileStoreError;
 
-    fn insert(&mut self, key: &str, value: &str) -> Result<(), Self::Error> {
+    fn insert_entry(&mut self, key: &str, value: &str) -> Result<(), Self::Error> {
         let file_path = self.key_to_filename(key);
         fs::write(file_path, value)?;
         Ok(())
     }
 
-    fn get(&self, key: &str) -> Result<Option<Self::V>, Self::Error> {
+    fn get_entry(&self, key: &str) -> Result<Option<Self::V>, Self::Error> {
         let file_path = self.key_to_filename(key);
         match fs::read_to_string(file_path) {
             Ok(data) => Ok(Some(data)),
@@ -197,7 +197,7 @@ impl Repository for FileStore {
         }
     }
 
-    fn remove(&mut self, key: &str) -> Result<Option<Self::V>, Self::Error> {
+    fn remove_entry(&mut self, key: &str) -> Result<Option<Self::V>, Self::Error> {
         let file_path = self.key_to_filename(key);
         match fs::read_to_string(&file_path) {
             Ok(data) => {
@@ -209,7 +209,7 @@ impl Repository for FileStore {
         }
     }
 
-    fn iter_keys(
+    fn scan_range(
         &self,
         range: std::ops::Range<Self::K>,
     ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {

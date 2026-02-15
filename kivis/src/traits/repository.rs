@@ -23,7 +23,7 @@ pub trait Repository {
     /// # Errors
     ///
     /// Returns an error if the underlying storage fails to insert the key-value pair.
-    fn insert(
+    fn insert_entry(
         &mut self,
         key: <Self::K as UnifierData>::View<'_>,
         value: <Self::V as UnifierData>::View<'_>,
@@ -34,14 +34,17 @@ pub trait Repository {
     /// # Errors
     ///
     /// Returns an error if the underlying storage fails while retrieving the value.
-    fn get(&self, key: <Self::K as UnifierData>::View<'_>) -> Result<Option<Self::V>, Self::Error>;
+    fn get_entry(
+        &self,
+        key: <Self::K as UnifierData>::View<'_>,
+    ) -> Result<Option<Self::V>, Self::Error>;
 
     /// Remove the value associated with the given key from the repository.
     ///
     /// # Errors
     ///
     /// Returns an error if the underlying storage fails while removing the value.
-    fn remove(
+    fn remove_entry(
         &mut self,
         key: <Self::K as UnifierData>::View<'_>,
     ) -> Result<Option<Self::V>, Self::Error>;
@@ -50,7 +53,7 @@ pub trait Repository {
     /// # Errors
     ///
     /// Returns an error if the underlying storage fails during iteration.
-    fn iter_keys(
+    fn scan_range(
         &self,
         range: Range<Self::K>,
     ) -> Result<impl Iterator<Item = IterationItem<Self::K, Self::Error>>, Self::Error>;
@@ -60,17 +63,17 @@ pub trait Repository {
     /// # Errors
     ///
     /// Returns an error if any of the insert or remove operations fail.
-    fn batch_mixed<'a>(
+    fn apply<'a>(
         &mut self,
         operations: impl Iterator<Item = BatchOp<'a, Self::K, Self::V>>,
     ) -> Result<(), Self::Error> {
         for op in operations {
             match op {
                 BatchOp::Insert { key, value } => {
-                    self.insert(key, value)?;
+                    self.insert_entry(key, value)?;
                 }
                 BatchOp::Delete { key } => {
-                    self.remove(key)?;
+                    self.remove_entry(key)?;
                 }
             }
         }

@@ -219,7 +219,7 @@ impl<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> Reposito
     type V = Vec<u8, VALUE_SIZE>;
     type Error = EkvError;
 
-    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
+    fn insert_entry(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
         futures::executor::block_on(async {
             let mut txn = self.db.write_transaction().await;
             txn.write(key, value).await?;
@@ -228,7 +228,7 @@ impl<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> Reposito
         })
     }
 
-    fn get(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
+    fn get_entry(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
         futures::executor::block_on(async {
             let mut buffer = Vec::<u8, VALUE_SIZE>::new();
             buffer.resize(VALUE_SIZE, 0).ok();
@@ -243,8 +243,8 @@ impl<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> Reposito
         })
     }
 
-    fn remove(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
-        let existing = self.get(key)?;
+    fn remove_entry(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
+        let existing = self.get_entry(key)?;
         if existing.is_some() {
             futures::executor::block_on(async {
                 let mut txn = self.db.write_transaction().await;
@@ -256,7 +256,7 @@ impl<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> Reposito
         Ok(existing)
     }
 
-    fn iter_keys(
+    fn scan_range(
         &self,
         range: Range<Self::K>,
     ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
@@ -279,7 +279,7 @@ impl<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> Reposito
         Ok(iter)
     }
 
-    fn batch_mixed<'a>(
+    fn apply<'a>(
         &mut self,
         operations: impl Iterator<Item = kivis::BatchOp<'a, Self::K, Self::V>>,
     ) -> Result<(), Self::Error> {

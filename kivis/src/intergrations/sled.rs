@@ -77,55 +77,7 @@ impl Unifier for PostcardUnifier {
     }
 }
 
-/// A sled-based storage implementation.
-///
-/// This storage backend uses the sled embedded database with postcard serialization.
-/// Sled is a modern embedded database with ACID guarantees, suitable for production use.
-#[derive(Debug, Clone)]
-pub struct SledStorage {
-    db: sled::Db,
-}
-
-impl SledStorage {
-    /// Create a new in-memory sled storage (for testing)
-    /// Create a new in-memory sled storage (for testing)
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the database cannot be created.
-    pub fn new() -> Result<Self, SledStorageError> {
-        let db = sled::Config::new().temporary(true).open()?;
-        Ok(Self { db })
-    }
-
-    /// Open a sled database at the specified path
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the database cannot be opened.
-    pub fn open(path: impl AsRef<std::path::Path>) -> Result<Self, SledStorageError> {
-        let db = sled::open(path)?;
-        Ok(Self { db })
-    }
-
-    /// Create a sled database with custom configuration
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the database cannot be opened.
-    pub fn with_config(config: &sled::Config) -> Result<Self, SledStorageError> {
-        let db = config.open()?;
-        Ok(Self { db })
-    }
-
-    /// Get a reference to the underlying sled database
-    #[must_use]
-    pub fn db(&self) -> &sled::Db {
-        &self.db
-    }
-}
-
-impl Storage for SledStorage {
+impl Storage for sled::Db {
     type Repo = Self;
     type KeyUnifier = PostcardUnifier;
     type ValueUnifier = PostcardUnifier;
@@ -140,38 +92,37 @@ impl Storage for SledStorage {
     }
 }
 
-impl Repository for SledStorage {
+impl Repository for sled::Db {
     type K = Vec<u8>;
     type V = Vec<u8>;
     type Error = SledStorageError;
 
-    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
-        self.db.insert(key, value)?;
+    fn insert_entry(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
+        self.insert(key, value)?;
         Ok(())
     }
 
-    fn get(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
-        match self.db.get(key)? {
+    fn get_entry(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
+        match self.get(key)? {
             Some(ivec) => Ok(Some(ivec.to_vec())),
             None => Ok(None),
         }
     }
 
-    fn remove(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
-        match self.db.remove(key)? {
+    fn remove_entry(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
+        match self.remove(key)? {
             Some(ivec) => Ok(Some(ivec.to_vec())),
             None => Ok(None),
         }
     }
 
-    fn iter_keys(
+    fn scan_range(
         &self,
         range: Range<Self::K>,
     ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
         // Sled uses forward iteration, but kivis expects reverse order
         // Collect all keys in range and reverse them
         let keys: Vec<_> = self
-            .db
             .range(range.start..range.end)
             .filter_map(Result::ok)
             .map(|(k, _)| k.to_vec())
@@ -180,7 +131,7 @@ impl Repository for SledStorage {
         Ok(keys.into_iter().rev().map(Ok))
     }
 
-    fn batch_mixed<'a>(
+    fn apply<'a>(
         &mut self,
         operations: impl Iterator<Item = crate::BatchOp<'a, Self::K, Self::V>>,
     ) -> Result<(), Self::Error> {
@@ -197,7 +148,7 @@ impl Repository for SledStorage {
             }
         }
 
-        self.db.apply_batch(batch)?;
+        self.apply_batch(batch)?;
         Ok(())
     }
 }

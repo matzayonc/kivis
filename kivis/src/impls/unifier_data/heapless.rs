@@ -1,3 +1,5 @@
+use heapless::CapacityError;
+
 use crate::{BufferOverflowError, UnifierData};
 
 /// Implementation of `UnifierData` for `heapless::Vec<u8, N>`.
@@ -43,7 +45,7 @@ impl<const N: usize> UnifierData for heapless::Vec<u8, N> {
 
     fn extend_from(&mut self, part: Self::View<'_>) -> Result<(), BufferOverflowError> {
         self.extend_from_slice(part)
-            .map_err(|()| BufferOverflowError)
+            .map_err(|_: CapacityError| BufferOverflowError)
     }
 
     fn len(&self) -> usize {
@@ -65,11 +67,11 @@ impl<const N: usize> UnifierData for heapless::Vec<u8, N> {
         // Copy the range to a temporary buffer
         let mut temp = heapless::Vec::<u8, N>::new();
         temp.extend_from_slice(&self[start..end])
-            .map_err(|()| BufferOverflowError)?;
+            .map_err(|_: CapacityError| BufferOverflowError)?;
 
         // Extend self with the temporary buffer
         self.extend_from_slice(&temp)
-            .map_err(|()| BufferOverflowError)
+            .map_err(|_: CapacityError| BufferOverflowError)
     }
 }
 
@@ -106,20 +108,20 @@ mod tests {
         // Test duplicate_within
         let mut vec4 = heapless::Vec::<u8, 256>::new();
         vec4.extend_from_slice(&[1, 2, 3, 4])
-            .map_err(|()| BufferOverflowError)?;
+            .map_err(|_: CapacityError| BufferOverflowError)?;
         UnifierData::duplicate_within(&mut vec4, 1, 3)?;
         assert_eq!(vec4.as_slice(), &[1, 2, 3, 4, 2, 3]);
 
         // Test overflow on extend
         let mut vec5 = heapless::Vec::<u8, 4>::new();
         vec5.extend_from_slice(&[1, 2, 3, 4])
-            .map_err(|()| BufferOverflowError)?;
+            .map_err(|_: CapacityError| BufferOverflowError)?;
         assert!(vec5.extend_from(&[5]).is_err());
 
         // Test overflow on next
         let mut vec6 = heapless::Vec::<u8, 2>::new();
         vec6.extend_from_slice(&[255, 255])
-            .map_err(|()| BufferOverflowError)?;
+            .map_err(|_: CapacityError| BufferOverflowError)?;
         assert!(vec6.next().is_err());
 
         Ok(())

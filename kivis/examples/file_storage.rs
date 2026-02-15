@@ -79,13 +79,13 @@ impl Repository for FileStore {
     type K = Vec<u8>;
     type V = Vec<u8>;
     type Error = FileStoreError;
-    fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
+    fn insert_entry(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
         let file_path = self.key_to_filename(key);
         fs::write(file_path, value)?;
         Ok(())
     }
 
-    fn get(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
+    fn get_entry(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
         let file_path = self.key_to_filename(key);
         match fs::read(file_path) {
             Ok(data) => Ok(Some(data)),
@@ -94,7 +94,7 @@ impl Repository for FileStore {
         }
     }
 
-    fn remove(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
+    fn remove_entry(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
         let file_path = self.key_to_filename(key);
         match fs::read(&file_path) {
             Ok(data) => {
@@ -106,7 +106,7 @@ impl Repository for FileStore {
         }
     }
 
-    fn iter_keys(
+    fn scan_range(
         &self,
         range: std::ops::Range<Vec<u8>>,
     ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {

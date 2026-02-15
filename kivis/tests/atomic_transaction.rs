@@ -63,20 +63,20 @@ mod tests {
         type V = Vec<u8>;
         type Error = MockError;
 
-        fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
+        fn insert_entry(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
             self.data.insert(Reverse(key.to_vec()), value.to_vec());
             Ok(())
         }
 
-        fn get(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
+        fn get_entry(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
             Ok(self.data.get(&Reverse(key.to_vec())).cloned())
         }
 
-        fn remove(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
+        fn remove_entry(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
             Ok(self.data.remove(&Reverse(key.to_vec())))
         }
 
-        fn iter_keys(
+        fn scan_range(
             &self,
             range: Range<Self::K>,
         ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
@@ -85,7 +85,7 @@ mod tests {
             Ok(iter.map(|(k, _v)| Ok(k.0.clone())))
         }
 
-        fn batch_mixed<'a>(
+        fn apply<'a>(
             &mut self,
             operations: impl Iterator<Item = BatchOp<'a, Self::K, Self::V>>,
         ) -> Result<(), Self::Error> {
