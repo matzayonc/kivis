@@ -1,4 +1,4 @@
-use kivis::{BufferOverflowError, BufferOverflowOr, Repository, Storage, Unifier};
+use kivis::{BufferOp, BufferOverflowError, BufferOverflowOr, Repository, Storage, Unifier};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{fmt::Display, fs, path::PathBuf};
 
@@ -166,6 +166,7 @@ impl Storage for FileStore {
     type Repo = Self;
     type KeyUnifier = CsvSerializer;
     type ValueUnifier = CsvSerializer;
+    type Container = Vec<BufferOp>;
 
     fn repository(&self) -> &Self::Repo {
         self

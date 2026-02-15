@@ -100,7 +100,9 @@ where
         Ok(inserted_key)
     }
 
-    pub fn create_transaction(&self) -> DatabaseTransaction<M, S::KeyUnifier, S::ValueUnifier> {
+    pub fn create_transaction(
+        &self,
+    ) -> DatabaseTransaction<M, S::KeyUnifier, S::ValueUnifier, S::Container> {
         DatabaseTransaction::new(self)
     }
 
@@ -113,7 +115,7 @@ where
     /// Returns a [`DatabaseError`] if writing to the underlying storage fails.
     pub fn commit(
         &mut self,
-        transaction: DatabaseTransaction<M, S::KeyUnifier, S::ValueUnifier>,
+        transaction: DatabaseTransaction<M, S::KeyUnifier, S::ValueUnifier, S::Container>,
     ) -> Result<(), DatabaseError<S>> {
         transaction.commit(&mut self.storage)?;
         Ok(())

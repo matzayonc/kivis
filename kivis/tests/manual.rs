@@ -8,8 +8,8 @@ use std::{collections::BTreeMap, ops::Range};
 use thiserror::Error;
 
 use kivis::{
-    BufferOverflowError, BufferOverflowOr, Database, DatabaseEntry, DeriveKey, Incrementable,
-    Index, RecordKey, Repository, Scope, Storage,
+    BufferOp, BufferOverflowError, BufferOverflowOr, Database, DatabaseEntry, DeriveKey,
+    Incrementable, Index, RecordKey, Repository, Scope, Storage,
 };
 
 // Define a record type for an User.
@@ -144,6 +144,7 @@ impl Storage for ManualStorage {
     type Repo = Self;
     type KeyUnifier = Configuration;
     type ValueUnifier = Configuration;
+    type Container = Vec<BufferOp>;
 
     fn repository(&self) -> &Self::Repo {
         self

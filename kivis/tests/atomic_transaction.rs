@@ -8,8 +8,8 @@ mod tests {
         error::{DecodeError, EncodeError},
     };
     use kivis::{
-        BatchOp, BufferOverflowError, Database, DatabaseTransaction, Record, Repository, Storage,
-        manifest,
+        BatchOp, BufferOp, BufferOverflowError, Database, DatabaseTransaction, Record, Repository,
+        Storage, manifest,
     };
     use serde::{Deserialize, Serialize};
     use thiserror::Error;
@@ -47,6 +47,7 @@ mod tests {
         type Repo = Self;
         type KeyUnifier = Configuration;
         type ValueUnifier = Configuration;
+        type Container = Vec<BufferOp>;
 
         fn repository(&self) -> &Self::Repo {
             self
@@ -105,7 +106,7 @@ mod tests {
 
     #[test]
     fn test_transaction_new() -> anyhow::Result<()> {
-        let tx = DatabaseTransaction::<Manifest, _, _>::new_with_serializers(
+        let tx = DatabaseTransaction::<Manifest, _, _, Vec<BufferOp>>::new_with_serializers(
             Configuration::default(),
             Configuration::default(),
         );
@@ -194,7 +195,7 @@ mod tests {
     #[test]
     fn test_empty_transaction_commit() -> anyhow::Result<()> {
         let mut storage = MockAtomicStorage::new();
-        let tx = DatabaseTransaction::<Manifest, _, _>::new_with_serializers(
+        let tx = DatabaseTransaction::<Manifest, _, _, Vec<BufferOp>>::new_with_serializers(
             Default::default(),
             Default::default(),
         );

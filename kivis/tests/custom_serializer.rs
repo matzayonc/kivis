@@ -2,7 +2,8 @@
 
 use bincode::error::{DecodeError, EncodeError};
 use kivis::{
-    BufferOverflowError, BufferOverflowOr, Database, Record, Repository, Storage, Unifier, manifest,
+    BufferOp, BufferOverflowError, BufferOverflowOr, Database, Record, Repository, Storage,
+    Unifier, manifest,
 };
 use serde::{Deserialize, Serialize};
 use std::{cmp::Reverse, collections::BTreeMap, ops::Range};
@@ -102,6 +103,7 @@ impl Storage for CustomStorage {
     type Repo = Self;
     type KeyUnifier = CustomKeyUnifier;
     type ValueUnifier = CustomValueUnifier;
+    type Container = Vec<BufferOp>;
 
     fn repository(&self) -> &Self::Repo {
         self

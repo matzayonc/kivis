@@ -5,8 +5,8 @@ use ekv::flash::{Flash, PageID};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use heapless::Vec;
 use kivis::{
-    BufferOverflowError, BufferOverflowOr, Record, Repository, Storage, Unifier, UnifierData,
-    manifest,
+    BufferOp, BufferOverflowError, BufferOverflowOr, Record, Repository, Storage, Unifier,
+    UnifierData, manifest,
 };
 use ouroboros::self_referencing;
 use serde::Serialize;
@@ -322,7 +322,6 @@ impl<const SIZE: usize, const KEY_SIZE: usize> Iterator for CursorIter<'_, SIZE,
     type Item = Result<Vec<u8, KEY_SIZE>, EkvError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // Use heapless vecs as stack-allocated buffers
         let mut key_buf = Vec::<u8, KEY_SIZE>::new();
         let mut value_buf = Vec::<u8, 1024>::new();
         key_buf.resize(KEY_SIZE, 0).ok();
@@ -354,6 +353,7 @@ impl<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> Storage
     type Repo = Self;
     type KeyUnifier = PostcardUnifier<KEY_SIZE>;
     type ValueUnifier = PostcardUnifier<VALUE_SIZE>;
+    type Container = heapless::Vec<BufferOp, 256>;
 
     fn repository(&self) -> &Self::Repo {
         self

@@ -3,19 +3,28 @@ use crate::{
     wrap::{Subtable, WrapPrelude},
 };
 
-#[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::vec::Vec;
-
 use super::errors::TransactionError;
 
-pub enum Op {
+pub enum BufferOp {
     Write { key_end: usize, value_end: usize },
     Delete { key_end: usize },
 }
 
-pub(crate) struct DatabaseTransactionBuffer<KU: Unifier, VU: Unifier> {
+/// Trait for containers that can hold transaction buffer operations.
+///
+/// This trait combines the necessary bounds for a container to be used
+/// as the `OpsContainer` in transactions.
+pub trait BufferOpsContainer: Default + Extend<BufferOp> + AsRef<[BufferOp]> {}
+
+// Blanket implementation for any type that satisfies the bounds
+impl<T> BufferOpsContainer for T where T: Default + Extend<BufferOp> + AsRef<[BufferOp]> {}
+
+pub(crate) struct DatabaseTransactionBuffer<KU: Unifier, VU: Unifier, OpsContainer>
+where
+    OpsContainer: BufferOpsContainer,
+{
     /// Pending operations: writes and deletes
-    pub(super) pending_ops: Vec<Op>,
+    pub(super) pending_ops: OpsContainer,
     /// Key data buffer
     pub(super) key_data: KU::D,
     /// Value data buffer
@@ -26,10 +35,15 @@ pub(crate) struct DatabaseTransactionBuffer<KU: Unifier, VU: Unifier> {
     value_serializer: VU,
 }
 
-impl<KU: Unifier + Copy, VU: Unifier + Copy> DatabaseTransactionBuffer<KU, VU> {
+impl<KU, VU, OpsContainer> DatabaseTransactionBuffer<KU, VU, OpsContainer>
+where
+    KU: Unifier + Copy,
+    VU: Unifier + Copy,
+    OpsContainer: BufferOpsContainer,
+{
     pub(crate) fn new(key_serializer: KU, value_serializer: VU) -> Self {
         Self {
-            pending_ops: Vec::new(),
+            pending_ops: OpsContainer::default(),
             key_data: KU::D::default(),
             value_data: VU::D::default(),
             key_serializer,
@@ -38,7 +52,7 @@ impl<KU: Unifier + Copy, VU: Unifier + Copy> DatabaseTransactionBuffer<KU, VU> {
     }
 
     pub(crate) fn is_empty(&self) -> bool {
-        self.pending_ops.is_empty()
+        self.pending_ops.as_ref().is_empty()
     }
 
     pub(crate) fn key_serializer(&self) -> KU {
@@ -49,7 +63,7 @@ impl<KU: Unifier + Copy, VU: Unifier + Copy> DatabaseTransactionBuffer<KU, VU> {
         self.value_serializer
     }
 
-    pub(crate) fn iter(&self) -> OpsIter<'_, KU, VU> {
+    pub(crate) fn iter(&self) -> OpsIter<'_, KU, VU, OpsContainer> {
         OpsIter::new(self)
     }
 
@@ -113,7 +127,8 @@ impl<KU: Unifier + Copy, VU: Unifier + Copy> DatabaseTransactionBuffer<KU, VU> {
 
             let value_end = VU::D::len(&self.value_data);
 
-            self.pending_ops.push(Op::Write { key_end, value_end });
+            self.pending_ops
+                .extend(core::iter::once(BufferOp::Write { key_end, value_end }));
         }
 
         // Write main record directly to buffers
@@ -133,7 +148,8 @@ impl<KU: Unifier + Copy, VU: Unifier + Copy> DatabaseTransactionBuffer<KU, VU> {
             .map_err(TransactionError::from_value)?;
         let value_end = VU::D::len(&self.value_data);
 
-        self.pending_ops.push(Op::Write { key_end, value_end });
+        self.pending_ops
+            .extend(core::iter::once(BufferOp::Write { key_end, value_end }));
 
         Ok(())
     }
@@ -178,7 +194,8 @@ impl<KU: Unifier + Copy, VU: Unifier + Copy> DatabaseTransactionBuffer<KU, VU> {
             }
 
             let key_end = KU::D::len(&self.key_data);
-            self.pending_ops.push(Op::Delete { key_end });
+            self.pending_ops
+                .extend(core::iter::once(BufferOp::Delete { key_end }));
         }
 
         // Delete main record - write directly to buffer
@@ -192,7 +209,8 @@ impl<KU: Unifier + Copy, VU: Unifier + Copy> DatabaseTransactionBuffer<KU, VU> {
             key_serializer.serialize_ref(&mut self.key_data, key)?;
         }
         let key_end = KU::D::len(&self.key_data);
-        self.pending_ops.push(Op::Delete { key_end });
+        self.pending_ops
+            .extend(core::iter::once(BufferOp::Delete { key_end }));
 
         Ok(())
     }

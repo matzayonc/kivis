@@ -70,4 +70,6 @@ pub use crate::errors::{
 
 #[cfg(feature = "atomic")]
 // Database transaction is only usefull if atomic storage is enabled.
-pub use transaction::{DatabaseTransaction, Op, OpsIter, TransactionError};
+pub use transaction::{
+    BufferOp, BufferOpsContainer, DatabaseTransaction, OpsIter, TransactionError,
+};

@@ -11,7 +11,7 @@ use bincode::{
     error::{DecodeError, EncodeError},
 };
 
-use crate::{BufferOverflowError, Repository, Storage};
+use crate::{BufferOp, BufferOverflowError, Repository, Storage};
 
 /// A memory-based storage implementation using a [`BTreeMap`].
 ///
@@ -76,6 +76,7 @@ impl Storage for MemoryStorage {
     type Repo = Self;
     type KeyUnifier = Configuration;
     type ValueUnifier = Configuration;
+    type Container = Vec<BufferOp>;
 
     fn repository(&self) -> &Self::Repo {
         self

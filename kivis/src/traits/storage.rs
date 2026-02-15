@@ -1,4 +1,4 @@
-use crate::{Repository, Unifier, UnifierData};
+use crate::{BufferOpsContainer, Repository, Unifier, UnifierData};
 
 /// Represents a batch operation: either insert or delete.
 pub enum BatchOp<'a, K: UnifierData, V: UnifierData> {
@@ -28,6 +28,9 @@ pub trait Storage {
 
     /// Unifier type used to serialize/deserialize values.
     type ValueUnifier: Unifier + Default + Copy;
+
+    /// Container for buffer operations that can be applied to the repository.
+    type Container: BufferOpsContainer;
 
     /// Returns a reference to the underlying repository.
     fn repository(&self) -> &Self::Repo;

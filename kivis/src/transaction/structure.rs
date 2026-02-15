@@ -1,7 +1,7 @@
 use crate::{
-    Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, Manifest, Manifests,
-    RecordKey, Repository, Storage, Unifier, transaction::buffer::DatabaseTransactionBuffer,
-    transaction::errors::TransactionError,
+    BufferOpsContainer, Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, Manifest,
+    Manifests, RecordKey, Repository, Storage, Unifier,
+    transaction::buffer::DatabaseTransactionBuffer, transaction::errors::TransactionError,
 };
 
 use core::marker::PhantomData;
@@ -10,16 +10,18 @@ use core::marker::PhantomData;
 /// without immediately applying them to storage.
 ///
 /// This struct is always available, but the `commit` method is only available when the "atomic" feature is enabled.
-pub struct DatabaseTransaction<Manifest, KU: Unifier, VU: Unifier> {
-    buffer: DatabaseTransactionBuffer<KU, VU>,
+pub struct DatabaseTransaction<Manifest, KU: Unifier, VU: Unifier, C: BufferOpsContainer> {
+    buffer: DatabaseTransactionBuffer<KU, VU, C>,
     _marker: PhantomData<Manifest>,
 }
 
-impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy> DatabaseTransaction<M, KU, VU> {
+impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy, C: BufferOpsContainer>
+    DatabaseTransaction<M, KU, VU, C>
+{
     /// Creates a new empty transaction. Should be used by [`Database::create_transaction`].
     pub fn new<S>(database: &Database<S, M>) -> Self
     where
-        S: Storage<KeyUnifier = KU, ValueUnifier = VU>,
+        S: Storage<KeyUnifier = KU, ValueUnifier = VU, Container = C>,
     {
         Self {
             buffer: DatabaseTransactionBuffer::new(
@@ -65,7 +67,7 @@ impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy> DatabaseTransaction<M,
         database: &mut Database<S, M>,
     ) -> Result<R::Key, DatabaseError<S>>
     where
-        S: Storage<KeyUnifier = KU, ValueUnifier = VU>,
+        S: Storage<KeyUnifier = KU, ValueUnifier = VU, Container = C>,
         R::Key: RecordKey<Record = R> + Incrementable + Ord,
         M: Manifests<R>,
     {
@@ -114,7 +116,7 @@ impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy> DatabaseTransaction<M,
     /// Returns a [`DatabaseError`] if any storage operation fails.
     pub fn commit<S>(self, storage: &mut S) -> Result<(), DatabaseError<S>>
     where
-        S: Storage<KeyUnifier = KU, ValueUnifier = VU>,
+        S: Storage<KeyUnifier = KU, ValueUnifier = VU, Container = C>,
     {
         if self.is_empty() {
             return Ok(());
