@@ -851,7 +851,7 @@ dependencies = [
 
 [[package]]
 name = "kivis"
-version = "0.5.0"
+version = "0.5.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -861,7 +861,7 @@ dependencies = [
  "futures",
  "heapless 0.9.2",
  "hex",
- "kivis-derive",
+ "kivis-derive 0.5.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "ouroboros",
  "paste",
  "postcard",
@@ -877,7 +877,20 @@ dependencies = [
 
 [[package]]
 name = "kivis-derive"
-version = "0.5.0"
+version = "0.5.2"
+dependencies = [
+ "convert_case",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn",
+]
+
+[[package]]
+name = "kivis-derive"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b31e0949463b97df718333e71123fa30118294de55e7d264534fcd23e0173af"
 dependencies = [
  "convert_case",
  "proc-macro2",
