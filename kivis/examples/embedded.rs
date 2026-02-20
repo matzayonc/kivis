@@ -184,7 +184,7 @@ impl From<BufferOverflowError> for EkvError {
 
 /// Storage implementation using ekv with postcard serialization
 pub struct EkvStorage<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> {
-    db: ekv::Database<MockFlash<SIZE>, embassy_sync::blocking_mutex::raw::NoopRawMutex>,
+    db: ekv::Database<MockFlash<SIZE>, NoopRawMutex>,
 }
 
 impl<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> Default

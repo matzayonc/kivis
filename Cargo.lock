@@ -260,7 +260,7 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab888debca410aa6f2726fb363926ca73539378c5e8880c8f08f35ae4b24d938"
 dependencies = [
- "embassy-sync 0.6.2",
+ "embassy-sync",
  "heapless 0.8.0",
 ]
 
@@ -275,20 +275,6 @@ dependencies = [
  "embedded-io-async",
  "futures-sink",
  "futures-util",
- "heapless 0.8.0",
-]
-
-[[package]]
-name = "embassy-sync"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73974a3edbd0bd286759b3d483540f0ebef705919a5f56f4fc7709066f71689b"
-dependencies = [
- "cfg-if",
- "critical-section",
- "embedded-io-async",
- "futures-core",
- "futures-sink",
  "heapless 0.8.0",
 ]
 
@@ -857,7 +843,7 @@ dependencies = [
  "axum",
  "bincode",
  "ekv",
- "embassy-sync 0.7.2",
+ "embassy-sync",
  "futures",
  "heapless 0.9.2",
  "hex",

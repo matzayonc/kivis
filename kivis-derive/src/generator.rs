@@ -203,7 +203,7 @@ impl Generator {
                     buffer: &mut KU::D,
                     discriminator: u8,
                     serializer: &KU,
-                ) -> Result<(), kivis::BufferOverflowOr<KU::SerError>> {
+                ) -> core::result::Result<(), kivis::BufferOverflowOr<KU::SerError>> {
                     match discriminator {
                         #(
                             #indices => {
