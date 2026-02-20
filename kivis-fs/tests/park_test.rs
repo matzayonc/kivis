@@ -1,5 +1,6 @@
 use kivis::{Database, Lexicographic, Record, manifest};
 use kivis_fs::FileStore;
+use tempfile::tempdir;
 
 /// A user record with an indexed name field
 #[derive(
@@ -26,16 +27,12 @@ manifest![Park: User, Pet];
 
 #[test]
 fn test_flow() -> anyhow::Result<()> {
-    const PATH: &str = "./data/fs-store";
-
-    // Clean up any existing data for a fresh start
-    let data_path = std::path::Path::new(PATH);
-    if data_path.exists() {
-        std::fs::remove_dir_all(data_path).ok();
-    }
+    // Create a temporary directory for the test
+    let temp_dir = tempdir()?;
+    let data_path = temp_dir.path();
 
     // Create a new file-based database instance
-    let file_store = FileStore::new(PATH).expect("Failed to create file store");
+    let file_store = FileStore::new(data_path).expect("Failed to create file store");
     let mut store: Database<_, Park> = Database::new(file_store)?;
 
     // Users can be added to the file store
@@ -81,8 +78,7 @@ fn test_flow() -> anyhow::Result<()> {
     assert_eq!(users_named_alice, vec![alice_key.clone()]);
 
     // The data persists to files
-    let data_dir = std::path::Path::new(PATH);
-    if let Ok(entries) = std::fs::read_dir(data_dir) {
+    if let Ok(entries) = std::fs::read_dir(data_path) {
         let file_count = entries.count();
         println!("✓ File-based storage working - {file_count} files persisted");
     }

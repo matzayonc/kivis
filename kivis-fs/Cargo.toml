@@ -2,13 +2,21 @@
 name = "kivis-fs"
 version = "0.1.1"
 edition = "2024"
+description = "File system storage backend for kivis databases with human-readable CSV persistence"
+license = "MIT"
+repository = "https://github.com/matzayonc/kivis"
+homepage = "https://github.com/matzayonc/kivis"
+documentation = "https://docs.rs/kivis-fs"
+keywords = ["kivis", "storage", "filesystem", "database", "csv"]
+categories = ["database", "filesystem"]
+authors = ["Mateusz Zając <matzayonc@gmail.com>"]
 
 [dependencies]
 kivis = { workspace = true }
 serde = { workspace = true }
-hex = { workspace = true }
 csv = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
 thiserror = { workspace = true }
+tempfile = { workspace = true }

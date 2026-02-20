@@ -35,7 +35,7 @@ hex = { workspace = true }
 trybuild = { workspace = true }
 anyhow = { workspace = true }
 thiserror = { workspace = true }
-tempfile = "3.0"
+tempfile = { workspace = true }
 axum = "0.7"
 tokio = { version = "1", features = ["full"] }
 serde_json = "1.0"
