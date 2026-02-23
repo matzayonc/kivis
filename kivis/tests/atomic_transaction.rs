@@ -106,7 +106,7 @@ mod tests {
 
     #[test]
     fn test_transaction_new() -> anyhow::Result<()> {
-        let tx = DatabaseTransaction::<Manifest, _, _, Vec<BufferOp>>::new_with_serializers(
+        let tx = DatabaseTransaction::<Manifest, _, _, Vec<BufferOp>>::new(
             Configuration::default(),
             Configuration::default(),
         );
@@ -195,7 +195,7 @@ mod tests {
     #[test]
     fn test_empty_transaction_commit() -> anyhow::Result<()> {
         let mut storage = MockAtomicStorage::new();
-        let tx = DatabaseTransaction::<Manifest, _, _, Vec<BufferOp>>::new_with_serializers(
+        let tx = DatabaseTransaction::<Manifest, _, _, Vec<BufferOp>>::new(
             Default::default(),
             Default::default(),
         );

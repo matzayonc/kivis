@@ -77,3 +77,26 @@ pub use transaction::{
 
 #[cfg(feature = "sled")]
 pub use intergrations::{PostcardUnifier, SledStorageError};
+
+pub trait Cache: Default {
+    type K;
+    type V;
+    fn get(&self, key: Self::K) -> Option<Self::V>;
+    fn set(&mut self, key: Self::K, value: Self::V);
+}
+
+#[derive(Default)]
+pub struct NoCache;
+
+impl Cache for NoCache {
+    type K = ();
+    type V = ();
+
+    fn get(&self, _key: Self::K) -> Option<Self::V> {
+        None
+    }
+
+    fn set(&mut self, _key: Self::K, _value: Self::V) {}
+}
+
+pub trait CacheContainer<V> {}

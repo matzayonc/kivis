@@ -80,6 +80,18 @@ macro_rules! manifest {
                             [<last_ $ty:snake>]: ::core::option::Option<<$ty as $crate::DatabaseEntry>::Key>,
                         )*
                     }
+
+                    #[derive(Default)]
+                    pub struct [<$manifest_name Cache>]<V: $crate::CacheContainer>
+                    where
+                        $(
+                            V: $crate::CacheContainer<<$ty as $crate::DatabaseEntry>::Key>,
+                        )*
+                    {
+                        $(
+                            [<$ty:snake>]: <V as $crate::CacheContainer<<$ty as $crate::DatabaseEntry>::Key>>::Value,
+                        )*
+                    }
                 }
 
         $crate::scope_impl_with_index!($manifest_name, 0; $($ty),+);
@@ -89,7 +101,7 @@ macro_rules! manifest {
                 &$crate::generate_member_scopes!(0; $($ty),+)
             }
 
-            fn load<S: $crate::Storage>(&mut self, db: &mut $crate::Database<S, Self>) -> ::core::result::Result<(), $crate::DatabaseError<S>> {
+            fn load<S: $crate::Storage, C: $crate::Cache>(&mut self, db: &mut $crate::Database<S, Self, C>) -> ::core::result::Result<(), $crate::DatabaseError<S>> {
                 $crate::paste! {
                     $(
                         self.[<last_ $ty:snake>] = ::core::option::Option::Some(db.last_id()?);

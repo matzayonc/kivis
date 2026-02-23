@@ -2,7 +2,10 @@ use core::fmt::Debug;
 
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::{BufferOverflowOr, Database, DatabaseError, Storage, Unifiable, UnifiableRef, Unifier};
+use crate::{
+    BufferOverflowOr, Database, DatabaseError, Storage, Unifiable, UnifiableRef, Unifier,
+    database::Cache,
+};
 
 /// A trait defining that the implementing type is a key of some record.
 /// Each type can be a key of only one record type, which is defined by the [`DatabaseEntry`] trait.
@@ -72,7 +75,10 @@ pub trait Manifest: Default {
     ///
     /// Returns a [`DatabaseError`] if loading manifests requires access to the
     /// underlying storage and that operation fails.
-    fn load<S: Storage>(&mut self, db: &mut Database<S, Self>) -> Result<(), DatabaseError<S>>
+    fn load<S: Storage, C: Cache>(
+        &mut self,
+        db: &mut Database<S, Self, C>,
+    ) -> Result<(), DatabaseError<S>>
     where
         Self: Sized;
 }
