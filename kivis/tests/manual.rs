@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, ops::Range};
 use thiserror::Error;
 
 use kivis::{
-    BufferOp, BufferOverflowError, BufferOverflowOr, Database, DatabaseEntry, DeriveKey,
+    BufferOp, BufferOverflowError, BufferOverflowOr, Cache, Database, DatabaseEntry, DeriveKey,
     Incrementable, Index, RecordKey, Repository, Scope, Storage,
 };
 
@@ -103,9 +103,9 @@ impl kivis::Manifest for Manifest {
         &[User::SCOPE, Pet::SCOPE]
     }
 
-    fn load<S: Storage>(
+    fn load<S: Storage, C: Cache>(
         &mut self,
-        db: &mut Database<S, Self>,
+        db: &mut Database<S, Self, C>,
     ) -> Result<(), kivis::DatabaseError<S>> {
         *self = Self {
             last_user: None,

@@ -11,15 +11,16 @@ use core::ops::Range;
 type DatabaseIteratorItem<R, S> = Result<<R as DatabaseEntry>::Key, DatabaseError<S>>;
 
 /// The `kivis` database type. All interactions with the database are done through this type.
-pub struct Database<S: Storage, M: Manifest> {
+pub struct Database<S: Storage, M: Manifest, C: Cache = NoCache> {
     pub(crate) storage: S,
     // fallback: Option<Box<dyn StorageInner<StoreError = S::StoreError>>>,
     pub(crate) manifest: M,
     pub(crate) key_serializer: <S as Storage>::KeyUnifier,
     pub(crate) value_serializer: <S as Storage>::ValueUnifier,
+    pub(crate) cache: C,
 }
 
-impl<S: Storage, M: Manifest> Database<S, M>
+impl<S: Storage, M: Manifest, C: Cache> Database<S, M, C>
 where
     S::KeyUnifier: Unifier + Copy,
     S::ValueUnifier: Unifier + Copy,
@@ -32,10 +33,10 @@ where
     pub fn new(store: S) -> Result<Self, DatabaseError<S>> {
         let mut db = Database {
             storage: store,
-            // fallback: None,
             manifest: M::default(),
             key_serializer: S::KeyUnifier::default(),
             value_serializer: S::ValueUnifier::default(),
+            cache: C::default(),
         };
         let mut manifest = M::default();
         manifest.load(&mut db)?;
@@ -73,8 +74,8 @@ where
         R::Key: RecordKey<Record = R> + Incrementable + Ord,
         M: Manifests<R>,
     {
-        let mut transaction = DatabaseTransaction::new(self);
-        let inserted_key = transaction.put(record, self)?;
+        let mut transaction = self.create_transaction();
+        let inserted_key = transaction.put(record, &mut self.manifest)?;
         self.commit(transaction)?;
         Ok(inserted_key)
     }
@@ -92,7 +93,7 @@ where
         R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
         M: Manifests<R>,
     {
-        let mut transaction = DatabaseTransaction::new(self);
+        let mut transaction = self.create_transaction();
         let inserted_key = transaction
             .insert::<K, R>(record)
             .map_err(DatabaseError::from_transaction_error)?;
@@ -103,7 +104,7 @@ where
     pub fn create_transaction(
         &self,
     ) -> DatabaseTransaction<M, S::KeyUnifier, S::ValueUnifier, S::Container> {
-        DatabaseTransaction::new(self)
+        DatabaseTransaction::new(self.key_serializer, self.value_serializer)
     }
 
     /// Commits a transaction to the database.
@@ -183,7 +184,7 @@ where
         let Some(record) = self.get(key)? else {
             return Ok(());
         };
-        let mut transaction = DatabaseTransaction::new(self);
+        let mut transaction = self.create_transaction();
         transaction
             .remove(key, &record)
             .map_err(DatabaseError::from_transaction_error)?;
@@ -203,7 +204,7 @@ where
         &self,
         range: Range<K>,
     ) -> Result<
-        impl Iterator<Item = DatabaseIteratorItem<K::Record, S>> + use<'_, K, S, M>,
+        impl Iterator<Item = DatabaseIteratorItem<K::Record, S>> + use<'_, K, S, M, C>,
         DatabaseError<S>,
     >
     where
@@ -245,7 +246,7 @@ where
     pub fn iter_all_keys<K: RecordKey + Ord>(
         &self,
     ) -> Result<
-        impl Iterator<Item = DatabaseIteratorItem<K::Record, S>> + use<'_, K, S, M>,
+        impl Iterator<Item = DatabaseIteratorItem<K::Record, S>> + use<'_, K, S, M, C>,
         DatabaseError<S>,
     >
     where
@@ -300,7 +301,7 @@ where
         &self,
         range: Range<I>,
     ) -> Result<
-        impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S, M>,
+        impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S, M, C>,
         DatabaseError<S>,
     > {
         let mut start = <<S as Storage>::KeyUnifier as Unifier>::D::default();
@@ -341,7 +342,7 @@ where
         &self,
         index_key: I,
     ) -> Result<
-        impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S, M>,
+        impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S, M, C>,
         DatabaseError<S>,
     > {
         let index_prelude = WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX));

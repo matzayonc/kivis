@@ -1,5 +1,5 @@
 use crate::{
-    BufferOpsContainer, Database, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, Manifest,
+    BufferOpsContainer, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, Manifest,
     Manifests, RecordKey, Repository, Storage, Unifier,
     transaction::buffer::DatabaseTransactionBuffer, transaction::errors::TransactionError,
 };
@@ -18,23 +18,9 @@ pub struct DatabaseTransaction<Manifest, KU: Unifier, VU: Unifier, C: BufferOpsC
 impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy, C: BufferOpsContainer>
     DatabaseTransaction<M, KU, VU, C>
 {
-    /// Creates a new empty transaction. Should be used by [`Database::create_transaction`].
-    pub fn new<S>(database: &Database<S, M>) -> Self
-    where
-        S: Storage<KeyUnifier = KU, ValueUnifier = VU, Container = C>,
-    {
-        Self {
-            buffer: DatabaseTransactionBuffer::new(
-                database.key_serializer,
-                database.value_serializer,
-            ),
-            _marker: PhantomData,
-        }
-    }
-
     /// Creates a new empty transaction with the specified serialization configuration.
     #[must_use]
-    pub fn new_with_serializers(key_serializer: KU, value_serializer: VU) -> Self {
+    pub fn new(key_serializer: KU, value_serializer: VU) -> Self {
         Self {
             buffer: DatabaseTransactionBuffer::new(key_serializer, value_serializer),
             _marker: PhantomData,
@@ -64,14 +50,14 @@ impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy, C: BufferOpsContainer>
     pub fn put<S, R: DatabaseEntry>(
         &mut self,
         record: R,
-        database: &mut Database<S, M>,
+        manifest: &mut M,
     ) -> Result<R::Key, DatabaseError<S>>
     where
         S: Storage<KeyUnifier = KU, ValueUnifier = VU, Container = C>,
         R::Key: RecordKey<Record = R> + Incrementable + Ord,
         M: Manifests<R>,
     {
-        let last_key = database.manifest.last();
+        let last_key = manifest.last();
         let new_key = if let Some(k) = last_key {
             k.next_id().ok_or(DatabaseError::FailedToIncrement)?
         } else {
