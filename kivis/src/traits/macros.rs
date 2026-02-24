@@ -71,6 +71,34 @@ macro_rules! manifest {
         pub struct $manifest_name;
     };
 
+    // Multiple items case with manifest name and cache type - generates cache struct, then delegates
+    ($manifest_name:ident + $cache_ty:ident: $($ty:ty),+ $(,)?) => {
+        $crate::paste! {
+            #[derive(Default)]
+            pub struct [<$manifest_name Cache>]
+            where
+                $(
+                    $cache_ty<<$ty as $crate::DatabaseEntry>::Key, $ty>: $crate::CacheContainer<<$ty as $crate::DatabaseEntry>::Key, $ty>,
+                )*
+            {
+                $(
+                    pub [<$ty:snake>]: $cache_ty<<$ty as $crate::DatabaseEntry>::Key, $ty>,
+                )*
+            }
+        }
+        $crate::paste! {
+            $(
+                impl $crate::CacheAccess<$ty> for [<$manifest_name Cache>] {
+                    type Container = $cache_ty<<$ty as $crate::DatabaseEntry>::Key, $ty>;
+                    fn access(&mut self) -> &mut Self::Container {
+                        &mut self.[<$ty:snake>]
+                    }
+                }
+            )*
+        }
+        $crate::manifest!($manifest_name: $($ty),+);
+    };
+
     // Multiple items case with manifest name - generate implementations with incrementing indices
     ($manifest_name:ident: $($ty:ty),+ $(,)?) => {
                 $crate::paste! {
@@ -78,18 +106,6 @@ macro_rules! manifest {
                     pub struct $manifest_name {
                         $(
                             [<last_ $ty:snake>]: ::core::option::Option<<$ty as $crate::DatabaseEntry>::Key>,
-                        )*
-                    }
-
-                    #[derive(Default)]
-                    pub struct [<$manifest_name Cache>]<V: $crate::CacheContainer>
-                    where
-                        $(
-                            V: $crate::CacheContainer<<$ty as $crate::DatabaseEntry>::Key>,
-                        )*
-                    {
-                        $(
-                            [<$ty:snake>]: <V as $crate::CacheContainer<<$ty as $crate::DatabaseEntry>::Key>>::Value,
                         )*
                     }
                 }

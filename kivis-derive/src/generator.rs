@@ -68,7 +68,7 @@ impl Generator {
 
         quote! {
             #(#other_attrs)*
-            #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+            #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
             #visibility struct #key_type(#(pub #field_types),*);
 
             #key_trait
