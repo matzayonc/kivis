@@ -3,8 +3,8 @@ use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
 use crate::wrap::{Subtable, Wrap, WrapPrelude, empty_wrap, wrap};
 use crate::{
-    BufferOverflowOr, DeriveKey, Incrementable, Manifest, Manifests, RecordKey, Repository,
-    Unifiable, Unifier, UnifierData,
+    BufferOverflowOr, Cache, CacheAccess, CacheContainer, DeriveKey, Incrementable, Manifest,
+    Manifests, NoCache, RecordKey, Repository, Unifiable, Unifier, UnifierData,
 };
 use core::ops::Range;
 
@@ -13,7 +13,6 @@ type DatabaseIteratorItem<R, S> = Result<<R as DatabaseEntry>::Key, DatabaseErro
 /// The `kivis` database type. All interactions with the database are done through this type.
 pub struct Database<S: Storage, M: Manifest, C: Cache = NoCache> {
     pub(crate) storage: S,
-    // fallback: Option<Box<dyn StorageInner<StoreError = S::StoreError>>>,
     pub(crate) manifest: M,
     pub(crate) key_serializer: <S as Storage>::KeyUnifier,
     pub(crate) value_serializer: <S as Storage>::ValueUnifier,
@@ -51,15 +50,6 @@ where
     pub fn with_value_serializer(&mut self, config: <S as Storage>::ValueUnifier) {
         self.value_serializer = config;
     }
-
-    // /// Sets a fallback storage that will be used if the main storage does not contain the requested record.
-    // /// The current storage then becomes the cache for the fallback storage.
-    // pub fn set_fallback(
-    //     &mut self,
-    //     _fallback: Box<dyn Storage<Serializer = S::Serializer, StoreError = S::StoreError>>,
-    // ) {
-    //     // self.fallback = Some(fallback);
-    // }
 
     /// Add a record with autoincremented key into the database, together with all related index entries.
     ///
@@ -130,40 +120,39 @@ where
     ///
     /// Returns a [`DatabaseError`] if the key cannot be serialized, if IO fails,
     /// or if deserializing the result fails.
-    pub fn get<K: RecordKey>(&self, key: &K) -> Result<Option<K::Record>, DatabaseError<S>>
+    pub fn get<K: RecordKey>(&mut self, key: &K) -> Result<Option<K::Record>, DatabaseError<S>>
     where
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
+        C: CacheAccess<K::Record>,
     {
+        if let Some(cached) = self.cache.access().get(key) {
+            return Ok(Some(cached));
+        }
+
         let mut serialized_key = <<S as Storage>::KeyUnifier as Unifier>::D::default();
 
         wrap::<K::Record, S::KeyUnifier>(key, &self.key_serializer, &mut serialized_key)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
 
-        let key = serialized_key.as_view();
+        let raw_key = serialized_key.as_view();
 
         let Some(value) = self
             .storage
             .repository()
-            .get_entry(key)
+            .get_entry(raw_key)
             .map_err(DatabaseError::Storage)?
         else {
-            // let Some(fallback) = &self.fallback else {
-            //     return Ok(None);
-            // };
-            // let key = wrap::<K::Record, S::KeyUnifier>(key, &self.key_serializer)
-            //     .map_err(|e| DatabaseError::Storage(e.into()))?;
-            // let Some(value) = fallback.get(key).map_err(DatabaseError::Storage)? else {
-            //     return Ok(None);
-            // };
-            // value
             return Ok(None);
         };
-        Ok(Some(
-            self.value_serializer
-                .deserialize(&value)
-                .map_err(DatabaseError::ValueDeserialization)?,
-        ))
+
+        let record = self
+            .value_serializer
+            .deserialize(&value)
+            .map_err(DatabaseError::ValueDeserialization)?;
+
+        self.cache.access().set(key, &record);
+        Ok(Some(record))
     }
 
     /// Removes a record from the database by its key and returns it.
@@ -180,6 +169,7 @@ where
         R: DatabaseEntry<Key = K>,
         R::Key: RecordKey<Record = R>,
         M: Manifests<R> + Manifests<K::Record>,
+        C: CacheAccess<R>,
     {
         let Some(record) = self.get(key)? else {
             return Ok(());
@@ -189,6 +179,7 @@ where
             .remove(key, &record)
             .map_err(DatabaseError::from_transaction_error)?;
         self.commit(transaction)?;
+        self.cache.access().expire(key);
         Ok(())
     }
 

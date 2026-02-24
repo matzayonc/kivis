@@ -3,8 +3,7 @@ use core::fmt::Debug;
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
-    BufferOverflowOr, Database, DatabaseError, Storage, Unifiable, UnifiableRef, Unifier,
-    database::Cache,
+    BufferOverflowOr, Cache, Database, DatabaseError, Storage, Unifiable, UnifiableRef, Unifier,
 };
 
 /// A trait defining that the implementing type is a key of some record.

@@ -53,7 +53,7 @@
 mod database;
 mod errors;
 mod impls;
-mod intergrations;
+mod integrations;
 mod traits;
 mod transaction;
 mod utils;
@@ -70,13 +70,13 @@ pub use crate::errors::{
 };
 
 #[cfg(feature = "atomic")]
-// Database transaction is only usefull if atomic storage is enabled.
+// Database transaction is only useful if atomic storage is enabled.
 pub use transaction::{
     BufferOp, BufferOpsContainer, DatabaseTransaction, OpsIter, TransactionError,
 };
 
 #[cfg(feature = "sled")]
-pub use intergrations::{PostcardUnifier, SledStorageError};
+pub use integrations::{PostcardUnifier, SledStorageError};
 
 pub trait Cache: Default {
     type K;
@@ -99,4 +99,28 @@ impl Cache for NoCache {
     fn set(&mut self, _key: Self::K, _value: Self::V) {}
 }
 
-pub trait CacheContainer<V> {}
+impl<K, V> CacheContainer<K, V> for NoCache {
+    fn set(&mut self, _key: &K, _value: &V) {}
+    fn get(&mut self, _key: &K) -> Option<V> {
+        None
+    }
+    fn expire(&mut self, _key: &K) {}
+}
+
+impl<T: DatabaseEntry> CacheAccess<T> for NoCache {
+    type Container = NoCache;
+    fn access(&mut self) -> &mut NoCache {
+        self
+    }
+}
+
+pub trait CacheContainer<K, V> {
+    fn set(&mut self, key: &K, value: &V);
+    fn get(&mut self, key: &K) -> Option<V>;
+    fn expire(&mut self, key: &K);
+}
+
+pub trait CacheAccess<T: DatabaseEntry> {
+    type Container: CacheContainer<<T as DatabaseEntry>::Key, T>;
+    fn access(&mut self) -> &mut Self::Container;
+}
