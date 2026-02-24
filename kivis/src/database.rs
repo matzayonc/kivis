@@ -63,10 +63,12 @@ where
     where
         R::Key: RecordKey<Record = R> + Incrementable + Ord,
         M: Manifests<R>,
+        C: CacheAccess<R>,
     {
         let mut transaction = self.create_transaction();
         let inserted_key = transaction.put(record, &mut self.manifest)?;
         self.commit(transaction)?;
+        self.cache.access().expire(&inserted_key);
         Ok(inserted_key)
     }
 
@@ -82,12 +84,14 @@ where
     where
         R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
         M: Manifests<R>,
+        C: CacheAccess<R>,
     {
         let mut transaction = self.create_transaction();
         let inserted_key = transaction
             .insert::<K, R>(record)
             .map_err(DatabaseError::from_transaction_error)?;
         self.commit(transaction)?;
+        self.cache.access().expire(&inserted_key);
         Ok(inserted_key)
     }
 
@@ -362,6 +366,11 @@ where
     /// Consumes the database and returns the underlying storage.
     pub fn dissolve(self) -> S {
         self.storage
+    }
+
+    /// Returns a reference to the cache.
+    pub fn cache(&self) -> &C {
+        &self.cache
     }
 
     /// Returns the current key and value serializers used by the database.

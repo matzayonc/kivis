@@ -95,6 +95,10 @@ macro_rules! manifest {
                     }
                 }
             )*
+
+            impl $crate::Cache for [<$manifest_name Cache>] {
+                type Manifest = $manifest_name;
+            }
         }
         $crate::manifest!($manifest_name: $($ty),+);
     };
