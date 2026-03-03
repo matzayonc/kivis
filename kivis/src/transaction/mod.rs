@@ -1,6 +1,7 @@
 mod buffer;
 mod errors;
 mod iter;
+mod pre_buffer;
 mod structure;
 
 pub use buffer::{BufferOp, BufferOpsContainer};

@@ -98,7 +98,27 @@ struct Manifest {
     last_user: Option<UserKey>,
     last_pet: Option<PetKey>,
 }
+
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
+enum ManifestRecord<'a> {
+    User(&'a User),
+    Pet(&'a Pet),
+}
+impl<'a> From<&'a User> for ManifestRecord<'a> {
+    fn from(r: &'a User) -> Self {
+        Self::User(r)
+    }
+}
+impl<'a> From<&'a Pet> for ManifestRecord<'a> {
+    fn from(r: &'a Pet) -> Self {
+        Self::Pet(r)
+    }
+}
+
 impl kivis::Manifest for Manifest {
+    type Record<'a> = ManifestRecord<'a>;
+
     fn members() -> &'static [u8] {
         &[User::SCOPE, Pet::SCOPE]
     }

@@ -1,5 +1,6 @@
 use crate::{
-    BufferOverflowOr, DatabaseEntry, OpsIter, RecordKey, Unifier, UnifierData,
+    BufferOverflowOr, DatabaseEntry, Manifest, OpsIter, RecordKey, Unifier, UnifierData,
+    transaction::pre_buffer::{BufferProcessor, PreBufferOps},
     wrap::{Subtable, WrapPrelude},
 };
 
@@ -18,6 +19,17 @@ pub trait BufferOpsContainer: Default + Extend<BufferOp> + AsRef<[BufferOp]> {}
 
 // Blanket implementation for any type that satisfies the bounds
 impl<T> BufferOpsContainer for T where T: Default + Extend<BufferOp> + AsRef<[BufferOp]> {}
+
+impl<M: Manifest, KU: Unifier, VU: Unifier, OpsContainer: BufferOpsContainer> BufferProcessor<M>
+    for DatabaseTransactionBuffer<KU, VU, OpsContainer>
+{
+    fn process<'outer, 'inner>(&self, _op: PreBufferOps, _record: &'outer M::Record<'inner>)
+    where
+        'inner: 'outer,
+    {
+        // TODO: There should be conversion between `PreTransactionBuffer` and `DatabaseTransactionBuffer`.
+    }
+}
 
 pub(crate) struct DatabaseTransactionBuffer<KU: Unifier, VU: Unifier, OpsContainer>
 where

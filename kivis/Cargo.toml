@@ -29,6 +29,8 @@ paste = { workspace = true }
 heapless = { workspace = true, optional = true }
 sled = { version = "0.34", optional = true }
 postcard = { workspace = true, optional = true, features = ["alloc"] }
+bumpalo = { workspace = true, features = ["collections"] }
+ouroboros = "0.18"
 
 [dev-dependencies]
 hex = { workspace = true }
@@ -46,7 +48,6 @@ ekv = { workspace = true }
 postcard = { workspace = true }
 futures = { workspace = true }
 embassy-sync = { workspace = true }
-ouroboros = "0.18"
 heapless = { workspace = true }
 
 [[example]]
