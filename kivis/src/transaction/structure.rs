@@ -4,15 +4,17 @@ use crate::{
     transaction::buffer::DatabaseTransactionBuffer, transaction::errors::TransactionError,
 };
 
+use super::pre_buffer::PreTransactionBuffer;
 use core::marker::PhantomData;
 
 /// A database transaction that accumulates low-level byte operations (writes and deletes)
 /// without immediately applying them to storage.
 ///
 /// This struct is always available, but the `commit` method is only available when the "atomic" feature is enabled.
-pub struct DatabaseTransaction<Manifest, KU: Unifier, VU: Unifier, C: BufferOpsContainer> {
-    buffer: DatabaseTransactionBuffer<KU, VU, C>,
-    _marker: PhantomData<Manifest>,
+pub struct DatabaseTransaction<M: Manifest, KU: Unifier, VU: Unifier, C: BufferOpsContainer> {
+    _pre_buffer: PreTransactionBuffer<M>,
+    post_buffer: DatabaseTransactionBuffer<KU, VU, C>,
+    _marker: PhantomData<M>,
 }
 
 impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy, C: BufferOpsContainer>
@@ -22,7 +24,8 @@ impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy, C: BufferOpsContainer>
     #[must_use]
     pub fn new(key_serializer: KU, value_serializer: VU) -> Self {
         Self {
-            buffer: DatabaseTransactionBuffer::new(key_serializer, value_serializer),
+            _pre_buffer: PreTransactionBuffer::<M>::empty(),
+            post_buffer: DatabaseTransactionBuffer::new(key_serializer, value_serializer),
             _marker: PhantomData,
         }
     }
@@ -39,7 +42,8 @@ impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy, C: BufferOpsContainer>
         M: Manifests<R>,
     {
         let original_key = R::key(&record);
-        self.buffer.prepare_writes::<R>(record, &original_key)?;
+        self.post_buffer
+            .prepare_writes::<R>(record, &original_key)?;
         Ok(original_key)
     }
 
@@ -64,7 +68,7 @@ impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy, C: BufferOpsContainer>
             R::Key::default()
         };
 
-        self.buffer
+        self.post_buffer
             .prepare_writes::<R>(record, &new_key)
             .map_err(DatabaseError::from_transaction_error)?;
         last_key.replace(new_key.clone());
@@ -83,13 +87,13 @@ impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy, C: BufferOpsContainer>
         R::Key: RecordKey<Record = R>,
         M: Manifests<R>,
     {
-        self.buffer.prepare_deletes::<R>(record, key)
+        self.post_buffer.prepare_deletes::<R>(record, key)
     }
 
     /// Returns true if the transaction has no pending operations.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.buffer.is_empty()
+        self.post_buffer.is_empty()
     }
 
     /// Commits all pending operations to the storage.
@@ -108,7 +112,7 @@ impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy, C: BufferOpsContainer>
             return Ok(());
         }
 
-        let iter = self.buffer.iter();
+        let iter = self.post_buffer.iter();
 
         storage
             .repository_mut()

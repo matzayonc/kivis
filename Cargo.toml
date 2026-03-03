@@ -32,3 +32,4 @@ ekv = { version = "1.0", default-features = false }
 postcard = { version = "1.0", default-features = false }
 futures = { version = "0.3", default-features = false, features = ["executor"] }
 embassy-sync = { version = "0.6", default-features = false }
+bumpalo = "3"

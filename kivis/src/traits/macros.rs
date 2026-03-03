@@ -112,23 +112,42 @@ macro_rules! manifest {
                             [<last_ $ty:snake>]: ::core::option::Option<<$ty as $crate::DatabaseEntry>::Key>,
                         )*
                     }
+
+                    /// An enum holding a reference to any record type in this manifest.
+                    /// All variants are pointer-sized (`&'a T`), so cloning is cheap.
+                    #[derive(Clone, Copy)]
+                    pub enum [<$manifest_name Record>]<'a> {
+                        $(
+                            [<$ty>](&'a $ty),
+                        )*
+                    }
+
+                    $(
+                        impl<'a> ::core::convert::From<&'a $ty> for [<$manifest_name Record>]<'a> {
+                            fn from(record: &'a $ty) -> Self {
+                                [<$manifest_name Record>]::[<$ty>](record)
+                            }
+                        }
+                    )*
                 }
 
         $crate::scope_impl_with_index!($manifest_name, 0; $($ty),+);
 
+        $crate::paste! {
         impl $crate::Manifest for $manifest_name {
+            type Record<'a> = [<$manifest_name Record>]<'a>;
+
             fn members() -> &'static [u8] {
                 &$crate::generate_member_scopes!(0; $($ty),+)
             }
 
             fn load<S: $crate::Storage, C: $crate::Cache>(&mut self, db: &mut $crate::Database<S, Self, C>) -> ::core::result::Result<(), $crate::DatabaseError<S>> {
-                $crate::paste! {
-                    $(
-                        self.[<last_ $ty:snake>] = ::core::option::Option::Some(db.last_id()?);
-                    )*
-                }
+                $(
+                    self.[<last_ $ty:snake>] = ::core::option::Option::Some(db.last_id()?);
+                )*
                 ::core::result::Result::Ok(())
             }
+        }
         }
     };
 

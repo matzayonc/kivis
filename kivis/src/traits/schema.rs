@@ -68,7 +68,10 @@ pub trait Manifests<T: Scope + DatabaseEntry> {
     fn last(&mut self) -> &mut Option<T::Key>;
 }
 
-pub trait Manifest: Default {
+pub trait Manifest: Default + 'static {
+    /// An enum covering all record types in this manifest.
+    type Record<'a>: Copy;
+
     fn members() -> &'static [u8];
     /// # Errors
     ///
