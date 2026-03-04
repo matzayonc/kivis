@@ -148,19 +148,25 @@ macro_rules! manifest {
                 ::core::result::Result::Ok(())
             }
 
-            fn process_record<'a, 'b, U: 'b + $crate::UnifierPair>(
+            fn process_record<'a, 'b, U, R>(
                 op: $crate::PreBufferOps,
                 record: &'b Self::Record<'a>,
                 unifiers: U,
-            ) -> $crate::RecordOps<'b, U>
+                repo: &mut R,
+            ) -> ::core::result::Result<(), $crate::ApplyError<U, R::Error>>
             where
+                U: 'b + $crate::UnifierPair,
+                R: $crate::Repository<
+                    K = <<U as $crate::UnifierPair>::KeyUnifier as $crate::Unifier>::D,
+                    V = <<U as $crate::UnifierPair>::ValueUnifier as $crate::Unifier>::D,
+                >,
                 Self: Sized,
                 'a: 'b,
             {
                 match *record {
                     $(
                         [<$manifest_name Record>]::[<$ty>](key, val) => {
-                            $crate::build_record_ops::<$ty, U>(op, val, key, unifiers)
+                            $crate::apply_record_ops::<$ty, U, R>(op, val, key, unifiers, repo)
                         }
                     )*
                 }

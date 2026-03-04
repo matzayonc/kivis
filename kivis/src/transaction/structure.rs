@@ -1,9 +1,9 @@
 use crate::{
     DatabaseEntry, DatabaseError, DeriveKey, Incrementable, Manifest, Manifests, RecordKey,
-    RecordOpsEnum, Repository, Storage, UnifierData, UnifierPair,
+    Storage, UnifierPair,
     transaction::{
-        buffer::{BufferProcessor, PreBufferOps},
-        errors::TransactionError,
+        buffer::PreBufferOps,
+        errors::{ApplyError, TransactionError},
     },
 };
 
@@ -16,49 +16,6 @@ use super::buffer::PreTransactionBuffer;
 pub struct DatabaseTransaction<M: Manifest, U: UnifierPair> {
     pre_buffer: PreTransactionBuffer<M>,
     unifiers: U,
-}
-
-/// Applies each [`RecordOps`] iterator directly to storage without any intermediate byte buffer.
-struct DirectWriter<'s, S: Storage> {
-    storage: &'s mut S,
-    unifiers: S::Unifiers,
-}
-
-impl<M: Manifest, S: Storage> BufferProcessor<M> for DirectWriter<'_, S> {
-    type Error = DatabaseError<S>;
-
-    fn process<'outer, 'inner>(
-        &mut self,
-        op: PreBufferOps,
-        record: &'outer M::Record<'inner>,
-    ) -> Result<(), Self::Error>
-    where
-        'inner: 'outer,
-    {
-        let ops = M::process_record::<S::Unifiers>(op, record, self.unifiers);
-        match ops {
-            RecordOpsEnum::Write(iter) => {
-                for result in iter {
-                    let (key_buf, value_buf) =
-                        result.map_err(DatabaseError::<S>::from_transaction_error)?;
-                    self.storage
-                        .repository_mut()
-                        .insert_entry(key_buf.as_view(), value_buf.as_view())
-                        .map_err(DatabaseError::Storage)?;
-                }
-            }
-            RecordOpsEnum::Delete(iter) => {
-                for result in iter {
-                    let key_buf = result.map_err(DatabaseError::<S>::from_transaction_error)?;
-                    self.storage
-                        .repository_mut()
-                        .remove_entry(key_buf.as_view())
-                        .map_err(DatabaseError::Storage)?;
-                }
-            }
-        }
-        Ok(())
-    }
 }
 
 impl<M: Manifest, U: UnifierPair> DatabaseTransaction<M, U> {
@@ -149,11 +106,19 @@ impl<M: Manifest, U: UnifierPair> DatabaseTransaction<M, U> {
             return Ok(());
         }
 
-        let mut writer = DirectWriter {
-            storage,
-            unifiers: self.unifiers,
-        };
-        self.pre_buffer.process(&mut writer)
+        let unifiers = self.unifiers;
+        self.pre_buffer.process(|op, record| {
+            M::process_record::<S::Unifiers, S::Repo>(
+                op,
+                &record,
+                unifiers,
+                storage.repository_mut(),
+            )
+            .map_err(|e| match e {
+                ApplyError::Transaction(te) => DatabaseError::<S>::from_transaction_error(te),
+                ApplyError::Storage(se) => DatabaseError::Storage(se),
+            })
+        })
     }
 
     /// Discards all pending operations without applying them.

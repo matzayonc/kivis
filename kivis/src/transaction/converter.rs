@@ -1,70 +1,54 @@
 use crate::{
-    BufferOverflowOr, DatabaseEntry, RecordKey, Unifier, UnifierData, UnifierPair,
+    BufferOverflowOr, DatabaseEntry, RecordKey, Repository, Unifier, UnifierData, UnifierPair,
     transaction::buffer::PreBufferOps,
     wrap::{Subtable, WrapPrelude},
 };
 
-use super::{
-    errors::TransactionError,
-    serialized_buffer::{RecordOps, RecordOpsEnum},
-};
+use super::errors::{ApplyError, TransactionError};
 
-/// Decouples serialization from buffering by holding the key and value serializers.
+/// Converts a record operation and applies the resulting writes or deletes directly to `repo`.
 ///
-/// Call [`Converter::convert`] to obtain a [`RecordOps`] iterator pair without
-/// touching any [`DatabaseTransactionBuffer`].
-pub(crate) struct Converter<U: UnifierPair>(pub U::KeyUnifier, pub U::ValueUnifier);
-
-impl<U: UnifierPair> Converter<U> {
-    /// Converts a record operation into a [`RecordOps`] iterator pair.
-    ///
-    /// This is the pure preparation step: it serializes keys and values into
-    /// fresh buffers without writing to any shared accumulator.
-    pub(crate) fn convert<'r, R>(
-        &self,
-        op: PreBufferOps,
-        record: &'r R,
-        key: &'r R::Key,
-    ) -> RecordOps<'r, U>
-    where
-        R: DatabaseEntry + Clone,
-        R::Key: RecordKey<Record = R>,
-        U: 'r,
-    {
-        match op {
-            PreBufferOps::Insert | PreBufferOps::Put => RecordOpsEnum::Write(Box::new(
-                prepare_writes::<R, U>(record, key, self.0, self.1),
-            )),
-            PreBufferOps::Delete => {
-                RecordOpsEnum::Delete(Box::new(prepare_deletes::<R, U>(record, key, self.0)))
-            }
-        }
-    }
-}
-
-/// Public entry-point used by the `manifest!` macro.
-///
-/// Constructs a temporary [`Converter`] and delegates to [`Converter::convert`].
-/// All conversion logic lives in [`Converter`].
+/// Used by `process_record` implementations inside the `manifest!` macro and manual
+/// `Manifest` implementations.
 #[doc(hidden)]
-pub fn build_record_ops<'r, R, U>(
+pub fn apply_record_ops<'r, R, U, Repo>(
     op: PreBufferOps,
     record: &'r R,
     key: &'r R::Key,
     unifiers: U,
-) -> RecordOps<'r, U>
+    repo: &mut Repo,
+) -> Result<(), ApplyError<U, Repo::Error>>
 where
     R: DatabaseEntry + Clone,
     R::Key: RecordKey<Record = R>,
     U: UnifierPair + 'r,
+    Repo: Repository<K = <U::KeyUnifier as Unifier>::D, V = <U::ValueUnifier as Unifier>::D>,
 {
-    Converter(unifiers.key_unifier(), unifiers.value_unifier()).convert(op, record, key)
+    let key_ser = unifiers.key_unifier();
+    let val_ser = unifiers.value_unifier();
+    match op {
+        PreBufferOps::Insert | PreBufferOps::Put => {
+            for result in prepare_writes::<R, U>(record, key, key_ser, val_ser) {
+                let (key_buf, value_buf) = result.map_err(ApplyError::Transaction)?;
+                repo.insert_entry(key_buf.as_view(), value_buf.as_view())
+                    .map_err(ApplyError::Storage)?;
+            }
+        }
+        PreBufferOps::Delete => {
+            for result in prepare_deletes::<R, U>(record, key, key_ser) {
+                let key_buf = result.map_err(ApplyError::Transaction)?;
+                repo.remove_entry(key_buf.as_view())
+                    .map_err(ApplyError::Storage)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Returns an iterator of fully-assembled `(key_buf, value_buf)` pairs for all entries
 /// (index entries + main record).
 #[allow(clippy::type_complexity)]
-fn prepare_writes<'r, R, U>(
+pub(super) fn prepare_writes<'r, R, U>(
     record: &'r R,
     key: &'r R::Key,
     key_serializer: U::KeyUnifier,
@@ -90,7 +74,7 @@ where
 
 /// Returns an iterator of fully-assembled key buffers for all delete entries
 /// (index entries + main record).
-fn prepare_deletes<'r, R, U>(
+pub(super) fn prepare_deletes<'r, R, U>(
     record: &'r R,
     key: &'r R::Key,
     key_serializer: U::KeyUnifier,
