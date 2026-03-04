@@ -79,8 +79,7 @@ impl Unifier for PostcardUnifier {
 
 impl Storage for sled::Db {
     type Repo = Self;
-    type KeyUnifier = PostcardUnifier;
-    type ValueUnifier = PostcardUnifier;
+    type Unifiers = (PostcardUnifier, PostcardUnifier);
     type Container = Vec<BufferOp>;
 
     fn repository(&self) -> &Self::Repo {

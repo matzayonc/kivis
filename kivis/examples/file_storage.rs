@@ -62,8 +62,7 @@ impl FileStore {
 
 impl Storage for FileStore {
     type Repo = Self;
-    type KeyUnifier = Configuration;
-    type ValueUnifier = Configuration;
+    type Unifiers = (Configuration, Configuration);
     type Container = Vec<BufferOp>;
 
     fn repository(&self) -> &Self::Repo {

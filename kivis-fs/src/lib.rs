@@ -87,8 +87,7 @@ pub use crate::repository::FileStore;
 
 impl Storage for FileStore {
     type Repo = Self;
-    type KeyUnifier = CsvSerializer;
-    type ValueUnifier = CsvSerializer;
+    type Unifiers = (CsvSerializer, CsvSerializer);
     type Container = Vec<BufferOp>;
 
     fn repository(&self) -> &Self::Repo {

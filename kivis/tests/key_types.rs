@@ -5,19 +5,19 @@ use serde::{Deserialize, Serialize};
 
 type Payload = u16;
 
-#[derive(Debug, Serialize, Deserialize, Record)]
+#[derive(Debug, Clone, Serialize, Deserialize, Record)]
 struct Autoincremented {
     p: Payload,
 }
 
-#[derive(Debug, Serialize, Deserialize, Record)]
+#[derive(Debug, Clone, Serialize, Deserialize, Record)]
 struct Field {
     #[key]
     id: u64,
     p: Payload,
 }
 
-#[derive(Debug, Serialize, Deserialize, Record)]
+#[derive(Debug, Clone, Serialize, Deserialize, Record)]
 struct Composite {
     #[key]
     directory: u32,
@@ -26,7 +26,7 @@ struct Composite {
     p: Payload,
 }
 
-#[derive(Debug, Serialize, Deserialize, Record)]
+#[derive(Debug, Clone, Serialize, Deserialize, Record)]
 #[derived_key(u32, u32)]
 struct WithDerived {
     p: Payload,

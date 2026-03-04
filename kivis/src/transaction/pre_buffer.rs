@@ -32,7 +32,7 @@ impl<M: Manifest> PreTransactionBuffer<M> {
 
     /// Bump-allocates `record` and stores a reference-based enum variant pointing into it.
     ///
-    pub(crate) fn _push<'a, T: 'a>(&mut self, op: PreBufferOps, record: T)
+    pub(crate) fn push<'a, T: 'a>(&mut self, op: PreBufferOps, record: T)
     where
         for<'f> &'f T: Into<M::Record<'f>>,
         'a: 'static, // 'static bounds is required by [`ouroboros`] to ensure the record can be safely stored in the arena
@@ -48,12 +48,17 @@ impl<M: Manifest> PreTransactionBuffer<M> {
 
     // The reverse of iterator.
     // `into_iter` would be more ergonomic, but it would returning data with `this` lifetime, which is not possible with the current design of `ouroboros`.
-    pub fn _process(self, processor: &impl BufferProcessor<M>) {
+    #[allow(dead_code)]
+    pub fn process<E>(self, processor: &mut impl BufferProcessor<M, Error = E>) -> Result<(), E> {
+        let mut result = Ok(());
         self.with_records(|r| {
             for (op, record) in r {
-                processor.process(*op, record);
+                if result.is_ok() {
+                    result = processor.process(*op, record);
+                }
             }
         });
+        result
     }
 }
 
@@ -65,14 +70,20 @@ impl<M: Manifest + 'static> Default for PreTransactionBuffer<M> {
 
 #[allow(dead_code)]
 pub(crate) trait BufferProcessor<M: Manifest> {
-    fn process<'outer, 'inner>(&self, op: PreBufferOps, record: &'outer M::Record<'inner>)
+    type Error;
+    fn process<'outer, 'inner>(
+        &mut self,
+        op: PreBufferOps,
+        record: &'outer M::Record<'inner>,
+    ) -> Result<(), Self::Error>
     where
         'inner: 'outer;
 }
 
 #[derive(Debug, Clone, Copy)]
 #[allow(dead_code)]
-pub(crate) enum PreBufferOps {
+#[doc(hidden)]
+pub enum PreBufferOps {
     Insert,
     Put,
     Delete,

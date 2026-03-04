@@ -75,5 +75,8 @@ pub use transaction::{
     BufferOp, BufferOpsContainer, DatabaseTransaction, OpsIter, TransactionError,
 };
 
+#[doc(hidden)]
+pub use transaction::{DatabaseTransactionBuffer, PreBufferOps};
+
 #[cfg(feature = "sled")]
 pub use integrations::{PostcardUnifier, SledStorageError};

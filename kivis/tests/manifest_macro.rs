@@ -2,27 +2,27 @@ use kivis::{Manifest, Record, Scope, manifest};
 use serde::{Deserialize, Serialize};
 
 // Define some test structs
-#[derive(Debug, Record, Deserialize, Serialize)]
+#[derive(Debug, Clone, Record, Deserialize, Serialize)]
 struct User {
     _id: u64,
     _name: String,
 }
 
-#[derive(Debug, Record, Deserialize, Serialize)]
+#[derive(Debug, Clone, Record, Deserialize, Serialize)]
 struct Post {
     _id: u64,
     _title: String,
     _content: String,
 }
 
-#[derive(Debug, Record, Deserialize, Serialize)]
+#[derive(Debug, Clone, Record, Deserialize, Serialize)]
 struct Comment {
     _id: u64,
     _post_id: u64,
     _content: String,
 }
 
-#[derive(Debug, Record, Deserialize, Serialize)]
+#[derive(Debug, Clone, Record, Deserialize, Serialize)]
 struct Tag {
     _id: u64,
     _name: String,
@@ -43,7 +43,7 @@ fn test_manifest_macro_multiple_types() {
 
 #[test]
 fn test_manifest_macro_single_type() {
-    #[derive(Debug, Record, Deserialize, Serialize)]
+    #[derive(Debug, Clone, Record, Deserialize, Serialize)]
     struct SingleType {
         _id: u64,
     }
@@ -54,11 +54,11 @@ fn test_manifest_macro_single_type() {
 
 #[test]
 fn test_manifest_macro_with_trailing_comma() {
-    #[derive(Debug, Record, Deserialize, Serialize)]
+    #[derive(Debug, Clone, Record, Deserialize, Serialize)]
     struct A {
         _id: u64,
     }
-    #[derive(Debug, Record, Deserialize, Serialize)]
+    #[derive(Debug, Clone, Record, Deserialize, Serialize)]
     struct B {
         _id: u64,
     }
@@ -70,7 +70,7 @@ fn test_manifest_macro_with_trailing_comma() {
 
 #[test]
 fn test_manifest_macro_empty_struct() {
-    #[derive(Debug, Record, Deserialize, Serialize)]
+    #[derive(Debug, Clone, Record, Deserialize, Serialize)]
     struct EmptyStruct {
         _id: u64,
     }
