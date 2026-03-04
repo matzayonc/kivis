@@ -2,11 +2,12 @@ use crate::{
     BufferOpsContainer, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, Manifest,
     Manifests, RecordKey, Repository, Storage, UnifierPair,
     transaction::{
-        buffer::DatabaseTransactionBuffer, errors::TransactionError, pre_buffer::PreBufferOps,
+        buffer::PreBufferOps, errors::TransactionError,
+        serialized_buffer::DatabaseTransactionBuffer,
     },
 };
 
-use super::pre_buffer::PreTransactionBuffer;
+use super::buffer::PreTransactionBuffer;
 use core::marker::PhantomData;
 
 /// A database transaction that accumulates low-level byte operations (writes and deletes)
@@ -42,9 +43,7 @@ impl<M: Manifest, U: UnifierPair, C: BufferOpsContainer> DatabaseTransaction<M, 
     {
         let original_key = R::key(&record);
         self.pre_buffer
-            .push(PreBufferOps::Insert, (original_key.clone(), record.clone()));
-        self.post_buffer
-            .prepare_writes::<R>(record, &original_key)?;
+            .push(PreBufferOps::Insert, (original_key.clone(), record));
         Ok(original_key)
     }
 
@@ -68,10 +67,7 @@ impl<M: Manifest, U: UnifierPair, C: BufferOpsContainer> DatabaseTransaction<M, 
         };
 
         self.pre_buffer
-            .push(PreBufferOps::Put, (new_key.clone(), record.clone()));
-        self.post_buffer
-            .prepare_writes::<R>(record, &new_key)
-            .map_err(DatabaseError::from_transaction_error)?;
+            .push(PreBufferOps::Put, (new_key.clone(), record));
         last_key.replace(new_key.clone());
         Ok(new_key)
     }
@@ -88,13 +84,13 @@ impl<M: Manifest, U: UnifierPair, C: BufferOpsContainer> DatabaseTransaction<M, 
     {
         self.pre_buffer
             .push(PreBufferOps::Delete, (key.clone(), record.clone()));
-        self.post_buffer.prepare_deletes::<R>(record, key)
+        Ok(())
     }
 
     /// Returns true if the transaction has no pending operations.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.post_buffer.is_empty()
+        self.pre_buffer.is_empty()
     }
 
     /// Commits all pending operations to the storage.
@@ -113,11 +109,18 @@ impl<M: Manifest, U: UnifierPair, C: BufferOpsContainer> DatabaseTransaction<M, 
             return Ok(());
         }
 
-        let iter = self.post_buffer.iter();
+        let DatabaseTransaction {
+            pre_buffer,
+            mut post_buffer,
+            ..
+        } = self;
+        pre_buffer
+            .process(&mut post_buffer)
+            .map_err(DatabaseError::from_transaction_error)?;
 
         storage
             .repository_mut()
-            .apply(iter)
+            .apply(post_buffer.iter())
             .map_err(DatabaseError::Storage)
     }
 
