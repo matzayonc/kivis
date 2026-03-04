@@ -69,14 +69,14 @@ pub use crate::errors::{
     BufferOverflowError, BufferOverflowOr, DatabaseError, InternalDatabaseError,
 };
 
-pub use transaction::{ApplyError, RecordOpKind, TransactionError};
+pub use transaction::{ApplyError, TransactionError};
 
 #[cfg(feature = "atomic")]
 // Database transaction is only useful if atomic storage is enabled.
-pub use transaction::{BufferOp, BufferOpsContainer, DatabaseTransaction, OpsIter};
+pub use transaction::DatabaseTransaction;
 
 #[doc(hidden)]
-pub use transaction::{DatabaseTransactionBuffer, PreBufferOps, apply_record_ops};
+pub use transaction::{PreBufferOps, apply_record_ops};
 
 #[cfg(feature = "sled")]
 pub use integrations::{PostcardUnifier, SledStorageError};

@@ -2,7 +2,7 @@ use bincode::{
     config::Configuration,
     error::{DecodeError, EncodeError},
 };
-use kivis::{BufferOp, Database, DatabaseError, Record, Repository, Storage, manifest};
+use kivis::{Database, DatabaseError, Record, Repository, Storage, manifest};
 use std::fs;
 use std::path::PathBuf;
 use thiserror::Error;
@@ -63,8 +63,6 @@ impl FileStore {
 impl Storage for FileStore {
     type Repo = Self;
     type Unifiers = (Configuration, Configuration);
-    type Container = Vec<BufferOp>;
-
     fn repository(&self) -> &Self::Repo {
         self
     }

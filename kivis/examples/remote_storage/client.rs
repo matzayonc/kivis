@@ -2,7 +2,7 @@
 // This demonstrates how to implement the Storage trait using HTTP requests
 
 use bincode::config::Configuration;
-use kivis::{BufferOp, BufferOverflowError, Repository, Storage};
+use kivis::{BufferOverflowError, Repository, Storage};
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use thiserror::Error;
@@ -65,8 +65,6 @@ impl Client {
 impl Storage for Client {
     type Repo = Self;
     type Unifiers = (Configuration, Configuration);
-    type Container = Vec<BufferOp>;
-
     fn repository(&self) -> &Self::Repo {
         self
     }
