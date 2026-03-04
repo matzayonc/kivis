@@ -1,6 +1,6 @@
 use crate::{
     BatchOp, BufferOp, Unifier, UnifierData, UnifierPair,
-    transaction::buffer::{BufferOpsContainer, DatabaseTransactionBuffer},
+    transaction::serialized_buffer::{BufferOpsContainer, DatabaseTransactionBuffer},
 };
 
 pub struct OpsIter<'a, U: UnifierPair, C: BufferOpsContainer> {
