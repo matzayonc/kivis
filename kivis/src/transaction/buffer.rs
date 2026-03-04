@@ -54,12 +54,15 @@ impl<M: Manifest> PreTransactionBuffer<M> {
 
     // The reverse of iterator.
     // `into_iter` would be more ergonomic, but it would returning data with `this` lifetime, which is not possible with the current design of `ouroboros`.
-    pub fn process<E>(self, processor: &mut impl BufferProcessor<M, Error = E>) -> Result<(), E> {
+    pub fn process<E, F>(self, mut f: F) -> Result<(), E>
+    where
+        F: for<'inner> FnMut(PreBufferOps, M::Record<'inner>) -> Result<(), E>,
+    {
         let mut result = Ok(());
         self.with_records(|r| {
             for (op, record) in r {
                 if result.is_ok() {
-                    result = processor.process(*op, record);
+                    result = f(*op, *record);
                 }
             }
         });
@@ -71,18 +74,6 @@ impl<M: Manifest + 'static> Default for PreTransactionBuffer<M> {
     fn default() -> Self {
         Self::empty()
     }
-}
-
-#[allow(dead_code)]
-pub(crate) trait BufferProcessor<M: Manifest> {
-    type Error;
-    fn process<'outer, 'inner>(
-        &mut self,
-        op: PreBufferOps,
-        record: &'outer M::Record<'inner>,
-    ) -> Result<(), Self::Error>
-    where
-        'inner: 'outer;
 }
 
 #[derive(Debug, Clone, Copy)]

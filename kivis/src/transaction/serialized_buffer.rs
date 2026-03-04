@@ -3,7 +3,10 @@ use crate::{
     transaction::buffer::PreBufferOps,
 };
 
-use super::{converter::Converter, errors::TransactionError};
+use super::{
+    converter::{prepare_deletes, prepare_writes},
+    errors::TransactionError,
+};
 
 #[derive(Clone, Copy)]
 pub enum BufferOp {
@@ -87,15 +90,20 @@ where
         R: DatabaseEntry + Clone,
         R::Key: RecordKey<Record = R>,
     {
-        let ops =
-            Converter(self.key_serializer(), self.value_serializer()).convert(op, record, key);
-        self.apply_record_ops(ops)
+        match op {
+            PreBufferOps::Insert | PreBufferOps::Put => self.apply_writes(prepare_writes::<R, U>(
+                record,
+                key,
+                self.key_serializer(),
+                self.value_serializer(),
+            )),
+            PreBufferOps::Delete => {
+                self.apply_deletes(prepare_deletes::<R, U>(record, key, self.key_serializer()))
+            }
+        }
     }
 
-    fn apply_record_ops<WI, DI>(
-        &mut self,
-        ops: RecordOpsEnum<WI, DI>,
-    ) -> Result<(), TransactionError<U>>
+    fn apply_writes<WI>(&mut self, iter: WI) -> Result<(), TransactionError<U>>
     where
         WI: Iterator<
             Item = Result<
@@ -106,38 +114,38 @@ where
                 TransactionError<U>,
             >,
         >,
-        DI: Iterator<Item = Result<<U::KeyUnifier as Unifier>::D, TransactionError<U>>>,
     {
         type KD<U> = <<U as UnifierPair>::KeyUnifier as Unifier>::D;
         type VD<U> = <<U as UnifierPair>::ValueUnifier as Unifier>::D;
+        for result in iter {
+            let (key_buf, value_buf) = result?;
+            self.key_data
+                .extend_from(key_buf.as_view())
+                .map_err(BufferOverflowOr::overflow)?;
+            let key_end = KD::<U>::len(&self.key_data);
+            self.value_data
+                .extend_from(value_buf.as_view())
+                .map_err(BufferOverflowOr::overflow)?;
+            let value_end = VD::<U>::len(&self.value_data);
+            self.pending_ops
+                .extend(core::iter::once(BufferOp::Write { key_end, value_end }));
+        }
+        Ok(())
+    }
 
-        match ops {
-            RecordOpsEnum::Write(iter) => {
-                for result in iter {
-                    let (key_buf, value_buf) = result?;
-                    self.key_data
-                        .extend_from(key_buf.as_view())
-                        .map_err(BufferOverflowOr::overflow)?;
-                    let key_end = KD::<U>::len(&self.key_data);
-                    self.value_data
-                        .extend_from(value_buf.as_view())
-                        .map_err(BufferOverflowOr::overflow)?;
-                    let value_end = VD::<U>::len(&self.value_data);
-                    self.pending_ops
-                        .extend(core::iter::once(BufferOp::Write { key_end, value_end }));
-                }
-            }
-            RecordOpsEnum::Delete(iter) => {
-                for key_buf in iter {
-                    let key_buf = key_buf?;
-                    self.key_data
-                        .extend_from(key_buf.as_view())
-                        .map_err(BufferOverflowOr::overflow)?;
-                    let key_end = KD::<U>::len(&self.key_data);
-                    self.pending_ops
-                        .extend(core::iter::once(BufferOp::Delete { key_end }));
-                }
-            }
+    fn apply_deletes<DI>(&mut self, iter: DI) -> Result<(), TransactionError<U>>
+    where
+        DI: Iterator<Item = Result<<U::KeyUnifier as Unifier>::D, TransactionError<U>>>,
+    {
+        type KD<U> = <<U as UnifierPair>::KeyUnifier as Unifier>::D;
+        for key_buf in iter {
+            let key_buf = key_buf?;
+            self.key_data
+                .extend_from(key_buf.as_view())
+                .map_err(BufferOverflowOr::overflow)?;
+            let key_end = KD::<U>::len(&self.key_data);
+            self.pending_ops
+                .extend(core::iter::once(BufferOp::Delete { key_end }));
         }
         Ok(())
     }
@@ -145,35 +153,3 @@ where
 
 /// Re-export of [`PreBufferOps`] under a public-facing name.
 pub type RecordOpKind = PreBufferOps;
-
-/// Carries either a write or delete iterator.
-///
-/// The generic version used internally; prefer the [`RecordOps`] type alias for
-/// public-facing APIs.
-#[doc(hidden)]
-pub enum RecordOpsEnum<WI, DI> {
-    Write(WI),
-    Delete(DI),
-}
-
-/// Concrete write/delete iterator pair returned by [`build_record_ops`].
-///
-/// Uses heap-allocated iterators so the return type can appear in trait methods.
-pub type RecordOps<'b, U> = RecordOpsEnum<
-    Box<
-        dyn Iterator<
-                Item = Result<
-                    (
-                        <<U as UnifierPair>::KeyUnifier as Unifier>::D,
-                        <<U as UnifierPair>::ValueUnifier as Unifier>::D,
-                    ),
-                    TransactionError<U>,
-                >,
-            > + 'b,
-    >,
-    Box<
-        dyn Iterator<
-                Item = Result<<<U as UnifierPair>::KeyUnifier as Unifier>::D, TransactionError<U>>,
-            > + 'b,
-    >,
->;

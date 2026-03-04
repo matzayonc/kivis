@@ -3,8 +3,8 @@ use core::fmt::Debug;
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
-    BufferOverflowOr, Cache, Database, DatabaseError, RecordOps, Storage, Unifiable, UnifiableRef,
-    Unifier, UnifierPair, transaction::PreBufferOps,
+    ApplyError, BufferOverflowOr, Cache, Database, DatabaseError, Repository, Storage, Unifiable,
+    UnifiableRef, Unifier, UnifierPair, transaction::PreBufferOps,
 };
 
 /// A trait defining that the implementing type is a key of some record.
@@ -85,13 +85,24 @@ pub trait Manifest: Default + 'static {
     where
         Self: Sized;
 
-    /// Returns a [`RecordOps`] iterator pair describing all writes or deletes for `record`.
-    fn process_record<'a, 'b, U: 'b + UnifierPair>(
+    /// Converts a record operation and applies the resulting writes or deletes directly to `repo`.
+    ///
+    /// Implementations should delegate to [`apply_record_ops`](crate::apply_record_ops) for each
+    /// record variant.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`ApplyError`] if serialization of keys or values fails, or if the repository
+    /// returns an error during a write or remove operation.
+    fn process_record<'a, 'b, U, R>(
         op: PreBufferOps,
         record: &'b Self::Record<'a>,
         unifiers: U,
-    ) -> RecordOps<'b, U>
+        repo: &mut R,
+    ) -> Result<(), ApplyError<U, R::Error>>
     where
+        U: 'b + UnifierPair,
+        R: Repository<K = <U::KeyUnifier as Unifier>::D, V = <U::ValueUnifier as Unifier>::D>,
         Self: Sized,
         'a: 'b;
 }

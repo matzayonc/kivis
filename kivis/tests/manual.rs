@@ -8,8 +8,8 @@ use std::{collections::BTreeMap, ops::Range};
 use thiserror::Error;
 
 use kivis::{
-    BufferOp, BufferOverflowError, BufferOverflowOr, Cache, Database, DatabaseEntry, DeriveKey,
-    Incrementable, Index, RecordKey, RecordOps, Repository, Scope, Storage, UnifierPair,
+    ApplyError, BufferOp, BufferOverflowError, BufferOverflowOr, Cache, Database, DatabaseEntry,
+    DeriveKey, Incrementable, Index, RecordKey, Repository, Scope, Storage, Unifier, UnifierPair,
 };
 
 // Define a record type for an User.
@@ -134,18 +134,24 @@ impl kivis::Manifest for Manifest {
         Ok(())
     }
 
-    fn process_record<'a, 'b, U: 'b + UnifierPair>(
+    fn process_record<'a, 'b, U, R>(
         op: kivis::PreBufferOps,
         record: &'b Self::Record<'a>,
         unifiers: U,
-    ) -> RecordOps<'b, U>
+        repo: &mut R,
+    ) -> Result<(), ApplyError<U, R::Error>>
     where
+        U: 'b + UnifierPair,
+        R: Repository<
+                K = <<U as UnifierPair>::KeyUnifier as Unifier>::D,
+                V = <<U as UnifierPair>::ValueUnifier as Unifier>::D,
+            >,
         Self: Sized,
         'a: 'b,
     {
         match *record {
-            ManifestRecord::User(key, val) => kivis::build_record_ops(op, val, key, unifiers),
-            ManifestRecord::Pet(key, val) => kivis::build_record_ops(op, val, key, unifiers),
+            ManifestRecord::User(key, val) => kivis::apply_record_ops(op, val, key, unifiers, repo),
+            ManifestRecord::Pet(key, val) => kivis::apply_record_ops(op, val, key, unifiers, repo),
         }
     }
 }
