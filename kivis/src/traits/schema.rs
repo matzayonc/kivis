@@ -3,9 +3,8 @@ use core::fmt::Debug;
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
-    BufferOpsContainer, BufferOverflowOr, Cache, Database, DatabaseError, Storage, Unifiable,
-    UnifiableRef, Unifier, UnifierPair,
-    transaction::{DatabaseTransactionBuffer, PreBufferOps},
+    BufferOverflowOr, Cache, Database, DatabaseError, RecordOps, Storage, Unifiable, UnifiableRef,
+    Unifier, UnifierPair, transaction::PreBufferOps,
 };
 
 /// A trait defining that the implementing type is a key of some record.
@@ -47,7 +46,6 @@ pub trait Incrementable: Default + Sized {
 }
 
 /// The main trait of the crate, defines a database entry that can be stored with its indexes.
-#[allow(unused_variables)] // Defalt implementation may not use all variables.
 pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {
     /// The primary key type for this database entry.
     type Key: RecordKey;
@@ -58,9 +56,9 @@ pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {
     /// Returns an error if serializing the index fails.
     fn index_key<KU: Unifier>(
         &self,
-        buffer: &mut KU::D,
-        discriminator: u8,
-        serializer: &KU,
+        _buffer: &mut KU::D,
+        _discriminator: u8,
+        _serializer: &KU,
     ) -> Result<(), BufferOverflowOr<KU::SerError>> {
         Ok(())
     }
@@ -87,14 +85,12 @@ pub trait Manifest: Default + 'static {
     where
         Self: Sized;
 
-    /// # Errors
-    ///
-    /// Returns a [`TransactionError`] if serializing keys or values fails.
-    fn process_record<'a, 'b, U: UnifierPair, C: Cache, OpsContainer: BufferOpsContainer>(
-        buffer: &mut DatabaseTransactionBuffer<U, OpsContainer>,
+    /// Returns a [`RecordOps`] iterator pair describing all writes or deletes for `record`.
+    fn process_record<'a, 'b, U: 'b + UnifierPair>(
         op: PreBufferOps,
         record: &'b Self::Record<'a>,
-    ) -> Result<(), crate::TransactionError<U>>
+        unifiers: U,
+    ) -> RecordOps<'b, U>
     where
         Self: Sized,
         'a: 'b;

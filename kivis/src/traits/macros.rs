@@ -148,11 +148,11 @@ macro_rules! manifest {
                 ::core::result::Result::Ok(())
             }
 
-            fn process_record<'a, 'b, U: $crate::UnifierPair, C: $crate::Cache, OpsContainer: $crate::BufferOpsContainer>(
-                buffer: &mut $crate::DatabaseTransactionBuffer<U, OpsContainer>,
+            fn process_record<'a, 'b, U: 'b + $crate::UnifierPair>(
                 op: $crate::PreBufferOps,
                 record: &'b Self::Record<'a>,
-            ) -> ::core::result::Result<(), $crate::TransactionError<U>>
+                unifiers: U,
+            ) -> $crate::RecordOps<'b, U>
             where
                 Self: Sized,
                 'a: 'b,
@@ -160,11 +160,10 @@ macro_rules! manifest {
                 match *record {
                     $(
                         [<$manifest_name Record>]::[<$ty>](key, val) => {
-                            buffer.prepare_record::<$ty>(op, val, key)?;
+                            $crate::build_record_ops::<$ty, U>(op, val, key, unifiers)
                         }
                     )*
                 }
-                ::core::result::Result::Ok(())
             }
         }
         }

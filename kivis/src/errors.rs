@@ -126,7 +126,6 @@ where
     }
 
     /// Creates a new `DatabaseError` from a transaction error.
-    #[cfg(feature = "atomic")]
     #[doc(hidden)]
     pub fn from_transaction_error(e: TransactionError<S::Unifiers>) -> Self {
         match e {
@@ -140,6 +139,12 @@ where
 impl<S: Storage> From<InternalDatabaseError> for DatabaseError<S> {
     fn from(e: InternalDatabaseError) -> Self {
         DatabaseError::Internal(e)
+    }
+}
+
+impl<S: Storage> From<TransactionError<S::Unifiers>> for DatabaseError<S> {
+    fn from(e: TransactionError<S::Unifiers>) -> Self {
+        DatabaseError::from_transaction_error(e)
     }
 }
 
