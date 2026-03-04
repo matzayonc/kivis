@@ -2,7 +2,7 @@ use core::ops::Range;
 use std::error::Error;
 use std::fmt::{Debug, Display};
 
-use crate::{BufferOp, BufferOverflowError, BufferOverflowOr, Repository, Storage, Unifier};
+use crate::{BufferOverflowError, BufferOverflowOr, Repository, Storage, Unifier};
 use serde::Serialize;
 
 /// Error type for [`SledStorage`] operations.
@@ -80,8 +80,6 @@ impl Unifier for PostcardUnifier {
 impl Storage for sled::Db {
     type Repo = Self;
     type Unifiers = (PostcardUnifier, PostcardUnifier);
-    type Container = Vec<BufferOp>;
-
     fn repository(&self) -> &Self::Repo {
         self
     }

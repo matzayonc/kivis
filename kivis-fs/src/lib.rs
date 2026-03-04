@@ -79,7 +79,7 @@ mod error;
 mod repository;
 mod serializer;
 
-use kivis::{BufferOp, Storage};
+use kivis::Storage;
 
 use crate::serializer::CsvSerializer;
 
@@ -88,8 +88,6 @@ pub use crate::repository::FileStore;
 impl Storage for FileStore {
     type Repo = Self;
     type Unifiers = (CsvSerializer, CsvSerializer);
-    type Container = Vec<BufferOp>;
-
     fn repository(&self) -> &Self::Repo {
         self
     }

@@ -7,14 +7,14 @@ use crate::{
     },
 };
 
-use super::buffer::PreTransactionBuffer;
+use super::buffer::TransactionBuffer;
 
 /// A database transaction that accumulates typed records in a pre-buffer and serializes
 /// them one at a time directly to storage on commit.
 ///
 /// This struct is always available, but the `commit` method is only available when the "atomic" feature is enabled.
 pub struct DatabaseTransaction<M: Manifest, U: UnifierPair> {
-    pre_buffer: PreTransactionBuffer<M>,
+    pre_buffer: TransactionBuffer<M>,
     unifiers: U,
 }
 
@@ -23,7 +23,7 @@ impl<M: Manifest, U: UnifierPair> DatabaseTransaction<M, U> {
     #[must_use]
     pub fn new(unifiers: U) -> Self {
         Self {
-            pre_buffer: PreTransactionBuffer::<M>::empty(),
+            pre_buffer: TransactionBuffer::<M>::empty(),
             unifiers,
         }
     }

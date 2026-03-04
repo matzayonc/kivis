@@ -5,8 +5,8 @@ use ekv::flash::{Flash, PageID};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use heapless::Vec;
 use kivis::{
-    BufferOp, BufferOverflowError, BufferOverflowOr, Record, Repository, Storage, Unifier,
-    UnifierData, manifest,
+    BufferOverflowError, BufferOverflowOr, Record, Repository, Storage, Unifier, UnifierData,
+    manifest,
 };
 use ouroboros::self_referencing;
 use serde::Serialize;
@@ -352,8 +352,6 @@ impl<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> Storage
 {
     type Repo = Self;
     type Unifiers = (PostcardUnifier<KEY_SIZE>, PostcardUnifier<VALUE_SIZE>);
-    type Container = heapless::Vec<BufferOp, 256>;
-
     fn repository(&self) -> &Self::Repo {
         self
     }

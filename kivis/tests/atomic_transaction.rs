@@ -8,8 +8,8 @@ mod tests {
         error::{DecodeError, EncodeError},
     };
     use kivis::{
-        BatchOp, BufferOp, BufferOverflowError, Database, DatabaseTransaction, Record, Repository,
-        Storage, manifest,
+        BatchOp, BufferOverflowError, Database, DatabaseTransaction, Record, Repository, Storage,
+        manifest,
     };
     use serde::{Deserialize, Serialize};
     use thiserror::Error;
@@ -46,8 +46,6 @@ mod tests {
     impl Storage for MockAtomicStorage {
         type Repo = Self;
         type Unifiers = (Configuration, Configuration);
-        type Container = Vec<BufferOp>;
-
         fn repository(&self) -> &Self::Repo {
             self
         }

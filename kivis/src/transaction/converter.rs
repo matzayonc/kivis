@@ -48,7 +48,7 @@ where
 /// Returns an iterator of fully-assembled `(key_buf, value_buf)` pairs for all entries
 /// (index entries + main record).
 #[allow(clippy::type_complexity)]
-pub(super) fn prepare_writes<'r, R, U>(
+fn prepare_writes<'r, R, U>(
     record: &'r R,
     key: &'r R::Key,
     key_serializer: U::KeyUnifier,
@@ -74,7 +74,7 @@ where
 
 /// Returns an iterator of fully-assembled key buffers for all delete entries
 /// (index entries + main record).
-pub(super) fn prepare_deletes<'r, R, U>(
+fn prepare_deletes<'r, R, U>(
     record: &'r R,
     key: &'r R::Key,
     key_serializer: U::KeyUnifier,
