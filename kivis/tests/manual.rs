@@ -8,8 +8,9 @@ use std::{collections::BTreeMap, ops::Range};
 use thiserror::Error;
 
 use kivis::{
-    BufferOp, BufferOverflowError, BufferOverflowOr, Cache, Database, DatabaseEntry, DeriveKey,
-    Incrementable, Index, RecordKey, Repository, Scope, Storage,
+    BufferOp, BufferOverflowError, BufferOverflowOr, Cache, Database, DatabaseEntry,
+    DatabaseTransactionBuffer, DeriveKey, Incrementable, Index, PreBufferOps, RecordKey,
+    Repository, Scope, Storage, UnifierPair,
 };
 
 // Define a record type for an User.
@@ -102,17 +103,17 @@ struct Manifest {
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
 enum ManifestRecord<'a> {
-    User(&'a User),
-    Pet(&'a Pet),
+    User(&'a UserKey, &'a User),
+    Pet(&'a PetKey, &'a Pet),
 }
-impl<'a> From<&'a User> for ManifestRecord<'a> {
-    fn from(r: &'a User) -> Self {
-        Self::User(r)
+impl<'a> From<&'a (UserKey, User)> for ManifestRecord<'a> {
+    fn from(pair: &'a (UserKey, User)) -> Self {
+        Self::User(&pair.0, &pair.1)
     }
 }
-impl<'a> From<&'a Pet> for ManifestRecord<'a> {
-    fn from(r: &'a Pet) -> Self {
-        Self::Pet(r)
+impl<'a> From<&'a (PetKey, Pet)> for ManifestRecord<'a> {
+    fn from(pair: &'a (PetKey, Pet)) -> Self {
+        Self::Pet(&pair.0, &pair.1)
     }
 }
 
@@ -131,6 +132,22 @@ impl kivis::Manifest for Manifest {
             last_user: None,
             last_pet: Some(db.last_id::<PetKey>()?),
         };
+        Ok(())
+    }
+
+    fn process_record<'a, 'b, U: UnifierPair, C: Cache, OpsContainer: kivis::BufferOpsContainer>(
+        buffer: &mut DatabaseTransactionBuffer<U, OpsContainer>,
+        op: PreBufferOps,
+        record: &'b Self::Record<'a>,
+    ) -> Result<(), kivis::TransactionError<U>>
+    where
+        Self: Sized,
+        'a: 'b,
+    {
+        match *record {
+            ManifestRecord::User(key, val) => buffer.prepare_record::<User>(op, val, key)?,
+            ManifestRecord::Pet(key, val) => buffer.prepare_record::<Pet>(op, val, key)?,
+        }
         Ok(())
     }
 }
@@ -162,8 +179,7 @@ enum NoError {
 
 impl Storage for ManualStorage {
     type Repo = Self;
-    type KeyUnifier = Configuration;
-    type ValueUnifier = Configuration;
+    type Unifiers = (Configuration, Configuration);
     type Container = Vec<BufferOp>;
 
     fn repository(&self) -> &Self::Repo {

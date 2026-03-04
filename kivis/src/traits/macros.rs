@@ -118,14 +118,14 @@ macro_rules! manifest {
                     #[derive(Clone, Copy)]
                     pub enum [<$manifest_name Record>]<'a> {
                         $(
-                            [<$ty>](&'a $ty),
+                            [<$ty>](&'a <$ty as $crate::DatabaseEntry>::Key, &'a $ty),
                         )*
                     }
 
                     $(
-                        impl<'a> ::core::convert::From<&'a $ty> for [<$manifest_name Record>]<'a> {
-                            fn from(record: &'a $ty) -> Self {
-                                [<$manifest_name Record>]::[<$ty>](record)
+                        impl<'a> ::core::convert::From<&'a (<$ty as $crate::DatabaseEntry>::Key, $ty)> for [<$manifest_name Record>]<'a> {
+                            fn from(pair: &'a (<$ty as $crate::DatabaseEntry>::Key, $ty)) -> Self {
+                                [<$manifest_name Record>]::[<$ty>](&pair.0, &pair.1)
                             }
                         }
                     )*
@@ -145,6 +145,25 @@ macro_rules! manifest {
                 $(
                     self.[<last_ $ty:snake>] = ::core::option::Option::Some(db.last_id()?);
                 )*
+                ::core::result::Result::Ok(())
+            }
+
+            fn process_record<'a, 'b, U: $crate::UnifierPair, C: $crate::Cache, OpsContainer: $crate::BufferOpsContainer>(
+                buffer: &mut $crate::DatabaseTransactionBuffer<U, OpsContainer>,
+                op: $crate::PreBufferOps,
+                record: &'b Self::Record<'a>,
+            ) -> ::core::result::Result<(), $crate::TransactionError<U>>
+            where
+                Self: Sized,
+                'a: 'b,
+            {
+                match *record {
+                    $(
+                        [<$manifest_name Record>]::[<$ty>](key, val) => {
+                            buffer.prepare_record::<$ty>(op, val, key)?;
+                        }
+                    )*
+                }
                 ::core::result::Result::Ok(())
             }
         }

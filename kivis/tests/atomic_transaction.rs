@@ -24,7 +24,7 @@ mod tests {
         BufferOverflow(#[from] BufferOverflowError),
     }
 
-    #[derive(Debug, Record, PartialEq, Eq, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Record, PartialEq, Eq, Serialize, Deserialize)]
     pub struct MockRecord(#[key] u8, char);
 
     manifest![Manifest: MockRecord];
@@ -45,8 +45,7 @@ mod tests {
 
     impl Storage for MockAtomicStorage {
         type Repo = Self;
-        type KeyUnifier = Configuration;
-        type ValueUnifier = Configuration;
+        type Unifiers = (Configuration, Configuration);
         type Container = Vec<BufferOp>;
 
         fn repository(&self) -> &Self::Repo {
@@ -106,10 +105,11 @@ mod tests {
 
     #[test]
     fn test_transaction_new() -> anyhow::Result<()> {
-        let tx = DatabaseTransaction::<Manifest, _, _, Vec<BufferOp>>::new(
-            Configuration::default(),
-            Configuration::default(),
-        );
+        let tx =
+            DatabaseTransaction::<Manifest, (Configuration, Configuration), Vec<BufferOp>>::new((
+                Configuration::default(),
+                Configuration::default(),
+            ));
         assert!(tx.is_empty());
         Ok(())
     }
@@ -195,10 +195,10 @@ mod tests {
     #[test]
     fn test_empty_transaction_commit() -> anyhow::Result<()> {
         let mut storage = MockAtomicStorage::new();
-        let tx = DatabaseTransaction::<Manifest, _, _, Vec<BufferOp>>::new(
-            Default::default(),
-            Default::default(),
-        );
+        let tx =
+            DatabaseTransaction::<Manifest, (Configuration, Configuration), Vec<BufferOp>>::new(
+                Default::default(),
+            );
 
         // Empty transaction should succeed
         tx.commit(&mut storage)?;

@@ -18,7 +18,7 @@ pub trait Prefix {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PrefixUnifier<P: Prefix>(std::marker::PhantomData<P>);
 
-impl<P: Prefix> Unifier for PrefixUnifier<P> {
+impl<P: Prefix + Copy> Unifier for PrefixUnifier<P> {
     type D = Vec<u8>;
     type SerError = EncodeError;
     type DeError = DecodeError;
@@ -101,8 +101,7 @@ impl CustomStorage {
 
 impl Storage for CustomStorage {
     type Repo = Self;
-    type KeyUnifier = CustomKeyUnifier;
-    type ValueUnifier = CustomValueUnifier;
+    type Unifiers = (CustomKeyUnifier, CustomValueUnifier);
     type Container = Vec<BufferOp>;
 
     fn repository(&self) -> &Self::Repo {

@@ -5,7 +5,10 @@ use core::{
 
 use bincode::config::Configuration;
 
-use crate::{Repository, Storage, Unifier};
+use crate::{Repository, Storage, Unifier, UnifierPair};
+
+type StorageKU<S> = <<S as Storage>::Unifiers as UnifierPair>::KeyUnifier;
+type StorageVU<S> = <<S as Storage>::Unifiers as UnifierPair>::ValueUnifier;
 
 #[cfg(feature = "atomic")]
 use crate::transaction::TransactionError;
@@ -57,10 +60,10 @@ pub enum DatabaseError<S: Storage> {
     /// Storage errors that occur while interacting with the storage backend.
     /// This includes IO errors, serialization errors, and deserialization errors.
     Storage(<S::Repo as Repository>::Error),
-    KeySerialization(<S::KeyUnifier as Unifier>::SerError),
-    ValueSerialization(<S::ValueUnifier as Unifier>::SerError),
-    KeyDeserialization(<S::KeyUnifier as Unifier>::DeError),
-    ValueDeserialization(<S::ValueUnifier as Unifier>::DeError),
+    KeySerialization(<StorageKU<S> as Unifier>::SerError),
+    ValueSerialization(<StorageVU<S> as Unifier>::SerError),
+    KeyDeserialization(<StorageKU<S> as Unifier>::DeError),
+    ValueDeserialization(<StorageVU<S> as Unifier>::DeError),
     /// Errors that occur when trying to increment a key.
     FailedToIncrement,
     /// Internal errors that should never occur during normal operation of the database.
@@ -70,10 +73,10 @@ pub enum DatabaseError<S: Storage> {
 impl<S: Storage> Debug for DatabaseError<S>
 where
     <S::Repo as Repository>::Error: Debug,
-    <S::KeyUnifier as Unifier>::SerError: Debug,
-    <S::ValueUnifier as Unifier>::SerError: Debug,
-    <S::KeyUnifier as Unifier>::DeError: Debug,
-    <S::ValueUnifier as Unifier>::DeError: Debug,
+    <StorageKU<S> as Unifier>::SerError: Debug,
+    <StorageVU<S> as Unifier>::SerError: Debug,
+    <StorageKU<S> as Unifier>::DeError: Debug,
+    <StorageVU<S> as Unifier>::DeError: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -114,7 +117,7 @@ where
 {
     /// Creates a new `DatabaseError::Storage` from the given storage error.
     pub(crate) fn from_buffer_overflow_or(
-        e: BufferOverflowOr<<S::KeyUnifier as Unifier>::SerError>,
+        e: BufferOverflowOr<<StorageKU<S> as Unifier>::SerError>,
     ) -> Self {
         match e.0 {
             Some(err) => DatabaseError::KeySerialization(err),
@@ -124,12 +127,8 @@ where
 
     /// Creates a new `DatabaseError` from a transaction error.
     #[cfg(feature = "atomic")]
-    pub(crate) fn from_transaction_error(
-        e: TransactionError<
-            <S::KeyUnifier as Unifier>::SerError,
-            <S::ValueUnifier as Unifier>::SerError,
-        >,
-    ) -> Self {
+    #[doc(hidden)]
+    pub fn from_transaction_error(e: TransactionError<S::Unifiers>) -> Self {
         match e {
             TransactionError::KeySerialization(err) => DatabaseError::KeySerialization(err),
             TransactionError::ValueSerialization(err) => DatabaseError::ValueSerialization(err),

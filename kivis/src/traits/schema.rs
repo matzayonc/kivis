@@ -3,7 +3,9 @@ use core::fmt::Debug;
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
-    BufferOverflowOr, Cache, Database, DatabaseError, Storage, Unifiable, UnifiableRef, Unifier,
+    BufferOpsContainer, BufferOverflowOr, Cache, Database, DatabaseError, Storage, Unifiable,
+    UnifiableRef, Unifier, UnifierPair,
+    transaction::{DatabaseTransactionBuffer, PreBufferOps},
 };
 
 /// A trait defining that the implementing type is a key of some record.
@@ -73,6 +75,7 @@ pub trait Manifest: Default + 'static {
     type Record<'a>: Copy;
 
     fn members() -> &'static [u8];
+
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if loading manifests requires access to the
@@ -83,6 +86,18 @@ pub trait Manifest: Default + 'static {
     ) -> Result<(), DatabaseError<S>>
     where
         Self: Sized;
+
+    /// # Errors
+    ///
+    /// Returns a [`TransactionError`] if serializing keys or values fails.
+    fn process_record<'a, 'b, U: UnifierPair, C: Cache, OpsContainer: BufferOpsContainer>(
+        buffer: &mut DatabaseTransactionBuffer<U, OpsContainer>,
+        op: PreBufferOps,
+        record: &'b Self::Record<'a>,
+    ) -> Result<(), crate::TransactionError<U>>
+    where
+        Self: Sized,
+        'a: 'b;
 }
 
 pub trait Scope {

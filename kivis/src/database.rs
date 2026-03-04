@@ -4,9 +4,11 @@ use crate::transaction::DatabaseTransaction;
 use crate::wrap::{Subtable, Wrap, WrapPrelude, empty_wrap, wrap};
 use crate::{
     BufferOverflowOr, Cache, CacheAccess, CacheContainer, DeriveKey, Incrementable, Manifest,
-    Manifests, NoCache, RecordKey, Repository, Unifiable, Unifier, UnifierData,
+    Manifests, NoCache, RecordKey, Repository, Unifiable, Unifier, UnifierData, UnifierPair,
 };
 use core::ops::Range;
+
+type StorageKU<S> = <<S as Storage>::Unifiers as UnifierPair>::KeyUnifier;
 
 type DatabaseIteratorItem<R, S> = Result<<R as DatabaseEntry>::Key, DatabaseError<S>>;
 
@@ -14,16 +16,11 @@ type DatabaseIteratorItem<R, S> = Result<<R as DatabaseEntry>::Key, DatabaseErro
 pub struct Database<S: Storage, M: Manifest, C: Cache = NoCache> {
     pub(crate) storage: S,
     pub(crate) manifest: M,
-    pub(crate) key_serializer: <S as Storage>::KeyUnifier,
-    pub(crate) value_serializer: <S as Storage>::ValueUnifier,
+    pub(crate) unifiers: S::Unifiers,
     pub(crate) cache: C,
 }
 
-impl<S: Storage, M: Manifest, C: Cache> Database<S, M, C>
-where
-    S::KeyUnifier: Unifier + Copy,
-    S::ValueUnifier: Unifier + Copy,
-{
+impl<S: Storage, M: Manifest, C: Cache> Database<S, M, C> {
     /// Creates a new [`Database`] instance over any storage backend.
     /// One of the key features of `kivis` is that it can work with any storage backend that implements the [`Storage`] trait.
     /// # Errors
@@ -33,8 +30,7 @@ where
         let mut db = Database {
             storage: store,
             manifest: M::default(),
-            key_serializer: S::KeyUnifier::default(),
-            value_serializer: S::ValueUnifier::default(),
+            unifiers: S::Unifiers::default(),
             cache: C::default(),
         };
         let mut manifest = M::default();
@@ -43,12 +39,8 @@ where
         Ok(db)
     }
 
-    pub fn with_key_serializer(&mut self, config: <S as Storage>::KeyUnifier) {
-        self.key_serializer = config;
-    }
-
-    pub fn with_value_serializer(&mut self, config: <S as Storage>::ValueUnifier) {
-        self.value_serializer = config;
+    pub fn with_unifiers(&mut self, unifiers: S::Unifiers) {
+        self.unifiers = unifiers;
     }
 
     /// Add a record with autoincremented key into the database, together with all related index entries.
@@ -59,9 +51,11 @@ where
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if serializing or writing the record fails.
-    pub fn put<R: DatabaseEntry>(&mut self, record: R) -> Result<R::Key, DatabaseError<S>>
+    pub fn put<R>(&mut self, record: R) -> Result<R::Key, DatabaseError<S>>
     where
-        R::Key: RecordKey<Record = R> + Incrementable + Ord,
+        R: DatabaseEntry + Clone + 'static,
+        R::Key: RecordKey<Record = R> + Incrementable + Ord + 'static,
+        for<'f> &'f (R::Key, R): Into<M::Record<'f>>,
         M: Manifests<R>,
         C: CacheAccess<R>,
     {
@@ -80,9 +74,11 @@ where
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if serializing or writing the record fails.
-    pub fn insert<K: RecordKey<Record = R>, R>(&mut self, record: R) -> Result<K, DatabaseError<S>>
+    pub fn insert<K, R>(&mut self, record: R) -> Result<K, DatabaseError<S>>
     where
-        R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
+        K: RecordKey<Record = R> + 'static,
+        R: DeriveKey<Key = K> + DatabaseEntry<Key = K> + Clone + 'static,
+        for<'f> &'f (K, R): Into<M::Record<'f>>,
         M: Manifests<R>,
         C: CacheAccess<R>,
     {
@@ -95,10 +91,8 @@ where
         Ok(inserted_key)
     }
 
-    pub fn create_transaction(
-        &self,
-    ) -> DatabaseTransaction<M, S::KeyUnifier, S::ValueUnifier, S::Container> {
-        DatabaseTransaction::new(self.key_serializer, self.value_serializer)
+    pub fn create_transaction(&self) -> DatabaseTransaction<M, S::Unifiers, S::Container> {
+        DatabaseTransaction::new(self.unifiers)
     }
 
     /// Commits a transaction to the database.
@@ -110,7 +104,7 @@ where
     /// Returns a [`DatabaseError`] if writing to the underlying storage fails.
     pub fn commit(
         &mut self,
-        transaction: DatabaseTransaction<M, S::KeyUnifier, S::ValueUnifier, S::Container>,
+        transaction: DatabaseTransaction<M, S::Unifiers, S::Container>,
     ) -> Result<(), DatabaseError<S>> {
         transaction.commit(&mut self.storage)?;
         Ok(())
@@ -134,9 +128,9 @@ where
             return Ok(Some(cached));
         }
 
-        let mut serialized_key = <<S as Storage>::KeyUnifier as Unifier>::D::default();
+        let mut serialized_key = <StorageKU<S> as Unifier>::D::default();
 
-        wrap::<K::Record, S::KeyUnifier>(key, &self.key_serializer, &mut serialized_key)
+        wrap::<K::Record, StorageKU<S>>(key, &self.unifiers.key_unifier(), &mut serialized_key)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
 
         let raw_key = serialized_key.as_view();
@@ -151,7 +145,8 @@ where
         };
 
         let record = self
-            .value_serializer
+            .unifiers
+            .value_unifier()
             .deserialize(&value)
             .map_err(DatabaseError::ValueDeserialization)?;
 
@@ -170,8 +165,9 @@ where
     /// storage reports an error while removing or retrieving records.
     pub fn remove<K: RecordKey<Record = R>, R>(&mut self, key: &K) -> Result<(), DatabaseError<S>>
     where
-        R: DatabaseEntry<Key = K>,
-        R::Key: RecordKey<Record = R>,
+        R: DatabaseEntry<Key = K> + Clone + 'static,
+        R::Key: RecordKey<Record = R> + Clone + 'static,
+        for<'f> &'f (K, R): Into<M::Record<'f>>,
         M: Manifests<R> + Manifests<K::Record>,
         C: CacheAccess<R>,
     {
@@ -206,11 +202,11 @@ where
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
     {
-        let mut start = <<S as Storage>::KeyUnifier as Unifier>::D::default();
-        wrap::<K::Record, S::KeyUnifier>(&range.start, &self.key_serializer, &mut start)
+        let mut start = <StorageKU<S> as Unifier>::D::default();
+        wrap::<K::Record, StorageKU<S>>(&range.start, &self.unifiers.key_unifier(), &mut start)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
-        let mut end = <<S as Storage>::KeyUnifier as Unifier>::D::default();
-        wrap::<K::Record, S::KeyUnifier>(&range.end, &self.key_serializer, &mut end)
+        let mut end = <StorageKU<S> as Unifier>::D::default();
+        wrap::<K::Record, StorageKU<S>>(&range.end, &self.unifiers.key_unifier(), &mut end)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
 
         let raw_iter = self
@@ -226,7 +222,8 @@ where
             };
 
             let deserialized: Wrap<K> = self
-                .key_serializer
+                .unifiers
+                .key_unifier()
                 .deserialize(&value)
                 .map_err(DatabaseError::KeyDeserialization)?;
 
@@ -248,7 +245,7 @@ where
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
     {
-        let (start, end) = empty_wrap::<K::Record, S::KeyUnifier>(&self.key_serializer)
+        let (start, end) = empty_wrap::<K::Record, StorageKU<S>>(&self.unifiers.key_unifier())
             .map_err(DatabaseError::from_buffer_overflow_or)?;
         let raw_iter = self
             .storage
@@ -263,7 +260,8 @@ where
             };
 
             let deserialized: Wrap<K> = self
-                .key_serializer
+                .unifiers
+                .key_unifier()
                 .deserialize(&value)
                 .map_err(DatabaseError::KeyDeserialization)?;
 
@@ -299,20 +297,23 @@ where
         impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S, M, C>,
         DatabaseError<S>,
     > {
-        let mut start = <<S as Storage>::KeyUnifier as Unifier>::D::default();
-        self.key_serializer
+        let mut start = <StorageKU<S> as Unifier>::D::default();
+        self.unifiers
+            .key_unifier()
             .serialize(
                 &mut start,
                 WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX)),
             )
             .map_err(DatabaseError::from_buffer_overflow_or)?;
-        let mut end = <<S as Storage>::KeyUnifier as Unifier>::D::duplicate(start.as_view())
+        let mut end = <StorageKU<S> as Unifier>::D::duplicate(start.as_view())
             .map_err(|e| DatabaseError::from_buffer_overflow_or(BufferOverflowOr::overflow(e)))?;
 
-        self.key_serializer
+        self.unifiers
+            .key_unifier()
             .serialize(&mut start, range.start)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
-        self.key_serializer
+        self.unifiers
+            .key_unifier()
             .serialize(&mut end, range.end)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
 
@@ -341,15 +342,17 @@ where
         DatabaseError<S>,
     > {
         let index_prelude = WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX));
-        let mut start = <<S as Storage>::KeyUnifier as Unifier>::D::default();
-        self.key_serializer
+        let mut start = <StorageKU<S> as Unifier>::D::default();
+        self.unifiers
+            .key_unifier()
             .serialize(&mut start, index_prelude)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
 
-        self.key_serializer
+        self.unifiers
+            .key_unifier()
             .serialize(&mut start, index_key)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
-        let mut end = <S::KeyUnifier as Unifier>::D::duplicate(start.as_view())
+        let mut end = <StorageKU<S> as Unifier>::D::duplicate(start.as_view())
             .map_err(|e| DatabaseError::from_buffer_overflow_or(BufferOverflowOr::overflow(e)))?;
         end.next()
             .map_err(|e| DatabaseError::from_buffer_overflow_or(BufferOverflowOr::overflow(e)))?;
@@ -373,15 +376,15 @@ where
         &self.cache
     }
 
-    /// Returns the current key and value serializers used by the database.
-    pub fn serializers(&self) -> (&S::KeyUnifier, &S::ValueUnifier) {
-        (&self.key_serializer, &self.value_serializer)
+    /// Returns the current unifiers used by the database.
+    pub fn unifiers(&self) -> &S::Unifiers {
+        &self.unifiers
     }
 
     /// Helper function to process iterator results and get deserialized values
     fn process_iter_result<T: Unifiable>(
         &self,
-        result: Result<<S::KeyUnifier as Unifier>::D, <S::Repo as Repository>::Error>,
+        result: Result<<StorageKU<S> as Unifier>::D, <S::Repo as Repository>::Error>,
     ) -> Result<T, DatabaseError<S>> {
         let key = result.map_err(DatabaseError::Storage)?;
 
@@ -395,7 +398,8 @@ where
             Err(e) => return Err(DatabaseError::Storage(e)),
         };
 
-        self.value_serializer
+        self.unifiers
+            .value_unifier()
             .deserialize(&value)
             .map_err(DatabaseError::ValueDeserialization)
     }

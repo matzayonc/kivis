@@ -66,7 +66,7 @@ pub trait UnifiableRef: Unifiable + Clone {}
 impl<T: Serialize + DeserializeOwned> Unifiable for T {}
 impl<T: Serialize + DeserializeOwned + Clone> UnifiableRef for T {}
 
-pub trait Unifier {
+pub trait Unifier: Copy {
     type D: UnifierData;
     type SerError: Debug + Display + Error;
     type DeError: Debug + Display + Error;
@@ -98,4 +98,27 @@ pub trait Unifier {
     ///
     /// Returns an error if deserialization fails.
     fn deserialize<T: Unifiable>(&self, data: &Self::D) -> Result<T, Self::DeError>;
+}
+
+/// A pair of [`Unifier`] types for key and value serialization.
+///
+/// Implemented automatically for any `(KU, VU)` tuple where both are [`Unifier`].
+pub trait UnifierPair: Copy + Default {
+    type KeyUnifier: Unifier + Default + Copy;
+    type ValueUnifier: Unifier + Default + Copy;
+
+    fn key_unifier(self) -> Self::KeyUnifier;
+    fn value_unifier(self) -> Self::ValueUnifier;
+}
+
+impl<KU: Unifier + Default + Copy, VU: Unifier + Default + Copy> UnifierPair for (KU, VU) {
+    type KeyUnifier = KU;
+    type ValueUnifier = VU;
+
+    fn key_unifier(self) -> KU {
+        self.0
+    }
+    fn value_unifier(self) -> VU {
+        self.1
+    }
 }

@@ -1,7 +1,9 @@
 use crate::{
     BufferOpsContainer, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, Manifest,
-    Manifests, RecordKey, Repository, Storage, Unifier,
-    transaction::buffer::DatabaseTransactionBuffer, transaction::errors::TransactionError,
+    Manifests, RecordKey, Repository, Storage, UnifierPair,
+    transaction::{
+        buffer::DatabaseTransactionBuffer, errors::TransactionError, pre_buffer::PreBufferOps,
+    },
 };
 
 use super::pre_buffer::PreTransactionBuffer;
@@ -11,21 +13,19 @@ use core::marker::PhantomData;
 /// without immediately applying them to storage.
 ///
 /// This struct is always available, but the `commit` method is only available when the "atomic" feature is enabled.
-pub struct DatabaseTransaction<M: Manifest, KU: Unifier, VU: Unifier, C: BufferOpsContainer> {
-    _pre_buffer: PreTransactionBuffer<M>,
-    post_buffer: DatabaseTransactionBuffer<KU, VU, C>,
+pub struct DatabaseTransaction<M: Manifest, UP: UnifierPair, C: BufferOpsContainer> {
+    pre_buffer: PreTransactionBuffer<M>,
+    post_buffer: DatabaseTransactionBuffer<UP, C>,
     _marker: PhantomData<M>,
 }
 
-impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy, C: BufferOpsContainer>
-    DatabaseTransaction<M, KU, VU, C>
-{
+impl<M: Manifest, U: UnifierPair, C: BufferOpsContainer> DatabaseTransaction<M, U, C> {
     /// Creates a new empty transaction with the specified serialization configuration.
     #[must_use]
-    pub fn new(key_serializer: KU, value_serializer: VU) -> Self {
+    pub fn new(unifiers: U) -> Self {
         Self {
-            _pre_buffer: PreTransactionBuffer::<M>::empty(),
-            post_buffer: DatabaseTransactionBuffer::new(key_serializer, value_serializer),
+            pre_buffer: PreTransactionBuffer::<M>::empty(),
+            post_buffer: DatabaseTransactionBuffer::new(unifiers),
             _marker: PhantomData,
         }
     }
@@ -33,15 +33,16 @@ impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy, C: BufferOpsContainer>
     /// # Errors
     ///
     /// Returns a [`TransactionError`] if serializing keys or values fails while preparing the writes.
-    pub fn insert<K: RecordKey<Record = R>, R>(
-        &mut self,
-        record: R,
-    ) -> Result<K, TransactionError<KU::SerError, VU::SerError>>
+    pub fn insert<K, R>(&mut self, record: R) -> Result<K, TransactionError<U>>
     where
-        R: DeriveKey<Key = K> + DatabaseEntry<Key = K>,
+        K: RecordKey<Record = R> + 'static,
+        R: DeriveKey<Key = K> + DatabaseEntry<Key = K> + Clone + 'static,
+        for<'f> &'f (K, R): Into<M::Record<'f>>,
         M: Manifests<R>,
     {
         let original_key = R::key(&record);
+        self.pre_buffer
+            .push(PreBufferOps::Insert, (original_key.clone(), record.clone()));
         self.post_buffer
             .prepare_writes::<R>(record, &original_key)?;
         Ok(original_key)
@@ -51,14 +52,12 @@ impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy, C: BufferOpsContainer>
     ///
     /// Returns a [`DatabaseError`] if writing to the underlying storage fails.
     ///
-    pub fn put<S, R: DatabaseEntry>(
-        &mut self,
-        record: R,
-        manifest: &mut M,
-    ) -> Result<R::Key, DatabaseError<S>>
+    pub fn put<S, R>(&mut self, record: R, manifest: &mut M) -> Result<R::Key, DatabaseError<S>>
     where
-        S: Storage<KeyUnifier = KU, ValueUnifier = VU, Container = C>,
-        R::Key: RecordKey<Record = R> + Incrementable + Ord,
+        S: Storage<Container = C, Unifiers = U>,
+        R: DatabaseEntry + Clone + 'static,
+        R::Key: RecordKey<Record = R> + Incrementable + Ord + 'static,
+        for<'f> &'f (R::Key, R): Into<M::Record<'f>>,
         M: Manifests<R>,
     {
         let last_key = manifest.last();
@@ -68,6 +67,8 @@ impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy, C: BufferOpsContainer>
             R::Key::default()
         };
 
+        self.pre_buffer
+            .push(PreBufferOps::Put, (new_key.clone(), record.clone()));
         self.post_buffer
             .prepare_writes::<R>(record, &new_key)
             .map_err(DatabaseError::from_transaction_error)?;
@@ -78,15 +79,15 @@ impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy, C: BufferOpsContainer>
     /// # Errors
     ///
     /// Returns a [`TransactionError`] if serializing keys to delete fails.
-    pub fn remove<R: DatabaseEntry>(
-        &mut self,
-        key: &R::Key,
-        record: &R,
-    ) -> Result<(), TransactionError<KU::SerError, VU::SerError>>
+    pub fn remove<R>(&mut self, key: &R::Key, record: &R) -> Result<(), TransactionError<U>>
     where
-        R::Key: RecordKey<Record = R>,
+        R: DatabaseEntry + Clone + 'static,
+        R::Key: RecordKey<Record = R> + Clone + 'static,
+        for<'f> &'f (R::Key, R): Into<M::Record<'f>>,
         M: Manifests<R>,
     {
+        self.pre_buffer
+            .push(PreBufferOps::Delete, (key.clone(), record.clone()));
         self.post_buffer.prepare_deletes::<R>(record, key)
     }
 
@@ -106,7 +107,7 @@ impl<M: Manifest, KU: Unifier + Copy, VU: Unifier + Copy, C: BufferOpsContainer>
     /// Returns a [`DatabaseError`] if any storage operation fails.
     pub fn commit<S>(self, storage: &mut S) -> Result<(), DatabaseError<S>>
     where
-        S: Storage<KeyUnifier = KU, ValueUnifier = VU, Container = C>,
+        S: Storage<Container = C, Unifiers = U>,
     {
         if self.is_empty() {
             return Ok(());

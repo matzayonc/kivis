@@ -1,17 +1,17 @@
 use crate::{
-    BatchOp, BufferOp, Unifier, UnifierData,
+    BatchOp, BufferOp, Unifier, UnifierData, UnifierPair,
     transaction::buffer::{BufferOpsContainer, DatabaseTransactionBuffer},
 };
 
-pub struct OpsIter<'a, KU: Unifier, VU: Unifier, C: BufferOpsContainer> {
-    pub(super) transaction: &'a DatabaseTransactionBuffer<KU, VU, C>,
+pub struct OpsIter<'a, U: UnifierPair, C: BufferOpsContainer> {
+    pub(super) transaction: &'a DatabaseTransactionBuffer<U, C>,
     pub(super) current_op: usize,
     pub(super) prev_key_end: usize,
     pub(super) prev_value_end: usize,
 }
 
-impl<'a, KU: Unifier, VU: Unifier, C: BufferOpsContainer> OpsIter<'a, KU, VU, C> {
-    pub(crate) fn new(transaction: &'a DatabaseTransactionBuffer<KU, VU, C>) -> Self {
+impl<'a, U: UnifierPair, C: BufferOpsContainer> OpsIter<'a, U, C> {
+    pub(crate) fn new(transaction: &'a DatabaseTransactionBuffer<U, C>) -> Self {
         Self {
             transaction,
             current_op: 0,
@@ -21,8 +21,8 @@ impl<'a, KU: Unifier, VU: Unifier, C: BufferOpsContainer> OpsIter<'a, KU, VU, C>
     }
 }
 
-impl<'a, KU: Unifier, VU: Unifier, C: BufferOpsContainer> Iterator for OpsIter<'a, KU, VU, C> {
-    type Item = BatchOp<'a, KU::D, VU::D>;
+impl<'a, U: UnifierPair, C: BufferOpsContainer> Iterator for OpsIter<'a, U, C> {
+    type Item = BatchOp<'a, <U::KeyUnifier as Unifier>::D, <U::ValueUnifier as Unifier>::D>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let op = self.current_op;
@@ -33,12 +33,12 @@ impl<'a, KU: Unifier, VU: Unifier, C: BufferOpsContainer> Iterator for OpsIter<'
             .get(op)
             .map(|op| match op {
                 BufferOp::Write { key_end, value_end } => {
-                    let key = KU::D::extract_range(
+                    let key = <U::KeyUnifier as Unifier>::D::extract_range(
                         &self.transaction.key_data,
                         self.prev_key_end,
                         *key_end,
                     );
-                    let value = VU::D::extract_range(
+                    let value = <U::ValueUnifier as Unifier>::D::extract_range(
                         &self.transaction.value_data,
                         self.prev_value_end,
                         *value_end,
@@ -48,7 +48,7 @@ impl<'a, KU: Unifier, VU: Unifier, C: BufferOpsContainer> Iterator for OpsIter<'
                     crate::BatchOp::Insert { key, value }
                 }
                 BufferOp::Delete { key_end } => {
-                    let key = KU::D::extract_range(
+                    let key = <U::KeyUnifier as Unifier>::D::extract_range(
                         &self.transaction.key_data,
                         self.prev_key_end,
                         *key_end,

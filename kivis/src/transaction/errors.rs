@@ -1,15 +1,19 @@
-use crate::BufferOverflowOr;
+use crate::{BufferOverflowOr, Unifier, UnifierPair};
 use core::error::Error;
 use core::fmt::{Debug, Display};
 
 /// Errors that can occur during transaction buffer operations
-pub enum TransactionError<KE, VE> {
-    KeySerialization(KE),
-    ValueSerialization(VE),
+pub enum TransactionError<UP: UnifierPair> {
+    KeySerialization(<UP::KeyUnifier as Unifier>::SerError),
+    ValueSerialization(<UP::ValueUnifier as Unifier>::SerError),
     BufferOverflow,
 }
 
-impl<KE: Debug, VE: Debug> Debug for TransactionError<KE, VE> {
+impl<UP: UnifierPair> Debug for TransactionError<UP>
+where
+    <UP::KeyUnifier as Unifier>::SerError: Debug,
+    <UP::ValueUnifier as Unifier>::SerError: Debug,
+{
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::KeySerialization(e) => f.debug_tuple("KeySerialization").field(e).finish(),
@@ -19,7 +23,11 @@ impl<KE: Debug, VE: Debug> Debug for TransactionError<KE, VE> {
     }
 }
 
-impl<KE: Display, VE: Display> Display for TransactionError<KE, VE> {
+impl<UP: UnifierPair> Display for TransactionError<UP>
+where
+    <UP::KeyUnifier as Unifier>::SerError: Display,
+    <UP::ValueUnifier as Unifier>::SerError: Display,
+{
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::KeySerialization(e) => write!(f, "Key serialization error: {e}"),
@@ -29,10 +37,17 @@ impl<KE: Display, VE: Display> Display for TransactionError<KE, VE> {
     }
 }
 
-impl<KE: Error + 'static, VE: Error + 'static> Error for TransactionError<KE, VE> {}
+impl<UP: UnifierPair> Error for TransactionError<UP>
+where
+    <UP::KeyUnifier as Unifier>::SerError: Error + 'static,
+    <UP::ValueUnifier as Unifier>::SerError: Error + 'static,
+{
+}
 
-impl<KE, VE> From<BufferOverflowOr<KE>> for TransactionError<KE, VE> {
-    fn from(e: BufferOverflowOr<KE>) -> Self {
+impl<UP: UnifierPair> From<BufferOverflowOr<<UP::KeyUnifier as Unifier>::SerError>>
+    for TransactionError<UP>
+{
+    fn from(e: BufferOverflowOr<<UP::KeyUnifier as Unifier>::SerError>) -> Self {
         match e.0 {
             Some(err) => TransactionError::KeySerialization(err),
             None => TransactionError::BufferOverflow,
@@ -40,8 +55,8 @@ impl<KE, VE> From<BufferOverflowOr<KE>> for TransactionError<KE, VE> {
     }
 }
 
-impl<KE, VE> TransactionError<KE, VE> {
-    pub(crate) fn from_value(e: BufferOverflowOr<VE>) -> Self {
+impl<UP: UnifierPair> TransactionError<UP> {
+    pub(crate) fn from_value(e: BufferOverflowOr<<UP::ValueUnifier as Unifier>::SerError>) -> Self {
         match e.0 {
             Some(err) => TransactionError::ValueSerialization(err),
             None => TransactionError::BufferOverflow,

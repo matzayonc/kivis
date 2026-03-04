@@ -1,4 +1,4 @@
-use crate::{BufferOpsContainer, Repository, Unifier, UnifierData};
+use crate::{BufferOpsContainer, Repository, Unifier, UnifierData, UnifierPair};
 
 /// Represents a batch operation: either insert or delete.
 pub enum BatchOp<'a, K: UnifierData, V: UnifierData> {
@@ -17,17 +17,14 @@ pub enum BatchOp<'a, K: UnifierData, V: UnifierData> {
 /// It defines methods for inserting, getting, removing, and iterating over keys in the storage.
 /// All storage operations are defined over serialized byte data.
 pub trait Storage {
+    /// Combined key+value unifier pair for this storage.
+    type Unifiers: UnifierPair;
+
     /// The repository type that this storage uses for low-level key-value operations.
     type Repo: Repository<
-            K = <<Self as Storage>::KeyUnifier as Unifier>::D,
-            V = <<Self as Storage>::ValueUnifier as Unifier>::D,
+            K = <<<Self as Storage>::Unifiers as UnifierPair>::KeyUnifier as Unifier>::D,
+            V = <<<Self as Storage>::Unifiers as UnifierPair>::ValueUnifier as Unifier>::D,
         >;
-
-    /// Unifier type used to serialize/deserialize keys.
-    type KeyUnifier: Unifier + Default + Copy;
-
-    /// Unifier type used to serialize/deserialize values.
-    type ValueUnifier: Unifier + Default + Copy;
 
     /// Container for buffer operations that can be applied to the repository.
     type Container: BufferOpsContainer;

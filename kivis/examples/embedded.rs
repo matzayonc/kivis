@@ -351,8 +351,7 @@ impl<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> Storage
     for EkvStorage<SIZE, KEY_SIZE, VALUE_SIZE>
 {
     type Repo = Self;
-    type KeyUnifier = PostcardUnifier<KEY_SIZE>;
-    type ValueUnifier = PostcardUnifier<VALUE_SIZE>;
+    type Unifiers = (PostcardUnifier<KEY_SIZE>, PostcardUnifier<VALUE_SIZE>);
     type Container = heapless::Vec<BufferOp, 256>;
 
     fn repository(&self) -> &Self::Repo {
