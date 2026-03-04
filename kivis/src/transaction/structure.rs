@@ -1,33 +1,73 @@
 use crate::{
-    BufferOpsContainer, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, Manifest,
-    Manifests, RecordKey, Repository, Storage, UnifierPair,
+    DatabaseEntry, DatabaseError, DeriveKey, Incrementable, Manifest, Manifests, RecordKey,
+    RecordOpsEnum, Repository, Storage, UnifierData, UnifierPair,
     transaction::{
-        buffer::PreBufferOps, errors::TransactionError,
-        serialized_buffer::DatabaseTransactionBuffer,
+        buffer::{BufferProcessor, PreBufferOps},
+        errors::TransactionError,
     },
 };
 
 use super::buffer::PreTransactionBuffer;
-use core::marker::PhantomData;
 
-/// A database transaction that accumulates low-level byte operations (writes and deletes)
-/// without immediately applying them to storage.
+/// A database transaction that accumulates typed records in a pre-buffer and serializes
+/// them one at a time directly to storage on commit.
 ///
 /// This struct is always available, but the `commit` method is only available when the "atomic" feature is enabled.
-pub struct DatabaseTransaction<M: Manifest, UP: UnifierPair, C: BufferOpsContainer> {
+pub struct DatabaseTransaction<M: Manifest, U: UnifierPair> {
     pre_buffer: PreTransactionBuffer<M>,
-    post_buffer: DatabaseTransactionBuffer<UP, C>,
-    _marker: PhantomData<M>,
+    unifiers: U,
 }
 
-impl<M: Manifest, U: UnifierPair, C: BufferOpsContainer> DatabaseTransaction<M, U, C> {
+/// Applies each [`RecordOps`] iterator directly to storage without any intermediate byte buffer.
+struct DirectWriter<'s, S: Storage> {
+    storage: &'s mut S,
+    unifiers: S::Unifiers,
+}
+
+impl<M: Manifest, S: Storage> BufferProcessor<M> for DirectWriter<'_, S> {
+    type Error = DatabaseError<S>;
+
+    fn process<'outer, 'inner>(
+        &mut self,
+        op: PreBufferOps,
+        record: &'outer M::Record<'inner>,
+    ) -> Result<(), Self::Error>
+    where
+        'inner: 'outer,
+    {
+        let ops = M::process_record::<S::Unifiers>(op, record, self.unifiers);
+        match ops {
+            RecordOpsEnum::Write(iter) => {
+                for result in iter {
+                    let (key_buf, value_buf) =
+                        result.map_err(DatabaseError::<S>::from_transaction_error)?;
+                    self.storage
+                        .repository_mut()
+                        .insert_entry(key_buf.as_view(), value_buf.as_view())
+                        .map_err(DatabaseError::Storage)?;
+                }
+            }
+            RecordOpsEnum::Delete(iter) => {
+                for result in iter {
+                    let key_buf = result.map_err(DatabaseError::<S>::from_transaction_error)?;
+                    self.storage
+                        .repository_mut()
+                        .remove_entry(key_buf.as_view())
+                        .map_err(DatabaseError::Storage)?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<M: Manifest, U: UnifierPair> DatabaseTransaction<M, U> {
     /// Creates a new empty transaction with the specified serialization configuration.
     #[must_use]
     pub fn new(unifiers: U) -> Self {
         Self {
             pre_buffer: PreTransactionBuffer::<M>::empty(),
-            post_buffer: DatabaseTransactionBuffer::new(unifiers),
-            _marker: PhantomData,
+            unifiers,
         }
     }
 
@@ -53,7 +93,7 @@ impl<M: Manifest, U: UnifierPair, C: BufferOpsContainer> DatabaseTransaction<M, 
     ///
     pub fn put<S, R>(&mut self, record: R, manifest: &mut M) -> Result<R::Key, DatabaseError<S>>
     where
-        S: Storage<Container = C, Unifiers = U>,
+        S: Storage<Unifiers = U>,
         R: DatabaseEntry + Clone + 'static,
         R::Key: RecordKey<Record = R> + Incrementable + Ord + 'static,
         for<'f> &'f (R::Key, R): Into<M::Record<'f>>,
@@ -95,7 +135,7 @@ impl<M: Manifest, U: UnifierPair, C: BufferOpsContainer> DatabaseTransaction<M, 
 
     /// Commits all pending operations to the storage.
     ///
-    /// Either all operations succeed, or none of them are applied.
+    /// Each record is serialized and written to storage individually — no accumulated byte buffer.
     /// The transaction is consumed by this operation.
     ///
     /// # Errors
@@ -103,31 +143,22 @@ impl<M: Manifest, U: UnifierPair, C: BufferOpsContainer> DatabaseTransaction<M, 
     /// Returns a [`DatabaseError`] if any storage operation fails.
     pub fn commit<S>(self, storage: &mut S) -> Result<(), DatabaseError<S>>
     where
-        S: Storage<Container = C, Unifiers = U>,
+        S: Storage<Unifiers = U>,
     {
         if self.is_empty() {
             return Ok(());
         }
 
-        let DatabaseTransaction {
-            pre_buffer,
-            mut post_buffer,
-            ..
-        } = self;
-        pre_buffer
-            .process(&mut post_buffer)
-            .map_err(DatabaseError::from_transaction_error)?;
-
-        storage
-            .repository_mut()
-            .apply(post_buffer.iter())
-            .map_err(DatabaseError::Storage)
+        let mut writer = DirectWriter {
+            storage,
+            unifiers: self.unifiers,
+        };
+        self.pre_buffer.process(&mut writer)
     }
 
     /// Discards all pending operations without applying them.
     /// The transaction is consumed by this operation.
     pub fn rollback(self) {
-        // Simply drop the transaction, discarding all pending operations
         drop(self);
     }
 }

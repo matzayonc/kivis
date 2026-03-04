@@ -91,7 +91,7 @@ impl<S: Storage, M: Manifest, C: Cache> Database<S, M, C> {
         Ok(inserted_key)
     }
 
-    pub fn create_transaction(&self) -> DatabaseTransaction<M, S::Unifiers, S::Container> {
+    pub fn create_transaction(&self) -> DatabaseTransaction<M, S::Unifiers> {
         DatabaseTransaction::new(self.unifiers)
     }
 
@@ -104,7 +104,7 @@ impl<S: Storage, M: Manifest, C: Cache> Database<S, M, C> {
     /// Returns a [`DatabaseError`] if writing to the underlying storage fails.
     pub fn commit(
         &mut self,
-        transaction: DatabaseTransaction<M, S::Unifiers, S::Container>,
+        transaction: DatabaseTransaction<M, S::Unifiers>,
     ) -> Result<(), DatabaseError<S>> {
         transaction.commit(&mut self.storage)?;
         Ok(())

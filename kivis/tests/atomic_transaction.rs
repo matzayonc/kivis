@@ -105,11 +105,10 @@ mod tests {
 
     #[test]
     fn test_transaction_new() -> anyhow::Result<()> {
-        let tx =
-            DatabaseTransaction::<Manifest, (Configuration, Configuration), Vec<BufferOp>>::new((
-                Configuration::default(),
-                Configuration::default(),
-            ));
+        let tx = DatabaseTransaction::<Manifest, (Configuration, Configuration)>::new((
+            Configuration::default(),
+            Configuration::default(),
+        ));
         assert!(tx.is_empty());
         Ok(())
     }
@@ -195,10 +194,9 @@ mod tests {
     #[test]
     fn test_empty_transaction_commit() -> anyhow::Result<()> {
         let mut storage = MockAtomicStorage::new();
-        let tx =
-            DatabaseTransaction::<Manifest, (Configuration, Configuration), Vec<BufferOp>>::new(
-                Default::default(),
-            );
+        let tx = DatabaseTransaction::<Manifest, (Configuration, Configuration)>::new(
+            Default::default(),
+        );
 
         // Empty transaction should succeed
         tx.commit(&mut storage)?;
