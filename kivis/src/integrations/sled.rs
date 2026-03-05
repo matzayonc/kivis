@@ -2,7 +2,9 @@ use core::ops::Range;
 use std::error::Error;
 use std::fmt::{Debug, Display};
 
-use crate::{BufferOverflowError, BufferOverflowOr, Repository, Storage, Unifier};
+use crate::{
+    BufferOverflowError, BufferOverflowOr, Repository, Storage, TryApplyError, Unifier, UnifierData,
+};
 use serde::Serialize;
 
 /// Error type for [`SledStorage`] operations.
@@ -128,19 +130,51 @@ impl Repository for sled::Db {
         Ok(keys.into_iter().rev().map(Ok))
     }
 
-    fn apply<'a>(
+    fn try_apply<U, E>(
         &mut self,
-        operations: impl Iterator<Item = crate::BatchOp<'a, Self::K, Self::V>>,
-    ) -> Result<(), Self::Error> {
+        operations: impl Iterator<Item = Result<crate::BatchOp<U>, E>>,
+    ) -> Result<(), TryApplyError<E, Self::Error>>
+    where
+        U: crate::UnifierPair,
+        U::KeyUnifier: crate::Unifier<D = Self::K>,
+        U::ValueUnifier: crate::Unifier<D = Self::V>,
+    {
+        let mut batch = sled::Batch::default();
+
+        for result in operations {
+            match result.map_err(TryApplyError::Iterator)? {
+                crate::BatchOp::Insert { key, value } => {
+                    batch.insert(key.as_view(), value.as_view());
+                }
+                crate::BatchOp::Delete { key } => {
+                    batch.remove(key.as_view());
+                }
+            }
+        }
+
+        self.apply_batch(batch)
+            .map_err(SledStorageError::from)
+            .map_err(TryApplyError::Storage)
+    }
+
+    fn apply<U>(
+        &mut self,
+        operations: impl Iterator<Item = crate::BatchOp<U>>,
+    ) -> Result<(), Self::Error>
+    where
+        U: crate::UnifierPair,
+        U::KeyUnifier: crate::Unifier<D = Self::K>,
+        U::ValueUnifier: crate::Unifier<D = Self::V>,
+    {
         let mut batch = sled::Batch::default();
 
         for op in operations {
             match op {
                 crate::BatchOp::Insert { key, value } => {
-                    batch.insert(key, value);
+                    batch.insert(key.as_view(), value.as_view());
                 }
                 crate::BatchOp::Delete { key } => {
-                    batch.remove(key);
+                    batch.remove(key.as_view());
                 }
             }
         }

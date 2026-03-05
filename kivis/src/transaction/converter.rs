@@ -1,5 +1,6 @@
 use crate::{
-    BufferOverflowOr, DatabaseEntry, RecordKey, Repository, Unifier, UnifierData, UnifierPair,
+    BatchOp, BufferOverflowOr, DatabaseEntry, RecordKey, Repository, TryApplyError, Unifier,
+    UnifierData, UnifierPair,
     transaction::buffer::PreBufferOps,
     wrap::{Subtable, WrapPrelude},
 };
@@ -24,91 +25,35 @@ where
     U: UnifierPair + 'r,
     Repo: Repository<K = <U::KeyUnifier as Unifier>::D, V = <U::ValueUnifier as Unifier>::D>,
 {
-    let key_ser = unifiers.key_unifier();
-    let val_ser = unifiers.value_unifier();
-    match op {
-        PreBufferOps::Insert | PreBufferOps::Put => {
-            for result in prepare_writes::<R, U>(record, key, key_ser, val_ser) {
-                let (key_buf, value_buf) = result.map_err(ApplyError::Transaction)?;
-                repo.insert_entry(key_buf.as_view(), value_buf.as_view())
-                    .map_err(ApplyError::Storage)?;
-            }
-        }
-        PreBufferOps::Delete => {
-            for result in prepare_deletes::<R, U>(record, key, key_ser) {
-                let key_buf = result.map_err(ApplyError::Transaction)?;
-                repo.remove_entry(key_buf.as_view())
-                    .map_err(ApplyError::Storage)?;
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Returns an iterator of fully-assembled `(key_buf, value_buf)` pairs for all entries
-/// (index entries + main record).
-#[allow(clippy::type_complexity)]
-fn prepare_writes<'r, R, U>(
-    record: &'r R,
-    key: &'r R::Key,
-    key_serializer: U::KeyUnifier,
-    value_serializer: U::ValueUnifier,
-) -> impl Iterator<
-    Item = Result<
-        (
-            <U::KeyUnifier as Unifier>::D,
-            <U::ValueUnifier as Unifier>::D,
+    let result = match op {
+        PreBufferOps::Insert | PreBufferOps::Put => repo.try_apply(
+            index_write_entries::<R, U>(record, key, unifiers)
+                .chain(main_write_entry::<R, U>(record, key, unifiers)),
         ),
-        TransactionError<U>,
-    >,
-> + 'r
-where
-    R: DatabaseEntry + Clone,
-    R::Key: RecordKey<Record = R>,
-    U: UnifierPair + 'r,
-{
-    index_write_entries::<R, U>(record, key, key_serializer, value_serializer).chain(
-        main_write_entry::<R, U>(record, key, key_serializer, value_serializer),
-    )
+        PreBufferOps::Delete => repo.try_apply(
+            index_delete_keys::<R, U>(record, key, unifiers)
+                .chain(main_delete_key::<R, U>(key, unifiers)),
+        ),
+    };
+    result.map_err(|e| match e {
+        TryApplyError::Iterator(e) => ApplyError::Transaction(e),
+        TryApplyError::Storage(e) => ApplyError::Storage(e),
+    })
 }
 
-/// Returns an iterator of fully-assembled key buffers for all delete entries
-/// (index entries + main record).
-fn prepare_deletes<'r, R, U>(
-    record: &'r R,
-    key: &'r R::Key,
-    key_serializer: U::KeyUnifier,
-) -> impl Iterator<Item = Result<<U::KeyUnifier as Unifier>::D, TransactionError<U>>> + 'r
-where
-    R: DatabaseEntry,
-    R::Key: RecordKey<Record = R>,
-    U: UnifierPair + 'r,
-{
-    index_delete_keys::<R, U>(record, key, key_serializer)
-        .chain(main_delete_key::<R, U>(key, key_serializer))
-}
-
-/// Returns an iterator of fully-assembled (key, value) write buffers for index entries.
-#[allow(clippy::type_complexity)]
+/// Returns an iterator of `BatchOp::Insert` write buffers for index entries.
 fn index_write_entries<'r, R, U>(
     record: &'r R,
     key: &'r R::Key,
-    key_serializer: U::KeyUnifier,
-    value_serializer: U::ValueUnifier,
-) -> impl Iterator<
-    Item = Result<
-        (
-            <U::KeyUnifier as Unifier>::D,
-            <U::ValueUnifier as Unifier>::D,
-        ),
-        TransactionError<U>,
-    >,
-> + 'r
+    unifiers: U,
+) -> impl Iterator<Item = Result<BatchOp<U>, TransactionError<U>>> + 'r
 where
     R: DatabaseEntry,
     R::Key: RecordKey<Record = R>,
     U: UnifierPair + 'r,
 {
+    let key_serializer = unifiers.key_unifier();
+    let value_serializer = unifiers.value_unifier();
     let mut cached_key_hash: Option<<U::KeyUnifier as Unifier>::D> = None;
     let mut cached_key_value: Option<<U::ValueUnifier as Unifier>::D> = None;
     (0..R::INDEX_COUNT_HINT).map(move |discriminator| {
@@ -129,7 +74,7 @@ where
         key_buf
             .extend_from(key_hash.as_view())
             .map_err(BufferOverflowOr::overflow)?;
-        let key_value = if let Some(kv) = &cached_key_value {
+        let value = if let Some(kv) = &cached_key_value {
             kv.clone()
         } else {
             let mut kv = <U::ValueUnifier as Unifier>::D::default();
@@ -139,33 +84,27 @@ where
             cached_key_value = Some(kv.clone());
             kv
         };
-        Ok((key_buf, key_value))
+        Ok(BatchOp::Insert {
+            key: key_buf,
+            value,
+        })
     })
 }
 
-/// Returns a single-item iterator with the fully-assembled (key, value) write buffers
-/// for the main record entry.
-#[allow(clippy::type_complexity)]
+/// Returns a single-item iterator with a `BatchOp::Insert` for the main record entry.
 fn main_write_entry<'r, R, U>(
     record: &'r R,
     key: &'r R::Key,
-    key_serializer: U::KeyUnifier,
-    value_serializer: U::ValueUnifier,
-) -> impl Iterator<
-    Item = Result<
-        (
-            <U::KeyUnifier as Unifier>::D,
-            <U::ValueUnifier as Unifier>::D,
-        ),
-        TransactionError<U>,
-    >,
-> + 'r
+    unifiers: U,
+) -> impl Iterator<Item = Result<BatchOp<U>, TransactionError<U>>> + 'r
 where
     R: DatabaseEntry + Clone,
     R::Key: RecordKey<Record = R>,
     U: UnifierPair + 'r,
 {
     core::iter::once_with(move || {
+        let key_serializer = unifiers.key_unifier();
+        let value_serializer = unifiers.value_unifier();
         let mut key_buf = <U::KeyUnifier as Unifier>::D::default();
         key_serializer.serialize(&mut key_buf, WrapPrelude::new::<R>(Subtable::Main))?;
         key_serializer.serialize_ref(&mut key_buf, key)?;
@@ -173,39 +112,45 @@ where
         value_serializer
             .serialize_ref(&mut value_buf, record)
             .map_err(TransactionError::from_value)?;
-        Ok((key_buf, value_buf))
+        Ok(BatchOp::Insert {
+            key: key_buf,
+            value: value_buf,
+        })
     })
 }
 
+/// Returns a single-item iterator with a `BatchOp::Delete` for the main record entry.
 fn main_delete_key<'r, R, U>(
     key: &'r R::Key,
-    key_serializer: U::KeyUnifier,
-) -> impl Iterator<Item = Result<<U::KeyUnifier as Unifier>::D, TransactionError<U>>> + 'r
+    unifiers: U,
+) -> impl Iterator<Item = Result<BatchOp<U>, TransactionError<U>>> + 'r
 where
     R: DatabaseEntry,
     R::Key: RecordKey<Record = R>,
     U: UnifierPair + 'r,
 {
     core::iter::once_with(move || {
+        let key_serializer = unifiers.key_unifier();
         let mut key_buf = <U::KeyUnifier as Unifier>::D::default();
         key_serializer.serialize(&mut key_buf, WrapPrelude::new::<R>(Subtable::Main))?;
         key_serializer.serialize_ref(&mut key_buf, key)?;
-        Ok(key_buf)
+        Ok(BatchOp::Delete { key: key_buf })
     })
 }
 
-/// Each item contains the complete serialized key (prelude + `index_key` + `primary_key`)
-/// for one index entry.
+/// Each item contains a `BatchOp::Delete` with the complete serialized key
+/// (prelude + `index_key` + `primary_key`) for one index entry.
 fn index_delete_keys<'r, R, U>(
     record: &'r R,
     key: &'r R::Key,
-    key_serializer: U::KeyUnifier,
-) -> impl Iterator<Item = Result<<U::KeyUnifier as Unifier>::D, TransactionError<U>>> + 'r
+    unifiers: U,
+) -> impl Iterator<Item = Result<BatchOp<U>, TransactionError<U>>> + 'r
 where
     R: DatabaseEntry,
     R::Key: RecordKey<Record = R>,
     U: UnifierPair + 'r,
 {
+    let key_serializer = unifiers.key_unifier();
     let mut cached_key: Option<<U::KeyUnifier as Unifier>::D> = None;
     (0..R::INDEX_COUNT_HINT).map(move |discriminator| {
         let mut key_buf = <U::KeyUnifier as Unifier>::D::default();
@@ -227,6 +172,6 @@ where
         key_buf
             .extend_from(key_bytes.as_view())
             .map_err(BufferOverflowOr::overflow)?;
-        Ok(key_buf)
+        Ok(BatchOp::Delete { key: key_buf })
     })
 }

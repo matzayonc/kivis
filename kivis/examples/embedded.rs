@@ -279,20 +279,25 @@ impl<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> Reposito
         Ok(iter)
     }
 
-    fn apply<'a>(
+    fn apply<U>(
         &mut self,
-        operations: impl Iterator<Item = kivis::BatchOp<'a, Self::K, Self::V>>,
-    ) -> Result<(), Self::Error> {
+        operations: impl Iterator<Item = kivis::BatchOp<U>>,
+    ) -> Result<(), Self::Error>
+    where
+        U: kivis::UnifierPair,
+        U::KeyUnifier: kivis::Unifier<D = Self::K>,
+        U::ValueUnifier: kivis::Unifier<D = Self::V>,
+    {
         futures::executor::block_on(async {
             let mut txn = self.db.write_transaction().await;
 
             for op in operations {
                 match op {
                     kivis::BatchOp::Insert { key, value } => {
-                        txn.write(key, value).await?;
+                        txn.write(key.as_view(), value.as_view()).await?;
                     }
                     kivis::BatchOp::Delete { key } => {
-                        txn.delete(key).await?;
+                        txn.delete(key.as_view()).await?;
                     }
                 }
             }

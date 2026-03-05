@@ -1,14 +1,23 @@
-use crate::{Repository, Unifier, UnifierData, UnifierPair};
+use crate::{Repository, Unifier, UnifierPair};
+
+/// Error returned by [`Repository::try_apply`]: either the iterator produced an error or
+/// the underlying storage did.
+pub enum TryApplyError<IterErr, StorageErr> {
+    /// The fallible iterator yielded an error before all operations were applied.
+    Iterator(IterErr),
+    /// The underlying storage returned an error while applying operations.
+    Storage(StorageErr),
+}
 
 /// Represents a batch operation: either insert or delete.
-pub enum BatchOp<'a, K: UnifierData, V: UnifierData> {
-    /// Insert operation with key and value references
+pub enum BatchOp<U: UnifierPair> {
+    /// Insert operation with owned key and value
     Insert {
-        key: K::View<'a>,
-        value: V::View<'a>,
+        key: <U::KeyUnifier as Unifier>::D,
+        value: <U::ValueUnifier as Unifier>::D,
     },
-    /// Delete operation with key reference
-    Delete { key: K::View<'a> },
+    /// Delete operation with owned key
+    Delete { key: <U::KeyUnifier as Unifier>::D },
 }
 
 /// A trait defining a storage backend for the database.
