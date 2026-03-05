@@ -69,6 +69,7 @@ pub use crate::errors::{
     BufferOverflowError, BufferOverflowOr, DatabaseError, InternalDatabaseError,
 };
 
+pub use traits::TryApplyError;
 pub use transaction::{ApplyError, TransactionError};
 
 #[cfg(feature = "atomic")]

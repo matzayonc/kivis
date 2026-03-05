@@ -82,18 +82,23 @@ mod tests {
             Ok(iter.map(|(k, _v)| Ok(k.0.clone())))
         }
 
-        fn apply<'a>(
+        fn apply<U>(
             &mut self,
-            operations: impl Iterator<Item = BatchOp<'a, Self::K, Self::V>>,
-        ) -> Result<(), Self::Error> {
+            operations: impl Iterator<Item = BatchOp<U>>,
+        ) -> Result<(), Self::Error>
+        where
+            U: kivis::UnifierPair,
+            U::KeyUnifier: kivis::Unifier<D = Self::K>,
+            U::ValueUnifier: kivis::Unifier<D = Self::V>,
+        {
             // In a real implementation, this could be atomic
             for op in operations {
                 match op {
                     BatchOp::Insert { key, value } => {
-                        self.data.insert(Reverse(key.to_vec()), value.to_vec());
+                        self.data.insert(Reverse(key), value);
                     }
                     BatchOp::Delete { key } => {
-                        self.data.remove(&Reverse(key.to_vec()));
+                        self.data.remove(&Reverse(key));
                     }
                 }
             }
