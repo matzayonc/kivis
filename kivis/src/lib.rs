@@ -77,7 +77,7 @@ pub use transaction::{ApplyError, TransactionError};
 pub use transaction::DatabaseTransaction;
 
 #[doc(hidden)]
-pub use transaction::{PreBufferOps, apply_record_ops};
+pub use transaction::{PreBufferOps, RecordOps, apply_record_ops, build_record_ops};
 
 #[cfg(feature = "sled")]
 pub use integrations::{PostcardUnifier, SledStorageError};

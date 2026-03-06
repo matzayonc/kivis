@@ -13,14 +13,14 @@ type StorageKU<S> = <<S as Storage>::Unifiers as UnifierPair>::KeyUnifier;
 type DatabaseIteratorItem<R, S> = Result<<R as DatabaseEntry>::Key, DatabaseError<S>>;
 
 /// The `kivis` database type. All interactions with the database are done through this type.
-pub struct Database<S: Storage, M: Manifest, C: Cache = NoCache> {
+pub struct Database<S: Storage, M: Manifest<S::Unifiers>, C: Cache = NoCache> {
     pub(crate) storage: S,
     pub(crate) manifest: M,
     pub(crate) unifiers: S::Unifiers,
     pub(crate) cache: C,
 }
 
-impl<S: Storage, M: Manifest, C: Cache> Database<S, M, C> {
+impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
     /// Creates a new [`Database`] instance over any storage backend.
     /// One of the key features of `kivis` is that it can work with any storage backend that implements the [`Storage`] trait.
     /// # Errors
@@ -53,6 +53,7 @@ impl<S: Storage, M: Manifest, C: Cache> Database<S, M, C> {
     /// Returns a [`DatabaseError`] if serializing or writing the record fails.
     pub fn put<R>(&mut self, record: R) -> Result<R::Key, DatabaseError<S>>
     where
+        S::Unifiers: 'static,
         R: DatabaseEntry + Clone + 'static,
         R::Key: RecordKey<Record = R> + Incrementable + Ord + 'static,
         for<'f> &'f (R::Key, R): Into<M::Record<'f>>,
@@ -76,6 +77,7 @@ impl<S: Storage, M: Manifest, C: Cache> Database<S, M, C> {
     /// Returns a [`DatabaseError`] if serializing or writing the record fails.
     pub fn insert<K, R>(&mut self, record: R) -> Result<K, DatabaseError<S>>
     where
+        S::Unifiers: 'static,
         K: RecordKey<Record = R> + 'static,
         R: DeriveKey<Key = K> + DatabaseEntry<Key = K> + Clone + 'static,
         for<'f> &'f (K, R): Into<M::Record<'f>>,
@@ -91,7 +93,10 @@ impl<S: Storage, M: Manifest, C: Cache> Database<S, M, C> {
         Ok(inserted_key)
     }
 
-    pub fn create_transaction(&self) -> DatabaseTransaction<M, S::Unifiers> {
+    pub fn create_transaction(&self) -> DatabaseTransaction<M, S::Unifiers>
+    where
+        S::Unifiers: 'static,
+    {
         DatabaseTransaction::new(self.unifiers)
     }
 
@@ -105,7 +110,10 @@ impl<S: Storage, M: Manifest, C: Cache> Database<S, M, C> {
     pub fn commit(
         &mut self,
         transaction: DatabaseTransaction<M, S::Unifiers>,
-    ) -> Result<(), DatabaseError<S>> {
+    ) -> Result<(), DatabaseError<S>>
+    where
+        S::Unifiers: 'static,
+    {
         transaction.commit(&mut self.storage)?;
         Ok(())
     }
@@ -165,6 +173,7 @@ impl<S: Storage, M: Manifest, C: Cache> Database<S, M, C> {
     /// storage reports an error while removing or retrieving records.
     pub fn remove<K: RecordKey<Record = R>, R>(&mut self, key: &K) -> Result<(), DatabaseError<S>>
     where
+        S::Unifiers: 'static,
         R: DatabaseEntry<Key = K> + Clone + 'static,
         R::Key: RecordKey<Record = R> + Clone + 'static,
         for<'f> &'f (K, R): Into<M::Record<'f>>,

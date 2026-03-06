@@ -8,8 +8,8 @@ use std::{collections::BTreeMap, ops::Range};
 use thiserror::Error;
 
 use kivis::{
-    ApplyError, BufferOverflowError, BufferOverflowOr, Cache, Database, DatabaseEntry, DeriveKey,
-    Incrementable, Index, RecordKey, Repository, Scope, Storage, Unifier, UnifierPair,
+    BufferOverflowError, BufferOverflowOr, Cache, Database, DatabaseEntry, DeriveKey,
+    Incrementable, Index, RecordKey, RecordOps, Repository, Scope, Storage, UnifierPair,
 };
 
 // Define a record type for an User.
@@ -116,8 +116,28 @@ impl<'a> From<&'a (PetKey, Pet)> for ManifestRecord<'a> {
     }
 }
 
-impl kivis::Manifest for Manifest {
+enum ManifestOps<'a, U: UnifierPair> {
+    User(RecordOps<'a, User, U>),
+    Pet(RecordOps<'a, Pet, U>),
+}
+
+impl<'a, U: UnifierPair> Iterator for ManifestOps<'a, U> {
+    type Item = Result<kivis::BatchOp<U>, kivis::TransactionError<U>>;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Self::User(it) => it.next(),
+            Self::Pet(it) => it.next(),
+        }
+    }
+}
+
+impl<U: UnifierPair> kivis::Manifest<U> for Manifest {
     type Record<'a> = ManifestRecord<'a>;
+
+    type Ops<'a>
+        = ManifestOps<'a, U>
+    where
+        U: 'a;
 
     fn members() -> &'static [u8] {
         &[User::SCOPE, Pet::SCOPE]
@@ -126,7 +146,10 @@ impl kivis::Manifest for Manifest {
     fn load<S: Storage, C: Cache>(
         &mut self,
         db: &mut Database<S, Self, C>,
-    ) -> Result<(), kivis::DatabaseError<S>> {
+    ) -> Result<(), kivis::DatabaseError<S>>
+    where
+        Self: kivis::Manifest<S::Unifiers>,
+    {
         *self = Self {
             last_user: None,
             last_pet: Some(db.last_id::<PetKey>()?),
@@ -134,24 +157,22 @@ impl kivis::Manifest for Manifest {
         Ok(())
     }
 
-    fn process_record<'a, 'b, U, R>(
+    fn record_ops<'a, 'b>(
         op: kivis::PreBufferOps,
         record: &'b Self::Record<'a>,
         unifiers: U,
-        repo: &mut R,
-    ) -> Result<(), ApplyError<U, R::Error>>
+    ) -> Self::Ops<'b>
     where
-        U: 'b + UnifierPair,
-        R: Repository<
-                K = <<U as UnifierPair>::KeyUnifier as Unifier>::D,
-                V = <<U as UnifierPair>::ValueUnifier as Unifier>::D,
-            >,
-        Self: Sized,
         'a: 'b,
+        U: 'b,
     {
         match *record {
-            ManifestRecord::User(key, val) => kivis::apply_record_ops(op, val, key, unifiers, repo),
-            ManifestRecord::Pet(key, val) => kivis::apply_record_ops(op, val, key, unifiers, repo),
+            ManifestRecord::User(key, val) => {
+                ManifestOps::User(kivis::build_record_ops(op, val, key, unifiers))
+            }
+            ManifestRecord::Pet(key, val) => {
+                ManifestOps::Pet(kivis::build_record_ops(op, val, key, unifiers))
+            }
         }
     }
 }

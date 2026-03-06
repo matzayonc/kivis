@@ -1,4 +1,4 @@
-use kivis::{Manifest, Record, Scope, manifest};
+use kivis::{Record, Scope, manifest};
 use serde::{Deserialize, Serialize};
 
 // Define some test structs
