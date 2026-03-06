@@ -134,39 +134,75 @@ macro_rules! manifest {
         $crate::scope_impl_with_index!($manifest_name, 0; $($ty),+);
 
         $crate::paste! {
-        impl $crate::Manifest for $manifest_name {
+        impl $manifest_name {
+            /// Returns the scope identifiers for all record types in this manifest.
+            pub fn members() -> &'static [u8] {
+                &$crate::generate_member_scopes!(0; $($ty),+)
+            }
+        }
+
+        /// A concrete iterator over [`BatchOp`]s for any record type in this manifest.
+        pub enum [<$manifest_name Ops>]<'a, __U: $crate::UnifierPair> {
+            $(
+                [<$ty>]($crate::RecordOps<'a, $ty, __U>),
+            )*
+        }
+
+        impl<'a, __U: $crate::UnifierPair> ::core::iter::Iterator for [<$manifest_name Ops>]<'a, __U>
+        where
+            $(
+                $ty: $crate::DatabaseEntry,
+                <$ty as $crate::DatabaseEntry>::Key: $crate::RecordKey<Record = $ty>,
+            )*
+        {
+            type Item = ::core::result::Result<
+                $crate::BatchOp<__U>,
+                $crate::TransactionError<__U>,
+            >;
+
+            fn next(&mut self) -> ::core::option::Option<Self::Item> {
+                match self {
+                    $(
+                        Self::[<$ty>](it) => it.next(),
+                    )*
+                }
+            }
+        }
+
+        impl<__U: $crate::UnifierPair> $crate::Manifest<__U> for $manifest_name {
             type Record<'a> = [<$manifest_name Record>]<'a>;
+
+            type Ops<'a> = [<$manifest_name Ops>]<'a, __U> where __U: 'a;
 
             fn members() -> &'static [u8] {
                 &$crate::generate_member_scopes!(0; $($ty),+)
             }
 
-            fn load<S: $crate::Storage, C: $crate::Cache>(&mut self, db: &mut $crate::Database<S, Self, C>) -> ::core::result::Result<(), $crate::DatabaseError<S>> {
+            fn load<S: $crate::Storage, C: $crate::Cache>(&mut self, db: &mut $crate::Database<S, Self, C>) -> ::core::result::Result<(), $crate::DatabaseError<S>>
+            where
+                Self: $crate::Manifest<S::Unifiers>,
+            {
                 $(
                     self.[<last_ $ty:snake>] = ::core::option::Option::Some(db.last_id()?);
                 )*
                 ::core::result::Result::Ok(())
             }
 
-            fn process_record<'a, 'b, U, R>(
+            fn record_ops<'a, 'b>(
                 op: $crate::PreBufferOps,
                 record: &'b Self::Record<'a>,
-                unifiers: U,
-                repo: &mut R,
-            ) -> ::core::result::Result<(), $crate::ApplyError<U, R::Error>>
+                unifiers: __U,
+            ) -> Self::Ops<'b>
             where
-                U: 'b + $crate::UnifierPair,
-                R: $crate::Repository<
-                    K = <<U as $crate::UnifierPair>::KeyUnifier as $crate::Unifier>::D,
-                    V = <<U as $crate::UnifierPair>::ValueUnifier as $crate::Unifier>::D,
-                >,
-                Self: Sized,
                 'a: 'b,
+                __U: 'b,
             {
                 match *record {
                     $(
                         [<$manifest_name Record>]::[<$ty>](key, val) => {
-                            $crate::apply_record_ops::<$ty, U, R>(op, val, key, unifiers, repo)
+                            [<$manifest_name Ops>]::[<$ty>](
+                                $crate::build_record_ops::<$ty, __U>(op, val, key, unifiers)
+                            )
                         }
                     )*
                 }

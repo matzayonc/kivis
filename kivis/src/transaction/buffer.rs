@@ -2,7 +2,7 @@ use bumpalo::{Bump, collections::Vec as BumpVec};
 use core::marker::PhantomData;
 use ouroboros::self_referencing;
 
-use crate::Manifest;
+use crate::{Manifest, UnifierPair};
 
 /// A pre-transaction buffer that uses a bump allocator for fast, arena-based allocation.
 ///
@@ -10,17 +10,17 @@ use crate::Manifest;
 /// `M::Record<'this>` — variants containing `&'this T` references into `bump` —
 /// where `'this` is the ouroboros lifetime of the arena itself.
 #[self_referencing]
-pub(crate) struct TransactionBuffer<M: Manifest> {
+pub(crate) struct TransactionBuffer<M: Manifest<U>, U: UnifierPair + 'static> {
     bump: Bump,
-    /// Anchors `M` in the generated struct; `M` only appears via GAT in `records`
-    /// so without this field ouroboros can't see the type parameter.
-    phantom: PhantomData<M>,
+    /// Anchors `M` and `U` in the generated struct; `M` only appears via GAT in `records`
+    /// so without this field ouroboros can't see the type parameters.
+    phantom: PhantomData<(M, U)>,
     #[borrows(bump)]
     #[not_covariant]
     records: BumpVec<'this, (PreBufferOps, M::Record<'this>)>,
 }
 
-impl<M: Manifest> TransactionBuffer<M> {
+impl<M: Manifest<U>, U: UnifierPair + 'static> TransactionBuffer<M, U> {
     pub(crate) fn empty() -> Self {
         TransactionBufferBuilder {
             bump: Bump::new(),
@@ -69,7 +69,7 @@ impl<M: Manifest> TransactionBuffer<M> {
     }
 }
 
-impl<M: Manifest + 'static> Default for TransactionBuffer<M> {
+impl<M: Manifest<U> + 'static, U: UnifierPair + 'static> Default for TransactionBuffer<M, U> {
     fn default() -> Self {
         Self::empty()
     }

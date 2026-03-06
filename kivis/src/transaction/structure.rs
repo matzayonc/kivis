@@ -1,10 +1,7 @@
 use crate::{
     DatabaseEntry, DatabaseError, DeriveKey, Incrementable, Manifest, Manifests, RecordKey,
-    Storage, UnifierPair,
-    transaction::{
-        buffer::PreBufferOps,
-        errors::{ApplyError, TransactionError},
-    },
+    Repository, Storage, TryApplyError, UnifierPair,
+    transaction::{buffer::PreBufferOps, errors::TransactionError},
 };
 
 use super::buffer::TransactionBuffer;
@@ -13,17 +10,17 @@ use super::buffer::TransactionBuffer;
 /// them one at a time directly to storage on commit.
 ///
 /// This struct is always available, but the `commit` method is only available when the "atomic" feature is enabled.
-pub struct DatabaseTransaction<M: Manifest, U: UnifierPair> {
-    pre_buffer: TransactionBuffer<M>,
+pub struct DatabaseTransaction<M: Manifest<U>, U: UnifierPair + 'static> {
+    pre_buffer: TransactionBuffer<M, U>,
     unifiers: U,
 }
 
-impl<M: Manifest, U: UnifierPair> DatabaseTransaction<M, U> {
+impl<M: Manifest<U>, U: UnifierPair + 'static> DatabaseTransaction<M, U> {
     /// Creates a new empty transaction with the specified serialization configuration.
     #[must_use]
     pub fn new(unifiers: U) -> Self {
         Self {
-            pre_buffer: TransactionBuffer::<M>::empty(),
+            pre_buffer: TransactionBuffer::<M, U>::empty(),
             unifiers,
         }
     }
@@ -108,16 +105,13 @@ impl<M: Manifest, U: UnifierPair> DatabaseTransaction<M, U> {
 
         let unifiers = self.unifiers;
         self.pre_buffer.process(|op, record| {
-            M::process_record::<S::Unifiers, S::Repo>(
-                op,
-                &record,
-                unifiers,
-                storage.repository_mut(),
-            )
-            .map_err(|e| match e {
-                ApplyError::Transaction(te) => DatabaseError::<S>::from_transaction_error(te),
-                ApplyError::Storage(se) => DatabaseError::Storage(se),
-            })
+            storage
+                .repository_mut()
+                .try_apply(M::record_ops(op, &record, unifiers))
+                .map_err(|e| match e {
+                    TryApplyError::Iterator(te) => DatabaseError::<S>::from_transaction_error(te),
+                    TryApplyError::Storage(se) => DatabaseError::Storage(se),
+                })
         })
     }
 

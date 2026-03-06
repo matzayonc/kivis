@@ -3,8 +3,8 @@ use core::fmt::Debug;
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
-    ApplyError, BufferOverflowOr, Cache, Database, DatabaseError, Repository, Storage, Unifiable,
-    UnifiableRef, Unifier, UnifierPair, transaction::PreBufferOps,
+    BatchOp, BufferOverflowOr, Cache, Database, DatabaseError, Storage, TransactionError,
+    Unifiable, UnifiableRef, Unifier, UnifierPair, transaction::PreBufferOps,
 };
 
 /// A trait defining that the implementing type is a key of some record.
@@ -68,9 +68,13 @@ pub trait Manifests<T: Scope + DatabaseEntry> {
     fn last(&mut self) -> &mut Option<T::Key>;
 }
 
-pub trait Manifest: Default + 'static {
+pub trait Manifest<U: UnifierPair>: Default + 'static {
     /// An enum covering all record types in this manifest.
     type Record<'a>: Copy;
+    /// An iterator of [`BatchOp`]s produced for a single record operation.
+    type Ops<'a>: Iterator<Item = Result<BatchOp<U>, TransactionError<U>>> + 'a
+    where
+        U: 'a;
 
     fn members() -> &'static [u8];
 
@@ -83,28 +87,20 @@ pub trait Manifest: Default + 'static {
         db: &mut Database<S, Self, C>,
     ) -> Result<(), DatabaseError<S>>
     where
-        Self: Sized;
+        Self: Sized + Manifest<S::Unifiers>;
 
-    /// Converts a record operation and applies the resulting writes or deletes directly to `repo`.
+    /// Converts a record operation into an iterator of [`BatchOp`]s.
     ///
-    /// Implementations should delegate to [`apply_record_ops`](crate::apply_record_ops) for each
+    /// Implementations should delegate to [`build_record_ops`](crate::build_record_ops) for each
     /// record variant.
-    ///
-    /// # Errors
-    ///
-    /// Returns an [`ApplyError`] if serialization of keys or values fails, or if the repository
-    /// returns an error during a write or remove operation.
-    fn process_record<'a, 'b, U, R>(
+    fn record_ops<'a, 'b>(
         op: PreBufferOps,
         record: &'b Self::Record<'a>,
         unifiers: U,
-        repo: &mut R,
-    ) -> Result<(), ApplyError<U, R::Error>>
+    ) -> Self::Ops<'b>
     where
-        U: 'b + UnifierPair,
-        R: Repository<K = <U::KeyUnifier as Unifier>::D, V = <U::ValueUnifier as Unifier>::D>,
-        Self: Sized,
-        'a: 'b;
+        'a: 'b,
+        U: 'b;
 }
 
 pub trait Scope {
