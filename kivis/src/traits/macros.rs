@@ -172,7 +172,7 @@ macro_rules! manifest {
         impl<__U: $crate::UnifierPair> $crate::Manifest<__U> for $manifest_name {
             type Record<'a> = [<$manifest_name Record>]<'a>;
 
-            type Ops<'a> = [<$manifest_name Ops>]<'a, __U> where __U: 'a;
+            type Iter<'a> = [<$manifest_name Ops>]<'a, __U> where __U: 'a;
 
             fn members() -> &'static [u8] {
                 &$crate::generate_member_scopes!(0; $($ty),+)
@@ -188,11 +188,11 @@ macro_rules! manifest {
                 ::core::result::Result::Ok(())
             }
 
-            fn record_ops<'a, 'b>(
+            fn iter_ops<'a, 'b>(
                 op: $crate::PreBufferOps,
                 record: &'b Self::Record<'a>,
                 unifiers: __U,
-            ) -> Self::Ops<'b>
+            ) -> Self::Iter<'b>
             where
                 'a: 'b,
                 __U: 'b,

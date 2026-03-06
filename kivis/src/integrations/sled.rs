@@ -63,7 +63,7 @@ impl Unifier for PostcardUnifier {
     fn serialize(
         &self,
         buffer: &mut Self::D,
-        data: impl Serialize,
+        data: &impl Serialize,
     ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
         let start = buffer.len();
         let serialized = postcard::to_allocvec(&data)?;

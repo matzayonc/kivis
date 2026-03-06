@@ -40,7 +40,7 @@ impl kivis::DatabaseEntry for User {
         serializer: &KU,
     ) -> Result<(), BufferOverflowOr<KU::SerError>> {
         if discriminator == 0 {
-            serializer.serialize_ref(buffer, &self.name)?;
+            serializer.serialize(buffer, &self.name)?;
         }
         Ok(())
     }
@@ -134,7 +134,7 @@ impl<'a, U: UnifierPair> Iterator for ManifestOps<'a, U> {
 impl<U: UnifierPair> kivis::Manifest<U> for Manifest {
     type Record<'a> = ManifestRecord<'a>;
 
-    type Ops<'a>
+    type Iter<'a>
         = ManifestOps<'a, U>
     where
         U: 'a;
@@ -157,11 +157,11 @@ impl<U: UnifierPair> kivis::Manifest<U> for Manifest {
         Ok(())
     }
 
-    fn record_ops<'a, 'b>(
+    fn iter_ops<'a, 'b>(
         op: kivis::PreBufferOps,
         record: &'b Self::Record<'a>,
         unifiers: U,
-    ) -> Self::Ops<'b>
+    ) -> Self::Iter<'b>
     where
         'a: 'b,
         U: 'b,

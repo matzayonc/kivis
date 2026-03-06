@@ -61,37 +61,23 @@ pub trait UnifierData: Default + Clone {
 }
 
 pub trait Unifiable: Serialize + DeserializeOwned {}
-pub trait UnifiableRef: Unifiable + Clone {}
 
 impl<T: Serialize + DeserializeOwned> Unifiable for T {}
-impl<T: Serialize + DeserializeOwned + Clone> UnifiableRef for T {}
 
 pub trait Unifier: Copy {
     type D: UnifierData;
     type SerError: Debug + Display + Error;
     type DeError: Debug + Display + Error;
 
-    /// Serializes data directly into an existing buffer and returns the start and end positions.
+    /// Serializes borrowed data into an existing buffer and returns the start and end positions.
     /// # Errors
     ///
     /// Returns an error if serialization fails.
     fn serialize(
         &self,
         buffer: &mut Self::D,
-        data: impl Unifiable,
+        data: &impl Serialize,
     ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>>;
-
-    /// Serializes borrowed data directly into an existing buffer and returns the start and end positions.
-    /// # Errors
-    ///
-    /// Returns an error if serialization fails.
-    fn serialize_ref<R: UnifiableRef>(
-        &self,
-        buffer: &mut Self::D,
-        data: &R,
-    ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
-        self.serialize(buffer, data.clone())
-    }
 
     /// Deserializes data from the given buffer.
     /// # Errors

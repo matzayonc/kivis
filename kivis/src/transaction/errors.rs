@@ -2,28 +2,6 @@ use crate::{BufferOverflowOr, Unifier, UnifierPair};
 use core::error::Error;
 use core::fmt::{Debug, Display};
 
-/// Error produced by [`Converter::apply`] and [`apply_record_ops`], covering both
-/// serialization failures and repository write/remove failures.
-pub enum ApplyError<U: UnifierPair, E> {
-    /// A serialization error occurred while preparing keys or values.
-    Transaction(TransactionError<U>),
-    /// The underlying repository returned an error.
-    Storage(E),
-}
-
-impl<U: UnifierPair, E: Debug> Debug for ApplyError<U, E>
-where
-    <U::KeyUnifier as Unifier>::SerError: Debug,
-    <U::ValueUnifier as Unifier>::SerError: Debug,
-{
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        match self {
-            Self::Transaction(e) => f.debug_tuple("Transaction").field(e).finish(),
-            Self::Storage(e) => f.debug_tuple("Storage").field(e).finish(),
-        }
-    }
-}
-
 /// Errors that can occur during transaction buffer operations
 pub enum TransactionError<UP: UnifierPair> {
     KeySerialization(<UP::KeyUnifier as Unifier>::SerError),

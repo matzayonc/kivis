@@ -24,7 +24,7 @@ impl Unifier for Configuration {
     fn serialize(
         &self,
         buffer: &mut Vec<u8>,
-        data: impl Serialize,
+        data: &impl Serialize,
     ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
         let start = buffer.len();
         let serialized = encode_to_vec(data, Self::default())?;

@@ -311,7 +311,7 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
             .key_unifier()
             .serialize(
                 &mut start,
-                WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX)),
+                &WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX)),
             )
             .map_err(DatabaseError::from_buffer_overflow_or)?;
         let mut end = <StorageKU<S> as Unifier>::D::duplicate(start.as_view())
@@ -319,11 +319,11 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
 
         self.unifiers
             .key_unifier()
-            .serialize(&mut start, range.start)
+            .serialize(&mut start, &range.start)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
         self.unifiers
             .key_unifier()
-            .serialize(&mut end, range.end)
+            .serialize(&mut end, &range.end)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
 
         let raw_iter = self
@@ -345,7 +345,7 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
     /// Returns a [`DatabaseError`] if the underlying storage iterator encounters an error.
     pub fn iter_by_index_exact<I: Index + Ord>(
         &self,
-        index_key: I,
+        index_key: &I,
     ) -> Result<
         impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S, M, C>,
         DatabaseError<S>,
@@ -354,7 +354,7 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
         let mut start = <StorageKU<S> as Unifier>::D::default();
         self.unifiers
             .key_unifier()
-            .serialize(&mut start, index_prelude)
+            .serialize(&mut start, &index_prelude)
             .map_err(DatabaseError::from_buffer_overflow_or)?;
 
         self.unifiers

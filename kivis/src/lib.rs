@@ -70,14 +70,14 @@ pub use crate::errors::{
 };
 
 pub use traits::TryApplyError;
-pub use transaction::{ApplyError, TransactionError};
+pub use transaction::TransactionError;
 
 #[cfg(feature = "atomic")]
 // Database transaction is only useful if atomic storage is enabled.
 pub use transaction::DatabaseTransaction;
 
 #[doc(hidden)]
-pub use transaction::{PreBufferOps, RecordOps, apply_record_ops, build_record_ops};
+pub use transaction::{PreBufferOps, RecordOps, build_record_ops};
 
 #[cfg(feature = "sled")]
 pub use integrations::{PostcardUnifier, SledStorageError};
