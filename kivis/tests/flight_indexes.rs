@@ -104,7 +104,7 @@ fn test_iter_by_departure_airport() -> anyhow::Result<()> {
     }
 
     let jfk_flights = store
-        .iter_by_index_exact(FlightDepartureAirportIndex("JFK".into()))?
+        .iter_by_index_exact(&FlightDepartureAirportIndex("JFK".into()))?
         .collect::<Result<Vec<_>, _>>()?;
 
     assert_eq!(jfk_flights.len(), 2);
@@ -130,7 +130,7 @@ fn test_iter_by_arrival_airport() -> anyhow::Result<()> {
     }
 
     let lax_flights = store
-        .iter_by_index_exact(FlightArrivalAirportIndex("LAX".into()))?
+        .iter_by_index_exact(&FlightArrivalAirportIndex("LAX".into()))?
         .collect::<Result<Vec<_>, _>>()?;
 
     assert_eq!(lax_flights.len(), 2);

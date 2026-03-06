@@ -164,7 +164,7 @@ fn test_iter_index_exact() -> anyhow::Result<()> {
     }
 
     let als = store
-        .iter_by_index_exact(UserNameIndex("Al".into()))?
+        .iter_by_index_exact(&UserNameIndex("Al".into()))?
         .collect::<Result<Vec<_>, _>>()?;
 
     assert_eq!(als.len(), 2);

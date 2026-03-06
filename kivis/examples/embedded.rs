@@ -47,12 +47,12 @@ impl<const N: usize> Unifier for PostcardUnifier<N> {
     fn serialize(
         &self,
         buffer: &mut Self::D,
-        data: impl Serialize,
+        data: &impl Serialize,
     ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
         let start = buffer.len();
         // Create a temporary buffer for serialization
         let mut temp_buffer = [0u8; N];
-        let serialized = postcard::to_slice(&data, &mut temp_buffer)?;
+        let serialized = postcard::to_slice(data, &mut temp_buffer)?;
         buffer
             .extend_from(serialized)
             .map_err(BufferOverflowOr::overflow)?;

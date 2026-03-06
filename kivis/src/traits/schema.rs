@@ -4,12 +4,12 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
     BatchOp, BufferOverflowOr, Cache, Database, DatabaseError, Storage, TransactionError,
-    Unifiable, UnifiableRef, Unifier, UnifierPair, transaction::PreBufferOps,
+    Unifiable, Unifier, UnifierPair, transaction::PreBufferOps,
 };
 
 /// A trait defining that the implementing type is a key of some record.
 /// Each type can be a key of only one record type, which is defined by the [`DatabaseEntry`] trait.
-pub trait RecordKey: Serialize + DeserializeOwned + Clone + Eq + UnifiableRef {
+pub trait RecordKey: Serialize + DeserializeOwned + Clone + Eq {
     /// The record type that this key identifies.
     type Record: DatabaseEntry;
 }
@@ -72,7 +72,7 @@ pub trait Manifest<U: UnifierPair>: Default + 'static {
     /// An enum covering all record types in this manifest.
     type Record<'a>: Copy;
     /// An iterator of [`BatchOp`]s produced for a single record operation.
-    type Ops<'a>: Iterator<Item = Result<BatchOp<U>, TransactionError<U>>> + 'a
+    type Iter<'a>: Iterator<Item = Result<BatchOp<U>, TransactionError<U>>> + 'a
     where
         U: 'a;
 
@@ -93,11 +93,11 @@ pub trait Manifest<U: UnifierPair>: Default + 'static {
     ///
     /// Implementations should delegate to [`build_record_ops`](crate::build_record_ops) for each
     /// record variant.
-    fn record_ops<'a, 'b>(
+    fn iter_ops<'a, 'b>(
         op: PreBufferOps,
         record: &'b Self::Record<'a>,
         unifiers: U,
-    ) -> Self::Ops<'b>
+    ) -> Self::Iter<'b>
     where
         'a: 'b,
         U: 'b;

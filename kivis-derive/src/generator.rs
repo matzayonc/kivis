@@ -207,7 +207,7 @@ impl Generator {
                     match discriminator {
                         #(
                             #indices => {
-                                serializer.serialize_ref(buffer, #index_values)?;
+                                serializer.serialize(buffer, #index_values)?;
                             }
                         )*
                         _ => {}

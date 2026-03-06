@@ -25,7 +25,7 @@ impl<P: Prefix + Copy> Unifier for PrefixUnifier<P> {
     fn serialize(
         &self,
         buffer: &mut Self::D,
-        data: impl Serialize,
+        data: &impl Serialize,
     ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
         let start = buffer.len();
         buffer.extend_from_slice(P::prefix());
@@ -167,14 +167,12 @@ fn test_custom_key_value_serialization() -> anyhow::Result<()> {
     let value_unifier = CustomValueUnifier::default();
 
     let mut key_buffer = Vec::new();
-    let (start, end) = key_unifier
-        .serialize(&mut key_buffer, "test_key".to_string())
-        .unwrap();
+    let (start, end) = key_unifier.serialize(&mut key_buffer, &"test_key").unwrap();
     let key_data = &key_buffer[start..end];
 
     let mut value_buffer = Vec::new();
     let (start, end) = value_unifier
-        .serialize(&mut value_buffer, "test_value".to_string())
+        .serialize(&mut value_buffer, &"test_value")
         .unwrap();
     let value_data = &value_buffer[start..end];
 
@@ -210,7 +208,7 @@ fn test_unifier_consistency() {
         fn serialize(
             &self,
             buffer: &mut Self::D,
-            data: impl Serialize,
+            data: &impl Serialize,
         ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
             let start = buffer.len();
             let encoded = bincode::serde::encode_to_vec(data, bincode::config::standard())?;
@@ -231,7 +229,7 @@ fn test_unifier_consistency() {
 
     // Test serialization
     let mut buffer = Vec::new();
-    let (start, end) = unifier.serialize(&mut buffer, 42u32).unwrap();
+    let (start, end) = unifier.serialize(&mut buffer, &42u32).unwrap();
     let result = &buffer[start..end];
 
     // Test deserialization

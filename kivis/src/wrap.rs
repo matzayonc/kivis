@@ -79,8 +79,8 @@ pub(crate) fn wrap<R: DatabaseEntry, KU: Unifier>(
     unifier: &KU,
     buffer: &mut KU::D,
 ) -> Result<(), BufferOverflowOr<KU::SerError>> {
-    unifier.serialize(buffer, WrapPrelude::new::<R>(Subtable::Main))?;
-    unifier.serialize_ref(buffer, item_key)?;
+    unifier.serialize(buffer, &WrapPrelude::new::<R>(Subtable::Main))?;
+    unifier.serialize(buffer, item_key)?;
     Ok(())
 }
 
@@ -104,10 +104,10 @@ pub(crate) fn empty_wrap<R: DatabaseEntry, KU: Unifier>(
     };
 
     let mut start_buffer = KU::D::default();
-    config.serialize(&mut start_buffer, start)?;
+    config.serialize(&mut start_buffer, &start)?;
 
     let mut end_buffer = KU::D::default();
-    config.serialize(&mut end_buffer, end)?;
+    config.serialize(&mut end_buffer, &end)?;
 
     Ok((start_buffer, end_buffer))
 }

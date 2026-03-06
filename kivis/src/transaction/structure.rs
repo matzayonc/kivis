@@ -107,7 +107,7 @@ impl<M: Manifest<U>, U: UnifierPair + 'static> DatabaseTransaction<M, U> {
         self.pre_buffer.process(|op, record| {
             storage
                 .repository_mut()
-                .try_apply(M::record_ops(op, &record, unifiers))
+                .try_apply(M::iter_ops(op, &record, unifiers))
                 .map_err(|e| match e {
                     TryApplyError::Iterator(te) => DatabaseError::<S>::from_transaction_error(te),
                     TryApplyError::Storage(se) => DatabaseError::Storage(se),
