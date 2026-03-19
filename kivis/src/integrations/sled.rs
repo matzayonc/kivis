@@ -3,7 +3,7 @@ use std::error::Error;
 use std::fmt::{Debug, Display};
 
 use crate::{
-    BufferOverflowError, BufferOverflowOr, Repository, Storage, TryApplyError, Unifier, UnifierData,
+    ApplyError, BufferOverflowError, BufferOverflowOr, Repository, Storage, Unifier, UnifierData,
 };
 use serde::Serialize;
 
@@ -130,10 +130,10 @@ impl Repository for sled::Db {
         Ok(keys.into_iter().rev().map(Ok))
     }
 
-    fn try_apply<U, E>(
+    fn apply<U, E>(
         &mut self,
         operations: impl Iterator<Item = Result<crate::BatchOp<U>, E>>,
-    ) -> Result<(), TryApplyError<E, Self::Error>>
+    ) -> Result<(), ApplyError<E, Self::Error>>
     where
         U: crate::UnifierPair,
         U::KeyUnifier: crate::Unifier<D = Self::K>,
@@ -142,7 +142,8 @@ impl Repository for sled::Db {
         let mut batch = sled::Batch::default();
 
         for result in operations {
-            match result.map_err(TryApplyError::Iterator)? {
+            let result = result.map_err(ApplyError::Serialization)?;
+            match result {
                 crate::BatchOp::Insert { key, value } => {
                     batch.insert(key.as_view(), value.as_view());
                 }
@@ -153,33 +154,8 @@ impl Repository for sled::Db {
         }
 
         self.apply_batch(batch)
-            .map_err(SledStorageError::from)
-            .map_err(TryApplyError::Storage)
-    }
-
-    fn apply<U>(
-        &mut self,
-        operations: impl Iterator<Item = crate::BatchOp<U>>,
-    ) -> Result<(), Self::Error>
-    where
-        U: crate::UnifierPair,
-        U::KeyUnifier: crate::Unifier<D = Self::K>,
-        U::ValueUnifier: crate::Unifier<D = Self::V>,
-    {
-        let mut batch = sled::Batch::default();
-
-        for op in operations {
-            match op {
-                crate::BatchOp::Insert { key, value } => {
-                    batch.insert(key.as_view(), value.as_view());
-                }
-                crate::BatchOp::Delete { key } => {
-                    batch.remove(key.as_view());
-                }
-            }
-        }
-
-        self.apply_batch(batch)?;
+            .map_err(SledStorageError::Sled)
+            .map_err(ApplyError::Application)?;
         Ok(())
     }
 }
