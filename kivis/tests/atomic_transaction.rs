@@ -8,8 +8,8 @@ mod tests {
         error::{DecodeError, EncodeError},
     };
     use kivis::{
-        BatchOp, BufferOverflowError, Database, DatabaseTransaction, Record, Repository, Storage,
-        manifest,
+        ApplyError, BufferOverflowError, Database, DatabaseTransaction, Record, Repository,
+        Storage, manifest,
     };
     use serde::{Deserialize, Serialize};
     use thiserror::Error;
@@ -82,10 +82,10 @@ mod tests {
             Ok(iter.map(|(k, _v)| Ok(k.0.clone())))
         }
 
-        fn apply<U>(
+        fn apply<U, E>(
             &mut self,
-            operations: impl Iterator<Item = BatchOp<U>>,
-        ) -> Result<(), Self::Error>
+            operations: impl Iterator<Item = Result<kivis::BatchOp<U>, E>>,
+        ) -> Result<(), ApplyError<E, Self::Error>>
         where
             U: kivis::UnifierPair,
             U::KeyUnifier: kivis::Unifier<D = Self::K>,
@@ -93,11 +93,12 @@ mod tests {
         {
             // In a real implementation, this could be atomic
             for op in operations {
+                let op = op.map_err(ApplyError::Serialization)?;
                 match op {
-                    BatchOp::Insert { key, value } => {
+                    kivis::BatchOp::Insert { key, value } => {
                         self.data.insert(Reverse(key), value);
                     }
-                    BatchOp::Delete { key } => {
+                    kivis::BatchOp::Delete { key } => {
                         self.data.remove(&Reverse(key));
                     }
                 }

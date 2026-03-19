@@ -5,8 +5,8 @@ use ekv::flash::{Flash, PageID};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use heapless::Vec;
 use kivis::{
-    BufferOverflowError, BufferOverflowOr, Record, Repository, Storage, Unifier, UnifierData,
-    manifest,
+    ApplyError, BufferOverflowError, BufferOverflowOr, Record, Repository, Storage, Unifier,
+    UnifierData, manifest,
 };
 use ouroboros::self_referencing;
 use serde::Serialize;
@@ -279,10 +279,10 @@ impl<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> Reposito
         Ok(iter)
     }
 
-    fn apply<U>(
+    fn apply<U, E>(
         &mut self,
-        operations: impl Iterator<Item = kivis::BatchOp<U>>,
-    ) -> Result<(), Self::Error>
+        operations: impl Iterator<Item = Result<kivis::BatchOp<U>, E>>,
+    ) -> Result<(), ApplyError<E, Self::Error>>
     where
         U: kivis::UnifierPair,
         U::KeyUnifier: kivis::Unifier<D = Self::K>,
@@ -292,18 +292,27 @@ impl<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> Reposito
             let mut txn = self.db.write_transaction().await;
 
             for op in operations {
+                let op = op.map_err(ApplyError::Serialization)?;
                 match op {
                     kivis::BatchOp::Insert { key, value } => {
-                        txn.write(key.as_view(), value.as_view()).await?;
+                        txn.write(key.as_view(), value.as_view())
+                            .await
+                            .map_err(EkvError::Write)
+                            .map_err(ApplyError::Application)?;
                     }
                     kivis::BatchOp::Delete { key } => {
-                        txn.delete(key.as_view()).await?;
+                        txn.delete(key.as_view())
+                            .await
+                            .map_err(EkvError::Write)
+                            .map_err(ApplyError::Application)?;
                     }
                 }
             }
 
-            txn.commit().await?;
-            Ok::<_, EkvError>(())
+            txn.commit()
+                .await
+                .map_err(EkvError::Commit)
+                .map_err(ApplyError::Application)
         })
     }
 }

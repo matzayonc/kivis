@@ -122,7 +122,7 @@ where
 
 /// Returns a concrete iterator of [`BatchOp`]s for the given record operation.
 ///
-/// Used by [`Manifest::record_ops`](crate::Manifest::record_ops) implementations inside the
+/// Used by [`Manifest::iter_ops`](crate::Manifest::iter_ops) implementations inside the
 /// `manifest!` macro and manual `Manifest` implementations.
 #[doc(hidden)]
 pub fn build_record_ops<'r, R, U>(

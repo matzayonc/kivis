@@ -2,12 +2,13 @@ use crate::{Repository, Unifier, UnifierPair};
 
 /// Error returned by [`Repository::try_apply`]: either the iterator produced an error or
 /// the underlying storage did.
-pub enum TryApplyError<IterErr, StorageErr> {
+pub enum ApplyError<SerializationError, ApplicationError> {
     /// The fallible iterator yielded an error before all operations were applied.
-    Iterator(IterErr),
+    Serialization(SerializationError),
     /// The underlying storage returned an error while applying operations.
-    Storage(StorageErr),
+    Application(ApplicationError),
 }
+// TODO: This should have a From implementation.
 
 /// Represents a batch operation: either insert or delete.
 pub enum BatchOp<U: UnifierPair> {
