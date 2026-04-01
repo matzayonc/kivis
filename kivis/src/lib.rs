@@ -25,7 +25,7 @@
 //! ```rust
 //! use kivis::{Database, MemoryStorage, Record, manifest};
 //!
-//! #[derive(Record, serde::Serialize, serde::Deserialize, Debug)]
+//! #[derive(Record, serde::Serialize, serde::Deserialize, Debug, Clone)]
 //! struct User {
 //!     name: String,
 //!     email: String,

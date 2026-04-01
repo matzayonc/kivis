@@ -5,26 +5,6 @@ use ouroboros::self_referencing;
 use super::errors::TransactionError;
 use crate::{BatchOp, Manifest, UnifierPair};
 
-/// A lifetime-parameterized collection of `(PreBufferOps, M::Record<'a>)` pairs,
-/// where `'a` is tied to the bump arena that owns the allocated records.
-struct Records<'a, M: Manifest<U>, U: UnifierPair + 'static> {
-    inner: BumpVec<'a, (PreBufferOps, M::Record<'a>)>,
-    iter: Option<M::Iter<'a>>,
-}
-
-impl<'a, M: Manifest<U>, U: UnifierPair + 'static> Records<'a, M, U> {
-    fn new_in(bump: &'a Bump) -> Self {
-        Self {
-            inner: BumpVec::new_in(bump),
-            iter: None,
-        }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.inner.is_empty()
-    }
-}
-
 /// A pre-transaction buffer that uses a bump allocator for fast, arena-based allocation.
 ///
 /// `Records<'this, M, U>` borrows from the internal `Bump` arena via the ouroboros `'this` lifetime.
@@ -39,12 +19,28 @@ pub(crate) struct TransactionBuffer<M: Manifest<U>, U: UnifierPair + 'static> {
     records: Records<'this, M, U>,
 }
 
+/// A lifetime-parameterized collection of `(PreBufferOps, M::Record<'a>)` pairs,
+/// where `'a` is tied to the bump arena that owns the allocated records.
+struct Records<'a, M: Manifest<U>, U: UnifierPair + 'static> {
+    inner: BumpVec<'a, (PreBufferOps, M::Record<'a>)>,
+    iter: Option<M::Iter<'a>>,
+}
+
+impl<'a, M: Manifest<U>, U: UnifierPair + 'static> Records<'a, M, U> {
+    fn new(bump: &'a Bump) -> Self {
+        Self {
+            inner: BumpVec::new_in(bump),
+            iter: None,
+        }
+    }
+}
+
 impl<M: Manifest<U>, U: UnifierPair + 'static> TransactionBuffer<M, U> {
     pub(crate) fn empty() -> Self {
         TransactionBufferBuilder {
             bump: Bump::new(),
             phantom: PhantomData,
-            records_builder: |bump| Records::new_in(bump),
+            records_builder: |bump| Records::new(bump),
         }
         .build()
     }
@@ -63,7 +59,7 @@ impl<M: Manifest<U>, U: UnifierPair + 'static> TransactionBuffer<M, U> {
 
     pub(crate) fn is_empty(&self) -> bool {
         let mut empty = false;
-        self.with_records(|r| empty = r.is_empty());
+        self.with_records(|r| empty = r.inner.is_empty());
         empty
     }
 
@@ -75,7 +71,11 @@ impl<M: Manifest<U>, U: UnifierPair + 'static> TransactionBuffer<M, U> {
         self,
         unifiers: U,
     ) -> impl Iterator<Item = Result<BatchOp<U>, TransactionError<U>>> {
-        TransactionBufferIterator::new(self, unifiers)
+        TransactionBufferIterator {
+            buffer: self,
+            unifiers,
+            index: 0,
+        }
     }
 }
 
@@ -89,16 +89,6 @@ struct TransactionBufferIterator<M: Manifest<U>, U: UnifierPair + 'static> {
     buffer: TransactionBuffer<M, U>,
     unifiers: U,
     index: usize,
-}
-
-impl<M: Manifest<U>, U: UnifierPair + 'static> TransactionBufferIterator<M, U> {
-    fn new(buffer: TransactionBuffer<M, U>, unifiers: U) -> Self {
-        Self {
-            buffer,
-            unifiers,
-            index: 0,
-        }
-    }
 }
 
 impl<M: Manifest<U>, U: UnifierPair + 'static> Iterator for TransactionBufferIterator<M, U> {
