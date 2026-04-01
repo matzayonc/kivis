@@ -89,12 +89,16 @@ impl<M: Manifest<U>, U: UnifierPair + 'static> DatabaseTransaction<M, U> {
 
     /// Commits all pending operations to the storage.
     ///
-    /// Each record is serialized and written to storage individually — no accumulated byte buffer.
+    /// All records are serialised into [`BatchOp`]s via [`TransactionBuffer::into_ops`] and
+    /// submitted to storage in a single [`Repository::apply`] call, which backends can wrap
+    /// in a native atomic batch write.
+    ///
     /// The transaction is consumed by this operation.
     ///
     /// # Errors
     ///
-    /// Returns a [`DatabaseError`] if any storage operation fails.
+    /// Returns a [`DatabaseError`] if serialisation of any record fails or if the
+    /// underlying storage operation fails.
     pub fn commit<S>(self, storage: &mut S) -> Result<(), DatabaseError<S>>
     where
         S: Storage<Unifiers = U>,
@@ -103,18 +107,18 @@ impl<M: Manifest<U>, U: UnifierPair + 'static> DatabaseTransaction<M, U> {
             return Ok(());
         }
 
-        let unifiers = self.unifiers;
-        self.pre_buffer.process(|op, record| {
-            storage
-                .repository_mut()
-                .apply(M::iter_ops(op, &record, unifiers))
-                .map_err(|e| match e {
-                    ApplyError::Serialization(iter_err) => {
-                        DatabaseError::from_transaction_error(iter_err)
-                    }
-                    ApplyError::Application(storage_err) => DatabaseError::Storage(storage_err),
-                })
-        })
+        let DatabaseTransaction {
+            pre_buffer,
+            unifiers,
+        } = self;
+
+        storage
+            .repository_mut()
+            .apply(pre_buffer.into_iter(unifiers))
+            .map_err(|e| match e {
+                ApplyError::Serialization(err) => DatabaseError::from_transaction_error(err),
+                ApplyError::Application(storage_err) => DatabaseError::Storage(storage_err),
+            })
     }
 
     /// Discards all pending operations without applying them.
