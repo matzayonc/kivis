@@ -132,7 +132,10 @@ impl<'a, U: UnifierPair> Iterator for ManifestOps<'a, U> {
 }
 
 impl<U: UnifierPair> kivis::Manifest<U> for Manifest {
-    type Record<'a> = ManifestRecord<'a>;
+    type Record<'a>
+        = ManifestRecord<'a>
+    where
+        U: 'a;
 
     type Iter<'a>
         = ManifestOps<'a, U>
@@ -157,16 +160,15 @@ impl<U: UnifierPair> kivis::Manifest<U> for Manifest {
         Ok(())
     }
 
-    fn iter_ops<'a, 'b>(
+    fn iter_ops<'a>(
         op: kivis::PreBufferOps,
-        record: &'b Self::Record<'a>,
+        record: Self::Record<'a>,
         unifiers: U,
-    ) -> Self::Iter<'b>
+    ) -> Self::Iter<'a>
     where
-        'a: 'b,
-        U: 'b,
+        U: 'a,
     {
-        match *record {
+        match record {
             ManifestRecord::User(key, val) => {
                 ManifestOps::User(kivis::build_record_ops(op, val, key, unifiers))
             }

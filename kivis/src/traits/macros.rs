@@ -170,7 +170,7 @@ macro_rules! manifest {
         }
 
         impl<__U: $crate::UnifierPair> $crate::Manifest<__U> for $manifest_name {
-            type Record<'a> = [<$manifest_name Record>]<'a>;
+            type Record<'a> = [<$manifest_name Record>]<'a> where __U: 'a;
 
             type Iter<'a> = [<$manifest_name Ops>]<'a, __U> where __U: 'a;
 
@@ -188,16 +188,15 @@ macro_rules! manifest {
                 ::core::result::Result::Ok(())
             }
 
-            fn iter_ops<'a, 'b>(
+            fn iter_ops<'a>(
                 op: $crate::PreBufferOps,
-                record: &'b Self::Record<'a>,
+                record: Self::Record<'a>,
                 unifiers: __U,
-            ) -> Self::Iter<'b>
+            ) -> Self::Iter<'a>
             where
-                'a: 'b,
-                __U: 'b,
+                __U: 'a,
             {
-                match *record {
+                match record {
                     $(
                         [<$manifest_name Record>]::[<$ty>](key, val) => {
                             [<$manifest_name Ops>]::[<$ty>](

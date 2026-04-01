@@ -5,11 +5,29 @@ use ouroboros::self_referencing;
 use super::errors::TransactionError;
 use crate::{BatchOp, Manifest, UnifierPair};
 
+/// A lifetime-parameterized collection of `(PreBufferOps, M::Record<'a>)` pairs,
+/// where `'a` is tied to the bump arena that owns the allocated records.
+struct Records<'a, M: Manifest<U>, U: UnifierPair + 'static> {
+    inner: BumpVec<'a, (PreBufferOps, M::Record<'a>)>,
+    iter: Option<M::Iter<'a>>,
+}
+
+impl<'a, M: Manifest<U>, U: UnifierPair + 'static> Records<'a, M, U> {
+    fn new_in(bump: &'a Bump) -> Self {
+        Self {
+            inner: BumpVec::new_in(bump),
+            iter: None,
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+}
+
 /// A pre-transaction buffer that uses a bump allocator for fast, arena-based allocation.
 ///
-/// Records are bump-allocated (stable address, never moved). The `records` vec holds
-/// `M::Record<'this>` — variants containing `&'this T` references into `bump` —
-/// where `'this` is the ouroboros lifetime of the arena itself.
+/// `Records<'this, M, U>` borrows from the internal `Bump` arena via the ouroboros `'this` lifetime.
 #[self_referencing]
 pub(crate) struct TransactionBuffer<M: Manifest<U>, U: UnifierPair + 'static> {
     bump: Bump,
@@ -18,7 +36,7 @@ pub(crate) struct TransactionBuffer<M: Manifest<U>, U: UnifierPair + 'static> {
     phantom: PhantomData<(M, U)>,
     #[borrows(bump)]
     #[not_covariant]
-    records: BumpVec<'this, (PreBufferOps, M::Record<'this>)>,
+    records: Records<'this, M, U>,
 }
 
 impl<M: Manifest<U>, U: UnifierPair + 'static> TransactionBuffer<M, U> {
@@ -26,23 +44,20 @@ impl<M: Manifest<U>, U: UnifierPair + 'static> TransactionBuffer<M, U> {
         TransactionBufferBuilder {
             bump: Bump::new(),
             phantom: PhantomData,
-            records_builder: |bump| BumpVec::new_in(bump),
+            records_builder: |bump| Records::new_in(bump),
         }
         .build()
     }
 
     /// Bump-allocates `record` and stores a reference-based enum variant pointing into it.
-    ///
     pub(crate) fn push<'a, T: 'a>(&mut self, op: PreBufferOps, record: T)
     where
         for<'f> &'f T: Into<M::Record<'f>>,
-        'a: 'static, // 'static bounds is required by [`ouroboros`] to ensure the record can be safely stored in the arena
+        'a: 'static, // 'static bound is required by [`ouroboros`] to ensure the record can be safely stored in the arena
     {
-        // There is no way to pass a seconds argument to a function, and to way to modify the generic arguments of the closure.
-        // The only requirement for the inner function is that T lives as long as the the 3rd lifetime ( T: 'c ).
         self.with_mut(|d| {
             let t: &T = d.bump.alloc(record);
-            d.records.push((op, t.into()));
+            d.records.inner.push((op, t.into()));
         });
     }
 
@@ -54,10 +69,8 @@ impl<M: Manifest<U>, U: UnifierPair + 'static> TransactionBuffer<M, U> {
 
     /// Consumes the buffer and returns a flat iterator of serialised [`BatchOp`]s.
     ///
-    /// `M::Iter<'b>` borrows from `record`, which lives inside the bump arena. The arena
-    /// is owned by `self` and dropped once `with_records` returns, so each record's ops
-    /// must be eagerly collected inside the callback while the borrow is still valid.
-    /// The resulting `Vec` owns all ops and is independent of the arena.
+    /// Each record's ops must be eagerly collected inside `with_records` while the arena
+    /// borrow is still valid; the resulting `Vec` is independent of the arena.
     pub(crate) fn into_iter(
         self,
         unifiers: U,
@@ -76,7 +89,6 @@ struct TransactionBufferIterator<M: Manifest<U>, U: UnifierPair + 'static> {
     buffer: TransactionBuffer<M, U>,
     unifiers: U,
     index: usize,
-    subindex: usize,
 }
 
 impl<M: Manifest<U>, U: UnifierPair + 'static> TransactionBufferIterator<M, U> {
@@ -85,7 +97,6 @@ impl<M: Manifest<U>, U: UnifierPair + 'static> TransactionBufferIterator<M, U> {
             buffer,
             unifiers,
             index: 0,
-            subindex: 0,
         }
     }
 }
@@ -94,26 +105,30 @@ impl<M: Manifest<U>, U: UnifierPair + 'static> Iterator for TransactionBufferIte
     type Item = Result<BatchOp<U>, TransactionError<U>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut all_ops = Vec::new();
         let unifiers = self.unifiers;
-        self.buffer.with_records(|records| {
-            if let Some(&(op, record)) = records.get(self.index) {
-                all_ops.extend(M::iter_ops(op, &record, unifiers));
+        let mut result = None;
+        self.buffer.with_records_mut(|records| {
+            // Drive the active iterator; fall through when it's exhausted or absent.
+            if let Some(item) = records.iter.as_mut().and_then(Iterator::next) {
+                result = Some(item);
+                return;
             }
-        });
-        if all_ops.is_empty() {
-            return None;
-        }
 
-        if self.subindex < all_ops.len() {
-            let r = all_ops.remove(self.subindex);
-            self.subindex += 1;
-            Some(r)
-        } else {
+            if self.index >= records.inner.len() {
+                // No more records to process, end the iteration.
+                return;
+            }
+
+            // Load the iterator for the next record, or stop if there are none left.
+            let (op, record) = records.inner[self.index];
+            records.iter = Some(M::iter_ops(op, record, unifiers));
             self.index += 1;
-            self.subindex = 0;
-            self.next()
-        }
+
+            // Return the first item of the new iterator, if it exists.
+            // No records should have empty ops.
+            result = records.iter.as_mut().and_then(Iterator::next);
+        });
+        result
     }
 }
 
