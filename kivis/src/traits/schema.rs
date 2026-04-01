@@ -70,7 +70,9 @@ pub trait Manifests<T: Scope + DatabaseEntry> {
 
 pub trait Manifest<U: UnifierPair>: Default + 'static {
     /// An enum covering all record types in this manifest.
-    type Record<'a>: Copy;
+    type Record<'a>: Copy
+    where
+        U: 'a;
     /// An iterator of [`BatchOp`]s produced for a single record operation.
     type Iter<'a>: Iterator<Item = Result<BatchOp<U>, TransactionError<U>>> + 'a
     where
@@ -93,14 +95,9 @@ pub trait Manifest<U: UnifierPair>: Default + 'static {
     ///
     /// Implementations should delegate to [`build_record_ops`](crate::build_record_ops) for each
     /// record variant.
-    fn iter_ops<'a, 'b>(
-        op: PreBufferOps,
-        record: &'b Self::Record<'a>,
-        unifiers: U,
-    ) -> Self::Iter<'b>
+    fn iter_ops<'a>(op: PreBufferOps, record: Self::Record<'a>, unifiers: U) -> Self::Iter<'a>
     where
-        'a: 'b,
-        U: 'b;
+        U: 'a;
 }
 
 pub trait Scope {
