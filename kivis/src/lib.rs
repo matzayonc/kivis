@@ -52,7 +52,6 @@
 
 mod database;
 mod errors;
-mod impls;
 mod integrations;
 mod traits;
 mod transaction;
