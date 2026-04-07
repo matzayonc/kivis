@@ -1,10 +1,10 @@
 use crate::errors::DatabaseError;
 use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
-use crate::wrap::{Subtable, Wrap, WrapPrelude, empty_wrap, wrap};
+use crate::wrap::{Subtable, WrapPrelude, empty_wrap, wrap};
 use crate::{
     BufferOverflowOr, Cache, CacheAccess, CacheContainer, DeriveKey, Incrementable, Manifest,
-    Manifests, NoCache, RecordKey, Repository, Unifiable, Unifier, UnifierData, UnifierPair,
+    Manifests, NoCache, RecordKey, Repository, Unifiable, Unified, Unifier, UnifierPair,
 };
 use core::ops::Range;
 
@@ -230,13 +230,10 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
                 Err(e) => return Err(DatabaseError::Storage(e)),
             };
 
-            let deserialized: Wrap<K> = self
-                .unifiers
-                .key_unifier()
-                .deserialize(&value)
+            let key: K = K::deserialize_wrapped_with(&self.unifiers.key_unifier(), &value)
                 .map_err(DatabaseError::KeyDeserialization)?;
 
-            Ok(deserialized.key)
+            Ok(key)
         }))
     }
 
@@ -268,13 +265,10 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
                 Err(e) => return Err(DatabaseError::Storage(e)),
             };
 
-            let deserialized: Wrap<K> = self
-                .unifiers
-                .key_unifier()
-                .deserialize(&value)
+            let key: K = K::deserialize_wrapped_with(&self.unifiers.key_unifier(), &value)
                 .map_err(DatabaseError::KeyDeserialization)?;
 
-            Ok(deserialized.key)
+            Ok(key)
         }))
     }
 

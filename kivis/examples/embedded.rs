@@ -5,8 +5,8 @@ use ekv::flash::{Flash, PageID};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use heapless::Vec;
 use kivis::{
-    ApplyError, BufferOverflowError, BufferOverflowOr, Record, Repository, Storage, Unifier,
-    UnifierData, manifest,
+    ApplyError, BufferOverflowError, BufferOverflowOr, Record, Repository, Storage, Unified,
+    Unifier, manifest,
 };
 use ouroboros::self_referencing;
 use serde::Serialize;
@@ -44,7 +44,7 @@ impl<const N: usize> Unifier for PostcardUnifier<N> {
     type SerError = postcard::Error;
     type DeError = postcard::Error;
 
-    fn serialize(
+    fn serialize_impl(
         &self,
         buffer: &mut Self::D,
         data: &impl Serialize,
@@ -59,7 +59,7 @@ impl<const N: usize> Unifier for PostcardUnifier<N> {
         Ok((start, buffer.len()))
     }
 
-    fn deserialize<T: serde::de::DeserializeOwned>(
+    fn deserialize_impl<T: serde::de::DeserializeOwned>(
         &self,
         data: &Self::D,
     ) -> Result<T, Self::DeError> {

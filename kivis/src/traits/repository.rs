@@ -1,7 +1,7 @@
 use core::ops::Range;
 use core::{error::Error, fmt::Debug};
 
-use crate::{ApplyError, BatchOp, BufferOverflowError, Unifier, UnifierData, UnifierPair};
+use crate::{ApplyError, BatchOp, BufferOverflowError, Unified, Unifier, UnifierPair};
 
 /// A trait defining a repository backend decoupled from serialization.
 ///
@@ -10,10 +10,10 @@ use crate::{ApplyError, BatchOp, BufferOverflowError, Unifier, UnifierData, Unif
 /// separation of concerns between data storage and serialization logic.
 pub trait Repository {
     /// Key type for the repository (the buffer type, e.g., Vec<u8> or String).
-    type K: UnifierData;
+    type K: Unified;
 
     /// Value type for the repository (the buffer type, e.g., Vec<u8> or String).
-    type V: UnifierData;
+    type V: Unified;
 
     /// Error type returned by repository operations.
     type Error: Debug + Error + From<BufferOverflowError>;
@@ -25,8 +25,8 @@ pub trait Repository {
     /// Returns an error if the underlying storage fails to insert the key-value pair.
     fn insert_entry(
         &mut self,
-        key: <Self::K as UnifierData>::View<'_>,
-        value: <Self::V as UnifierData>::View<'_>,
+        key: <Self::K as Unified>::View<'_>,
+        value: <Self::V as Unified>::View<'_>,
     ) -> Result<(), Self::Error>;
 
     /// Retrieve the value associated with the given key from the repository.
@@ -36,7 +36,7 @@ pub trait Repository {
     /// Returns an error if the underlying storage fails while retrieving the value.
     fn get_entry(
         &self,
-        key: <Self::K as UnifierData>::View<'_>,
+        key: <Self::K as Unified>::View<'_>,
     ) -> Result<Option<Self::V>, Self::Error>;
 
     /// Remove the value associated with the given key from the repository.
@@ -46,7 +46,7 @@ pub trait Repository {
     /// Returns an error if the underlying storage fails while removing the value.
     fn remove_entry(
         &mut self,
-        key: <Self::K as UnifierData>::View<'_>,
+        key: <Self::K as Unified>::View<'_>,
     ) -> Result<Option<Self::V>, Self::Error>;
     /// Iterate over the keys in the repository that are in range.
     ///

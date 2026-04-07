@@ -1,7 +1,5 @@
 use core::fmt::Debug;
 
-use serde::{Serialize, de::DeserializeOwned};
-
 use crate::{
     BatchOp, BufferOverflowOr, Cache, Database, DatabaseError, Storage, TransactionError,
     Unifiable, Unifier, UnifierPair, transaction::PreBufferOps,
@@ -9,7 +7,7 @@ use crate::{
 
 /// A trait defining that the implementing type is a key of some record.
 /// Each type can be a key of only one record type, which is defined by the [`DatabaseEntry`] trait.
-pub trait RecordKey: Serialize + DeserializeOwned + Clone + Eq {
+pub trait RecordKey: Unifiable + Clone + Eq {
     /// The record type that this key identifies.
     type Record: DatabaseEntry;
 }
@@ -46,7 +44,7 @@ pub trait Incrementable: Default + Sized {
 }
 
 /// The main trait of the crate, defines a database entry that can be stored with its indexes.
-pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {
+pub trait DatabaseEntry: Scope + Unifiable + Debug {
     /// The primary key type for this database entry.
     type Key: RecordKey;
     const INDEX_COUNT_HINT: u8 = 0;

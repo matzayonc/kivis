@@ -66,13 +66,6 @@ impl WrapPrelude {
     }
 }
 
-/// Internal wrapper structure that combines prelude and key for storage.
-#[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct Wrap<R> {
-    prelude: WrapPrelude,
-    pub key: R,
-}
-
 /// Wraps a database entry key with scope and subtable information for storage.
 pub(crate) fn wrap<R: DatabaseEntry, KU: Unifier>(
     item_key: &R::Key,
@@ -87,27 +80,13 @@ pub(crate) fn wrap<R: DatabaseEntry, KU: Unifier>(
 pub(crate) fn empty_wrap<R: DatabaseEntry, KU: Unifier>(
     config: &KU,
 ) -> Result<KeyRange<KU>, BufferOverflowOr<KU::SerError>> {
-    let start = Wrap {
-        prelude: WrapPrelude {
-            scope: R::SCOPE,
-            subtable: Subtable::Main,
-        },
-        key: (),
-    };
-
-    let end = Wrap {
-        prelude: WrapPrelude {
-            scope: R::SCOPE,
-            subtable: Subtable::Reserved,
-        },
-        key: (),
-    };
-
     let mut start_buffer = KU::D::default();
-    config.serialize(&mut start_buffer, &start)?;
+    config.serialize(&mut start_buffer, &WrapPrelude::new::<R>(Subtable::Main))?;
+    config.serialize(&mut start_buffer, &())?;
 
     let mut end_buffer = KU::D::default();
-    config.serialize(&mut end_buffer, &end)?;
+    config.serialize(&mut end_buffer, &WrapPrelude::new::<R>(Subtable::Reserved))?;
+    config.serialize(&mut end_buffer, &())?;
 
     Ok((start_buffer, end_buffer))
 }
