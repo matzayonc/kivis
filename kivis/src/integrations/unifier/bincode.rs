@@ -10,7 +10,7 @@ use bincode::{
 };
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::{BufferOverflowOr, Unifier, UnifierData};
+use crate::{BufferOverflowOr, Unified, Unifier};
 
 /// Implementation of `Unifier` for bincode's `Configuration`.
 ///
@@ -21,7 +21,7 @@ impl Unifier for Configuration {
     type SerError = EncodeError;
     type DeError = DecodeError;
 
-    fn serialize(
+    fn serialize_impl(
         &self,
         buffer: &mut Vec<u8>,
         data: &impl Serialize,
@@ -34,7 +34,7 @@ impl Unifier for Configuration {
         Ok((start, buffer.len()))
     }
 
-    fn deserialize<T: DeserializeOwned>(&self, data: &Vec<u8>) -> Result<T, Self::DeError> {
+    fn deserialize_impl<T: DeserializeOwned>(&self, data: &Vec<u8>) -> Result<T, Self::DeError> {
         Ok(decode_from_slice(data, Self::default())?.0)
     }
 }

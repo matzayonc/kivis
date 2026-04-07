@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
 use crate::{
-    BatchOp, BufferOverflowOr, DatabaseEntry, RecordKey, Unifier, UnifierData, UnifierPair,
+    BatchOp, BufferOverflowOr, DatabaseEntry, RecordKey, Unified, Unifier, UnifierPair,
     transaction::buffer::PreBufferOps,
     wrap::{Subtable, WrapPrelude},
 };

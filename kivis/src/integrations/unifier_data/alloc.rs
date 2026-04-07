@@ -3,12 +3,12 @@
 #[cfg(all(feature = "alloc", not(feature = "std")))]
 use alloc::{string::String, vec::Vec};
 
-use crate::{BufferOverflowError, UnifierData};
+use crate::{BufferOverflowError, Unified};
 
 /// Implementation of `UnifierData` for `Vec<u8>`.
 ///
 /// This is the default buffer type for standard environments where heap allocation is available.
-impl UnifierData for Vec<u8> {
+impl Unified for Vec<u8> {
     type View<'a> = &'a [u8];
 
     fn from_view(data: Self::View<'_>) -> Self {
@@ -60,7 +60,7 @@ impl UnifierData for Vec<u8> {
 /// Implementation of `UnifierData` for `String`.
 ///
 /// This buffer type is used when working with string keys or values.
-impl UnifierData for String {
+impl Unified for String {
     type View<'a> = &'a str;
 
     fn from_view(data: Self::View<'_>) -> Self {

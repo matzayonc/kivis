@@ -3,9 +3,8 @@ use std::error::Error;
 use std::fmt::{Debug, Display};
 
 use crate::{
-    ApplyError, BufferOverflowError, BufferOverflowOr, Repository, Storage, Unifier, UnifierData,
+    ApplyError, BufferOverflowError, BufferOverflowOr, Repository, Storage, Unified, Unifier,
 };
-use serde::Serialize;
 
 /// Error type for [`SledStorage`] operations.
 #[derive(Debug)]
@@ -60,10 +59,10 @@ impl Unifier for PostcardUnifier {
     type SerError = postcard::Error;
     type DeError = postcard::Error;
 
-    fn serialize(
+    fn serialize_impl(
         &self,
         buffer: &mut Self::D,
-        data: &impl Serialize,
+        data: &impl serde::Serialize,
     ) -> Result<(usize, usize), BufferOverflowOr<Self::SerError>> {
         let start = buffer.len();
         let serialized = postcard::to_allocvec(&data)?;
@@ -71,7 +70,7 @@ impl Unifier for PostcardUnifier {
         Ok((start, buffer.len()))
     }
 
-    fn deserialize<T: serde::de::DeserializeOwned>(
+    fn deserialize_impl<T: serde::de::DeserializeOwned>(
         &self,
         data: &Self::D,
     ) -> Result<T, Self::DeError> {

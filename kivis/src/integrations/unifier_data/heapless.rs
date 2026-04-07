@@ -1,6 +1,6 @@
 use heapless::CapacityError;
 
-use crate::{BufferOverflowError, UnifierData};
+use crate::{BufferOverflowError, Unified};
 
 /// Implementation of `UnifierData` for `heapless::Vec<u8, N>`.
 ///
@@ -19,7 +19,7 @@ use crate::{BufferOverflowError, UnifierData};
 /// buffer.extend(&[1, 2, 3]).unwrap();
 /// assert_eq!(buffer.as_slice(), &[1, 2, 3]);
 /// ```
-impl<const N: usize> UnifierData for heapless::Vec<u8, N> {
+impl<const N: usize> Unified for heapless::Vec<u8, N> {
     type View<'a> = &'a [u8];
 
     fn from_view(data: Self::View<'_>) -> Self {
@@ -98,18 +98,18 @@ mod tests {
         assert_eq!(vec.as_slice(), &[1, 2, 4]);
 
         // Test from_view
-        let vec2 = <heapless::Vec<u8, 256> as UnifierData>::from_view(&[5, 6, 7]);
+        let vec2 = <heapless::Vec<u8, 256> as Unified>::from_view(&[5, 6, 7]);
         assert_eq!(vec2.as_slice(), &[5, 6, 7]);
 
         // Test duplicate
-        let vec3 = <heapless::Vec<u8, 256> as UnifierData>::duplicate(&[8, 9])?;
+        let vec3 = <heapless::Vec<u8, 256> as Unified>::duplicate(&[8, 9])?;
         assert_eq!(vec3.as_slice(), &[8, 9]);
 
         // Test duplicate_within
         let mut vec4 = heapless::Vec::<u8, 256>::new();
         vec4.extend_from_slice(&[1, 2, 3, 4])
             .map_err(|_: CapacityError| BufferOverflowError)?;
-        UnifierData::duplicate_within(&mut vec4, 1, 3)?;
+        Unified::duplicate_within(&mut vec4, 1, 3)?;
         assert_eq!(vec4.as_slice(), &[1, 2, 3, 4, 2, 3]);
 
         // Test overflow on extend

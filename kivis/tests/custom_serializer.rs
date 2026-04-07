@@ -22,7 +22,7 @@ impl<P: Prefix + Copy> Unifier for PrefixUnifier<P> {
     type SerError = EncodeError;
     type DeError = DecodeError;
 
-    fn serialize(
+    fn serialize_impl(
         &self,
         buffer: &mut Self::D,
         data: &impl Serialize,
@@ -35,7 +35,7 @@ impl<P: Prefix + Copy> Unifier for PrefixUnifier<P> {
         Ok((start, end))
     }
 
-    fn deserialize<T: serde::de::DeserializeOwned>(
+    fn deserialize_impl<T: serde::de::DeserializeOwned>(
         &self,
         data: &Self::D,
     ) -> Result<T, Self::DeError> {
@@ -167,12 +167,14 @@ fn test_custom_key_value_serialization() -> anyhow::Result<()> {
     let value_unifier = CustomValueUnifier::default();
 
     let mut key_buffer = Vec::new();
-    let (start, end) = key_unifier.serialize(&mut key_buffer, &"test_key").unwrap();
+    let (start, end) = key_unifier
+        .serialize(&mut key_buffer, &"test_key".to_string())
+        .unwrap();
     let key_data = &key_buffer[start..end];
 
     let mut value_buffer = Vec::new();
     let (start, end) = value_unifier
-        .serialize(&mut value_buffer, &"test_value")
+        .serialize(&mut value_buffer, &"test_value".to_string())
         .unwrap();
     let value_data = &value_buffer[start..end];
 
@@ -205,7 +207,7 @@ fn test_unifier_consistency() {
         type SerError = EncodeError;
         type DeError = DecodeError;
 
-        fn serialize(
+        fn serialize_impl(
             &self,
             buffer: &mut Self::D,
             data: &impl Serialize,
@@ -217,7 +219,7 @@ fn test_unifier_consistency() {
             Ok((start, end))
         }
 
-        fn deserialize<T: serde::de::DeserializeOwned>(
+        fn deserialize_impl<T: serde::de::DeserializeOwned>(
             &self,
             data: &Self::D,
         ) -> Result<T, Self::DeError> {

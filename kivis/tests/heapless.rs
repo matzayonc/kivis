@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use kivis::{BufferOverflowError, UnifierData};
+use kivis::{BufferOverflowError, Unified};
 
 const BUFFER_SIZE: usize = 16;
 
@@ -19,7 +19,7 @@ impl From<&Bytes> for Bytes {
     }
 }
 
-impl UnifierData for Bytes {
+impl Unified for Bytes {
     type View<'a> = &'a [u8];
 
     fn from_view(data: &[u8]) -> Self {
