@@ -3,8 +3,8 @@ use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
 use crate::wrap::{Subtable, WrapPrelude, empty_wrap, wrap};
 use crate::{
-    BufferOverflowOr, Cache, CacheAccess, CacheContainer, DeriveKey, Incrementable, Manifest,
-    Manifests, NoCache, RecordKey, Repository, Unified, Unifier, UnifierPair,
+    AsKey, BufferOverflowOr, Cache, CacheAccess, CacheContainer, DeriveKey, Incrementable,
+    Manifest, Manifests, NoCache, RecordKey, Repository, Unified, Unifier, UnifierPair,
 };
 use core::ops::Range;
 use serde::de::DeserializeOwned;
@@ -127,20 +127,29 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
     ///
     /// Returns a [`DatabaseError`] if the key cannot be serialized, if IO fails,
     /// or if deserializing the result fails.
-    pub fn get<K: RecordKey>(&mut self, key: &K) -> Result<Option<K::Record>, DatabaseError<S>>
+    pub fn get<Q: AsKey>(
+        &mut self,
+        key: &Q,
+    ) -> Result<Option<<Q::Key as RecordKey>::Record>, DatabaseError<S>>
     where
-        K::Record: DatabaseEntry<Key = K>,
-        M: Manifests<K::Record>,
-        C: CacheAccess<K::Record>,
+        Q::Key: RecordKey,
+        <Q::Key as RecordKey>::Record: DatabaseEntry<Key = Q::Key>,
+        M: Manifests<<Q::Key as RecordKey>::Record>,
+        C: CacheAccess<<Q::Key as RecordKey>::Record>,
     {
+        let key = key.as_key();
         if let Some(cached) = self.cache.access().get(key) {
             return Ok(Some(cached));
         }
 
         let mut serialized_key = <StorageKU<S> as Unifier>::D::default();
 
-        wrap::<K::Record, StorageKU<S>>(key, &self.unifiers.key_unifier(), &mut serialized_key)
-            .map_err(DatabaseError::from_buffer_overflow_or)?;
+        wrap::<<Q::Key as RecordKey>::Record, StorageKU<S>>(
+            key,
+            &self.unifiers.key_unifier(),
+            &mut serialized_key,
+        )
+        .map_err(DatabaseError::from_buffer_overflow_or)?;
 
         let raw_key = serialized_key.as_view();
 
