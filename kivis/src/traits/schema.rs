@@ -14,6 +14,25 @@ pub trait RecordKey: Serialize + DeserializeOwned + Clone + Eq {
     type Record: DatabaseEntry;
 }
 
+/// Allows both owned keys (`K`) and references (`&K`) to be passed to database
+/// lookup methods such as [`Database::get`](crate::Database::get).
+///
+/// Implemented for all [`RecordKey`] types. Pass a reference: `db.get(&key)` or
+/// `db.get(&MyKey(1))`.
+pub trait AsKey {
+    /// The underlying key type.
+    type Key: RecordKey;
+    /// Returns a reference to the underlying key.
+    fn as_key(&self) -> &Self::Key;
+}
+
+impl<K: RecordKey> AsKey for K {
+    type Key = K;
+    fn as_key(&self) -> &K {
+        self
+    }
+}
+
 /// A trait defining how a key can be extracted from a record.
 /// This might be one of the fields, a composite key, a hash, random uuid or any other type of derivation.
 /// It shouldn't be implemented for auto-incrementing keys.
