@@ -4,9 +4,10 @@ use crate::transaction::DatabaseTransaction;
 use crate::wrap::{Subtable, WrapPrelude, empty_wrap, wrap};
 use crate::{
     BufferOverflowOr, Cache, CacheAccess, CacheContainer, DeriveKey, Incrementable, Manifest,
-    Manifests, NoCache, RecordKey, Repository, Unifiable, Unified, Unifier, UnifierPair,
+    Manifests, NoCache, RecordKey, Repository, Unified, Unifier, UnifierPair,
 };
 use core::ops::Range;
+use serde::de::DeserializeOwned;
 
 type StorageKU<S> = <<S as Storage>::Unifiers as UnifierPair>::KeyUnifier;
 
@@ -230,7 +231,10 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
                 Err(e) => return Err(DatabaseError::Storage(e)),
             };
 
-            let key: K = K::deserialize_wrapped_with(&self.unifiers.key_unifier(), &value)
+            let key: K = self
+                .unifiers
+                .key_unifier()
+                .deserialize_wrapped(&value)
                 .map_err(DatabaseError::KeyDeserialization)?;
 
             Ok(key)
@@ -265,7 +269,10 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
                 Err(e) => return Err(DatabaseError::Storage(e)),
             };
 
-            let key: K = K::deserialize_wrapped_with(&self.unifiers.key_unifier(), &value)
+            let key: K = self
+                .unifiers
+                .key_unifier()
+                .deserialize_wrapped(&value)
                 .map_err(DatabaseError::KeyDeserialization)?;
 
             Ok(key)
@@ -385,7 +392,7 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
     }
 
     /// Helper function to process iterator results and get deserialized values
-    fn process_iter_result<T: Unifiable>(
+    fn process_iter_result<T: DeserializeOwned>(
         &self,
         result: Result<<StorageKU<S> as Unifier>::D, <S::Repo as Repository>::Error>,
     ) -> Result<T, DatabaseError<S>> {

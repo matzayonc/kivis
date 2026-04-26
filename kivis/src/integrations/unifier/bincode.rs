@@ -21,7 +21,7 @@ impl Unifier for Configuration {
     type SerError = EncodeError;
     type DeError = DecodeError;
 
-    fn serialize_impl(
+    fn serialize(
         &self,
         buffer: &mut Vec<u8>,
         data: &impl Serialize,
@@ -34,7 +34,7 @@ impl Unifier for Configuration {
         Ok((start, buffer.len()))
     }
 
-    fn deserialize_impl<T: DeserializeOwned>(&self, data: &Vec<u8>) -> Result<T, Self::DeError> {
+    fn deserialize<T: DeserializeOwned>(&self, data: &Vec<u8>) -> Result<T, Self::DeError> {
         Ok(decode_from_slice(data, Self::default())?.0)
     }
 }

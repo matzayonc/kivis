@@ -65,7 +65,7 @@ impl Unifier for CsvSerializer {
     type SerError = csv::Error;
     type DeError = csv::Error;
 
-    fn serialize_impl(
+    fn serialize(
         &self,
         buffer: &mut Self::D,
         data: &impl Serialize,
@@ -88,7 +88,7 @@ impl Unifier for CsvSerializer {
         Ok((start, buffer.len()))
     }
 
-    fn deserialize_impl<T: DeserializeOwned>(&self, data: &Self::D) -> Result<T, Self::DeError> {
+    fn deserialize<T: DeserializeOwned>(&self, data: &Self::D) -> Result<T, Self::DeError> {
         let decoded = Self::decode_from_filename(data).ok_or_else(|| {
             csv::Error::from(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,

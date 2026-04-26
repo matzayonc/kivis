@@ -22,7 +22,7 @@ impl<P: Prefix + Copy> Unifier for PrefixUnifier<P> {
     type SerError = EncodeError;
     type DeError = DecodeError;
 
-    fn serialize_impl(
+    fn serialize(
         &self,
         buffer: &mut Self::D,
         data: &impl Serialize,
@@ -35,7 +35,7 @@ impl<P: Prefix + Copy> Unifier for PrefixUnifier<P> {
         Ok((start, end))
     }
 
-    fn deserialize_impl<T: serde::de::DeserializeOwned>(
+    fn deserialize<T: serde::de::DeserializeOwned>(
         &self,
         data: &Self::D,
     ) -> Result<T, Self::DeError> {
@@ -207,7 +207,7 @@ fn test_unifier_consistency() {
         type SerError = EncodeError;
         type DeError = DecodeError;
 
-        fn serialize_impl(
+        fn serialize(
             &self,
             buffer: &mut Self::D,
             data: &impl Serialize,
@@ -219,7 +219,7 @@ fn test_unifier_consistency() {
             Ok((start, end))
         }
 
-        fn deserialize_impl<T: serde::de::DeserializeOwned>(
+        fn deserialize<T: serde::de::DeserializeOwned>(
             &self,
             data: &Self::D,
         ) -> Result<T, Self::DeError> {
