@@ -59,7 +59,7 @@ impl Unifier for PostcardUnifier {
     type SerError = postcard::Error;
     type DeError = postcard::Error;
 
-    fn serialize_impl(
+    fn serialize(
         &self,
         buffer: &mut Self::D,
         data: &impl serde::Serialize,
@@ -70,7 +70,7 @@ impl Unifier for PostcardUnifier {
         Ok((start, buffer.len()))
     }
 
-    fn deserialize_impl<T: serde::de::DeserializeOwned>(
+    fn deserialize<T: serde::de::DeserializeOwned>(
         &self,
         data: &Self::D,
     ) -> Result<T, Self::DeError> {

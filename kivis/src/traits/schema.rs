@@ -1,13 +1,15 @@
 use core::fmt::Debug;
 
+use serde::{Serialize, de::DeserializeOwned};
+
 use crate::{
-    BatchOp, BufferOverflowOr, Cache, Database, DatabaseError, Storage, TransactionError,
-    Unifiable, Unifier, UnifierPair, transaction::PreBufferOps,
+    BatchOp, BufferOverflowOr, Cache, Database, DatabaseError, Storage, TransactionError, Unifier,
+    UnifierPair, transaction::PreBufferOps,
 };
 
 /// A trait defining that the implementing type is a key of some record.
 /// Each type can be a key of only one record type, which is defined by the [`DatabaseEntry`] trait.
-pub trait RecordKey: Unifiable + Clone + Eq {
+pub trait RecordKey: Serialize + DeserializeOwned + Clone + Eq {
     /// The record type that this key identifies.
     type Record: DatabaseEntry;
 }
@@ -26,9 +28,9 @@ pub trait DeriveKey {
 ///
 /// An index is a way to efficiently look up records in the database by a specific key.
 /// It defines a table, primary key type, and an unique prefix for the index.
-pub trait Index: Unifiable + Debug {
+pub trait Index: Serialize + DeserializeOwned + Debug {
     /// The key type used by this index.
-    type Key: Unifiable + Clone + Eq + Debug;
+    type Key: Serialize + DeserializeOwned + Clone + Eq + Debug;
     /// The record type that this index applies to.
     type Record: DatabaseEntry;
     /// Unique identifier for this index within the record type.
@@ -44,7 +46,7 @@ pub trait Incrementable: Default + Sized {
 }
 
 /// The main trait of the crate, defines a database entry that can be stored with its indexes.
-pub trait DatabaseEntry: Scope + Unifiable + Debug {
+pub trait DatabaseEntry: Scope + Serialize + DeserializeOwned + Debug {
     /// The primary key type for this database entry.
     type Key: RecordKey;
     const INDEX_COUNT_HINT: u8 = 0;
