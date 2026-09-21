@@ -1,7 +1,10 @@
 //! Implementations of the `UnifierData` trait for various buffer types.
 
 #[cfg(all(feature = "alloc", not(feature = "std")))]
-use alloc::{string::String, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
 
 use crate::{BufferOverflowError, Unified};
 

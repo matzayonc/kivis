@@ -1,6 +1,6 @@
 use core::fmt;
+use core::marker::PhantomData;
 use core::ops::{Deref, DerefMut};
-use std::marker::PhantomData;
 
 use serde::{Serialize, de::Visitor, ser::SerializeTuple};
 

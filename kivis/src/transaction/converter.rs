@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use core::cmp::Ordering;
 
 use crate::{
     BatchOp, BufferOverflowOr, DatabaseEntry, RecordKey, Unified, Unifier, UnifierPair,

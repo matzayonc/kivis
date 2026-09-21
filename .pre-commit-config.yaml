@@ -27,7 +27,7 @@ repos:
       - id: clippy
         name: cargo clippy
         description: Lint Rust code with clippy
-        args: ['--all-targets', '--all-features', '--', '-D', 'warnings']
+        args: ["--all-targets", "--all-features", "--", "-D", "warnings"]
 
   # Rust testing with nextest
   - repo: local
@@ -36,6 +36,17 @@ repos:
         name: cargo nextest
         description: Run tests with cargo nextest
         entry: cargo nextest run --all-features
+        language: system
+        pass_filenames: false
+        types: [rust]
+
+  # no_std build (because each hook uses --all-features, which turns `std` on)
+  - repo: local
+    hooks:
+      - id: cargo-check-no-std
+        name: cargo check (no_std)
+        description: Ensure the crate still builds without std
+        entry: cargo check -p kivis --no-default-features --features alloc,atomic
         language: system
         pass_filenames: false
         types: [rust]
