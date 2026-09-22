@@ -1,66 +1,173 @@
-## Kivis: Type-Safe Database Schema Generation for Rust
+# Kivis
 
-Kivis is a Rust crate that provides a powerful procedural macro to automatically generate database schemas directly from your Rust struct definitions. Designed to operate seamlessly over any ordered key-value store, such as `BTreeMap` or `Sled`, Kivis simplifies data persistence by offering robust support for complex data structures, keys, indexes, and foreign key relationships, all while maintaining type safety.
+[![CI](https://github.com/matzayonc/kivis/actions/workflows/ci.yml/badge.svg)](https://github.com/matzayonc/kivis/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/kivis.svg)](https://crates.io/crates/kivis)
+[![docs.rs](https://docs.rs/kivis/badge.svg)](https://docs.rs/kivis)
+[![license](https://img.shields.io/crates/l/kivis.svg)](LICENSE)
 
-## Schemas
+Type-safe database schemas for Rust, generated from your structs, over any ordered
+key-value store — `BTreeMap`, sled, the filesystem, or a few hundred kilobytes of flash
+on a microcontroller.
 
-The entire database schema is declaratively defined through intuitive derive macro attributes. By annotating your Rust structs, Kivis handles the underlying schema generation, reducing boilerplate and ensuring consistency between your application's data models and the stored schema.
+```toml
+[dependencies]
+kivis = "0.6"
+serde = { version = "1", features = ["derive"] }
+```
 
-## Flexible Key Management
+## Quick start
 
-Kivis offers two primary mechanisms for defining record keys:
+```rust
+use kivis::{Database, MemoryStorage, Record, manifest};
 
-1. Auto-incremented IDs: Records can be assigned unique, automatically incremented identifiers upon insertion, ideal for simple primary keys.
-2. Composite and Simple Keys: For more explicit keying, one or more fields within a struct can be designated as key components using the `#[key]` attribute. This allows for the creation of simple or composite keys that uniquely identify records.
-3. Custom behavior: For advanced use cases like content addressability and UUIDs.
+#[derive(Record, Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct User {
+    #[index]
+    name: String,
+    email: String,
+}
 
-Both key types are exposed through zero-cost abstraction wrappers, such as `StructNameKey`, which encapsulate the key's type and table correlation, providing compile-time safety and clarity.
+// Every record type in a database is listed in one manifest.
+manifest![App: User];
 
-## Efficient Data Retrieval with Indexes
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut db = Database::<MemoryStorage, App>::new(MemoryStorage::new())?;
 
-To facilitate efficient data retrieval, Kivis supports the definition of arbitrary secondary indexes. Any field can be marked with the `#[index]` attribute, leading to the automatic generation of a corresponding index structure (e.g., `StructNameFieldNameIndex`). These index structures enable fast lookups and range queries based on the indexed fields, similar to traditional database indexes.
+    // `put` assigns an autoincremented key and returns it.
+    let key = db.put(User {
+        name: "Alice".into(),
+        email: "alice@example.com".into(),
+    })?;
 
-## Robust Foreign Key Relationships
+    let user = db.get(&key)?.expect("just inserted");
+    assert_eq!(user.name, "Alice");
 
-A distinguishing feature of Kivis is its sophisticated handling of foreign key relationships. By storing key wrappers (e.g., `UserKey`, `ToyKey`) directly within a struct's fields, Kivis leverages these zero-cost abstractions to embed static table correlation directly into your data model. This approach ensures type-safe references between records in different tables, providing compile-time validation of relationships and enhancing data integrity without runtime overhead.
+    // Secondary indexes are derived from `#[index]` fields.
+    let found: Vec<_> = db
+        .iter_by_index_exact(&UserNameIndex("Alice".into()))?
+        .collect::<Result<_, _>>()?;
+    assert_eq!(found, vec![key]);
 
-## Compatibility
+    Ok(())
+}
+```
 
-Kivis is designed to be backend-agnostic, operating over any ordered key-value store. This flexibility allows developers to choose the underlying storage mechanism that best suits their application's needs, whether it's an in-memory `BTreeMap` for transient data or a persistent solution like `Sled`.
+## What the derive generates
 
-### Layered Cache Architecture
+`#[derive(Record)]` on `User` produces `UserKey`, one `User<Field>Index` type per
+`#[index]` field, and the trait impls tying them together.
 
-The `Storage` trait's simplicity enables sophisticated layered cache architectures where multiple storage implementations can be composed together. This design pattern allows for complex data hierarchies that optimize both performance and data locality. A typical layered setup might include:
+## Keys
 
-1. **Remote Repository**: The authoritative source containing the complete dataset, potentially hosted on cloud storage or a remote database server
-2. **Local Archive**: A comprehensive local copy that mirrors most of the remote data for offline access and reduced network dependency
-3. **Local Persistent Cache**: A fast local storage layer (such as SQLite or RocksDB) that maintains frequently accessed records across application restarts
-4. **In-Memory Cache**: The fastest access tier using structures like `BTreeMap` for immediate retrieval of hot data
+Three strategies, one per record:
 
-Each layer can implement the `Storage` trait and delegate to the next tier when data is not found locally, creating a transparent cache hierarchy that automatically optimizes data access patterns while maintaining the same simple API surface.
+| Strategy | How | Key type |
+|---|---|---|
+| Autoincrement | no `#[key]` field | `UserKey(u64)`, assigned by `put` |
+| Field key | one or more `#[key]` fields | `UserKey(field types…)`, assigned by `insert` |
+| Derived | `#[derived_key(T)]` + your `DeriveKey` impl | whatever you compute — a hash, a UUID |
 
-By leveraging Rust's powerful type system and procedural macros, Kivis provides a highly efficient, type-safe, and developer-friendly approach to defining and managing database schemas. It streamlines the process of working with structured data in key-value stores, making it an ideal choice for applications requiring robust data modeling with minimal overhead.
+Autoincrement ids start at 1 and are never reissued, including after the most recent
+record is deleted.
 
+## Foreign keys
 
-## Key insights
+Storing a `UserKey` in a field is how you reference another record, and the type says
+which table it points at:
 
-Type-Safe Key-Table Association: Kivis enforces compile-time referential integrity by using zero-cost key wrapper types (e.g., UserKey) to statically embed the target table correlation, preventing runtime errors associated with using the wrong key type for a record.
+```rust,ignore
+#[derive(Record, serde::Serialize, serde::Deserialize, Debug, Clone)]
+struct Pet {
+    name: String,
+    owner: UserKey,   // can only ever hold a key of a User
+}
+```
 
-Backend-Agnostic Storage: The separation of schema definition from the storage mechanism is achieved via a simple Storage trait, enabling Kivis to operate on any ordered key-value store and naturally support complex, layered cache architectures.
+Passing a `PetKey` where a `UserKey` belongs does not compile. This is checked at
+compile time only: nothing verifies that the referenced record still exists, so
+deleting a `User` leaves any `Pet` pointing at it dangling.
 
-Schema-as-Struct: Database schemas are declaratively defined directly from Rust structs using procedural macro attributes (#[key], #[index], etc.), which automatically generates all necessary data structures for persistence and querying, drastically reducing boilerplate and ensuring data model consistency.
+## Storage backends
 
+Any ordered key-value store, via the `Storage` and `Repository` traits.
+
+| Backend | Crate / feature | Notes |
+|---|---|---|
+| `BTreeMap` | `memory-storage` (default) | in-memory, no persistence |
+| sled | `sled` feature | embedded database |
+| Filesystem | [`kivis-fs`](kivis-fs) | one readable file per record |
+| Your own | implement `Repository` | see `examples/remote_storage` |
+
+Because the trait surface is small, backends compose: a layered cache is just a
+`Repository` that consults a faster tier before delegating to a slower one.
+
+### Implementing a backend
+
+`Repository` needs get, insert, remove and `scan_range`. `scan_range` yields keys in
+**ascending** byte order, start inclusive, end exclusive, as a `DoubleEndedIterator`.
+`apply` has a default implementation, but override it to map a batch onto your store's
+native atomic write — kivis relies on it so a failed commit leaves no partial state.
+
+## Key ordering
+
+Range scans compare encoded keys byte by byte, so the encoding has to preserve order.
+The built-in key encoding is big-endian and fixed-width, which matches numeric order for
+unsigned integers. Two cases do not sort the way you might expect:
+
+- **Signed integers** are two's complement, so negatives sort after positives.
+- **`String` and `Vec`** are length-prefixed and therefore sort by length first. For
+  lexicographic string keys use `Lexicographic<String>`, which encodes so that `"Cat"`
+  precedes `"Caterpillar"`.
+
+## Transactions
+
+`atomic` (default) gives you multi-record commits. Every write of a record — the record
+itself plus all its index entries — goes into a single batch, so indexes cannot drift
+out of sync with the data, even if a commit fails.
+
+```rust,ignore
+let mut tx = db.create_transaction();
+tx.insert(Account { id: 1, balance: 800 })?;
+tx.insert(Account { id: 2, balance: 700 })?;
+db.commit(tx)?;   // both, or neither
+```
+
+A full example is in `examples/transactions.rs`.
+
+## no_std
+
+Works without the standard library, and without an allocator:
+
+```toml
+kivis = { version = "0.6", default-features = false, features = ["alloc", "atomic"] }
+```
+
+`examples/embedded.rs` runs against flash through `ekv`, using fixed-capacity
+`heapless::Vec` buffers.
+
+### Features
+
+| Feature | Default | Effect |
+|---|---|---|
+| `std` | ✅ | standard library (implies `alloc`) |
+| `alloc` | ✅ via `std` | `Vec`/`String` buffers without std |
+| `atomic` | ✅ | transactions |
+| `memory-storage` | ✅ | the `BTreeMap` backend |
+| `heapless` | | fixed-capacity buffers, for no-allocator targets |
+| `sled` | | the sled backend |
+
+## Status
+
+Pre-1.0, and the storage format is not yet stable: **0.6.0 changed it incompatibly and
+databases written by 0.5.x cannot be opened.** See the [changelog](CHANGELOG.md).
 
 ## Related work
 
-1. 🔑 Key Serialization preserving order (rel. `bytekey`, `storekey`)
+- **Order-preserving key encoding** (`bytekey`, `storekey`) — kivis ships `Lexicographic`
+  for the string case rather than a general-purpose encoder.
+- **Schema-from-struct modeling** (`native_model`, `struct_db`) — kivis is
+  backend-agnostic and keeps its type-safe key wrappers as the referencing mechanism.
 
-    Kivis uses its custom `LexicographicString` for order preservation, a specialized, self-contained solution that contrasts with the general-purpose library approach of bytekey/storekey for all data types.
+## License
 
-2. 🧱 High-Level Modeling (rel. `netabase_store`, `native_model`)
-
-    Kivis is philosophically aligned with netabase_store (backend-agnostic, attribute-driven keys) but uses a unique API centered on zero-cost Key Wrappers and a `Storage` trait for its layered architecture.
-
-3. 🛡️ Data Safety and Integrity (rel. `rkv`, `struct_db`)
-
-    Kivis provides compile-time referential integrity via its type-safe Foreign Key Wrappers, a powerful feature for relationship validation in the non-relational K/V ecosystem that goes beyond the runtime checks of rkv and struct_db.
+MIT — see [LICENSE](LICENSE).
