@@ -50,7 +50,8 @@ impl Schema {
             return Err(Error::new_spanned(
                 &generics,
                 "kivis::Record cannot be derived for generic types: the generated key type \
-                 would not carry the type parameters. Derive it on a concrete type instead.",
+                 would not carry the type parameters. Derive it on a concrete type instead. \
+                 See LIMITATIONS.md.",
             )
             .to_compile_error()
             .into());

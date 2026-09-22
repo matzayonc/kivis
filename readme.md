@@ -161,6 +161,10 @@ kivis = { version = "0.6", default-features = false, features = ["alloc", "atomi
 Pre-1.0, and the storage format is not yet stable: **0.6.0 changed it incompatibly and
 databases written by 0.5.x cannot be opened.** See the [changelog](CHANGELOG.md).
 
+Known gaps — generic records, key ordering for signed and string keys, cache
+coherence after a transaction commit — are written down in
+[LIMITATIONS.md](LIMITATIONS.md).
+
 ## Related work
 
 - **Order-preserving key encoding** (`bytekey`, `storekey`) — kivis ships `Lexicographic`

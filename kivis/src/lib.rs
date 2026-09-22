@@ -20,6 +20,12 @@
 //! - `heapless`: Enable `UnifierData` implementation for `heapless::Vec<u8, N>`, allowing fixed-capacity
 //!   stack-allocated vectors for embedded environments
 //!
+//! ## Limitations
+//!
+//! Known gaps — generic records, key ordering for signed and string keys, and cache
+//! coherence after a transaction commit — are documented in `LIMITATIONS.md` in the
+//! repository: <https://github.com/matzayonc/kivis/blob/master/LIMITATIONS.md>
+//!
 //! ## Quick Start
 //!
 //! ```rust
