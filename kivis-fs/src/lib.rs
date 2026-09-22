@@ -69,25 +69,39 @@
 //! Records are stored in the filesystem as follows:
 //!
 //! - Each record is a separate file with a `.dat` extension
-//! - Filenames are derived from URL-encoded keys
+//! - Filenames are the encoded key (see [`KeyCodec`]): every component is fixed-width or
+//!   `.`-terminated and only uses `[A-Za-z0-9._]`, so filenames are safe on every platform
+//!   and sort in key order when compared as plain strings. For example the third
+//!   autoincremented record of the first table is stored as
+//!   `000.000.00000000000000000003.dat` (scope `.` subtable `.` id).
 //! - File contents use CSV format for the serialized data
 //! - The storage directory is created automatically if it doesn't exist
 //!
 //! This makes the storage directory easy to navigate, backup, and inspect manually.
+//!
+//! Plain `String` key and index fields are already prefix-free and sort correctly for
+//! ASCII alphanumerics, so [`kivis::Lexicographic`] is not required with this backend
+//! (it still works, but encodes as one `.`-terminated number per byte).
+//!
+//! # Compatibility
+//!
+//! Version 0.2 changed the key encoding; directories written by 0.1 cannot be opened.
 
 mod error;
+mod key;
 mod repository;
 mod serializer;
 
 use kivis::Storage;
 
-use crate::serializer::CsvSerializer;
-
+pub use crate::error::FileStoreError;
+pub use crate::key::{KeyCodec, KeyError};
 pub use crate::repository::FileStore;
+pub use crate::serializer::CsvSerializer;
 
 impl Storage for FileStore {
     type Repo = Self;
-    type Unifiers = (CsvSerializer, CsvSerializer);
+    type Unifiers = (KeyCodec, CsvSerializer);
     fn repository(&self) -> &Self::Repo {
         self
     }

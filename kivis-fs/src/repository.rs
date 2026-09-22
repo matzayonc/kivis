@@ -45,14 +45,19 @@ impl Repository for FileStore {
         }
     }
 
+    /// Keys in `range`, ascending (`start` inclusive, `end` exclusive).
+    ///
+    /// The directory is listed on every call; this backend is meant for small data sets.
+    // A `Vec` iterator is double-ended; refining the return type keeps this compatible
+    // with the core once `Repository::scan_range` requires `DoubleEndedIterator`.
+    #[allow(refining_impl_trait)]
     fn scan_range(
         &self,
         range: std::ops::Range<Self::K>,
     ) -> Result<impl DoubleEndedIterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
-        let entries = fs::read_dir(&self.data_dir)?;
-
         let mut keys: Vec<String> = Vec::new();
-        for entry in entries.flatten() {
+        for entry in fs::read_dir(&self.data_dir)? {
+            let entry = entry?;
             if let Some(filename) = entry.file_name().to_str()
                 && let Some(key) = self.filename_to_key(filename)
                 && key >= range.start
@@ -82,12 +87,21 @@ impl FileStore {
     }
 
     /// Converts a key string to a filesystem path.
+    ///
+    /// Every stored key ends with the [`KeyCodec`](crate::KeyCodec) terminator `.`, which
+    /// doubles as the dot of the `.dat` extension so names read as `<key>dat`
+    /// rather than `<key>..dat`.
     fn key_to_filename(&self, key: &str) -> PathBuf {
-        self.data_dir.join(format!("{key}.dat"))
+        let separator = if key.ends_with('.') { "" } else { "." };
+        self.data_dir.join(format!("{key}{separator}dat"))
     }
 
-    /// Extracts the key from a filename by removing the `.dat` extension.
+    /// Extracts the key from a filename by removing the `dat` extension (keeping the dot,
+    /// which belongs to the key).
     fn filename_to_key(&self, filename: &str) -> Option<String> {
-        filename.strip_suffix(".dat").map(String::from)
+        filename
+            .strip_suffix("dat")
+            .filter(|key| key.ends_with('.'))
+            .map(String::from)
     }
 }
