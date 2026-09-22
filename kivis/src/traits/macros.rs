@@ -99,6 +99,26 @@ macro_rules! manifest {
             impl $crate::Cache for [<$manifest_name Cache>] {
                 type Manifest = $manifest_name;
             }
+
+            impl<__U: $crate::UnifierPair + 'static> $crate::CacheExpiry<$manifest_name, __U>
+                for [<$manifest_name Cache>]
+            {
+                fn expire_record<'a>(&mut self, record: [<$manifest_name Record>]<'a>)
+                where
+                    __U: 'a,
+                {
+                    match record {
+                        $(
+                            [<$manifest_name Record>]::[<$ty>](key, _) => {
+                                $crate::CacheContainer::expire(
+                                    <Self as $crate::CacheAccess<$ty>>::access(self),
+                                    key,
+                                );
+                            }
+                        )*
+                    }
+                }
+            }
         }
         $crate::manifest!($manifest_name: $($ty),+);
     };

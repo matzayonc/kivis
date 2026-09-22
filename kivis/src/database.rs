@@ -3,8 +3,9 @@ use crate::traits::{DatabaseEntry, Index, Storage};
 use crate::transaction::DatabaseTransaction;
 use crate::wrap::{Subtable, WrapPrelude, empty_wrap, wrap};
 use crate::{
-    AsKey, BufferOverflowOr, Cache, CacheAccess, CacheContainer, DeriveKey, Incrementable,
-    Manifest, Manifests, NoCache, RecordKey, Repository, Unified, Unifier, UnifierPair,
+    AsKey, BufferOverflowOr, Cache, CacheAccess, CacheContainer, CacheExpiry, DeriveKey,
+    Incrementable, Manifest, Manifests, NoCache, RecordKey, Repository, Unified, Unifier,
+    UnifierPair,
 };
 use core::ops::Range;
 use serde::de::DeserializeOwned;
@@ -63,13 +64,12 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
         R::Key: RecordKey<Record = R> + Incrementable + Ord + 'static,
         for<'f> &'f (R::Key, R): Into<M::Record<'f>>,
         M: Manifests<R>,
-        C: CacheAccess<R>,
+        C: CacheAccess<R> + CacheExpiry<M, S::Unifiers>,
     {
         let mut transaction = self.create_transaction();
         let inserted_key = transaction.put(record, &mut self.manifest)?;
         self.commit(transaction)?;
         self.persist_counter(&inserted_key)?;
-        self.cache.access().expire(&inserted_key);
         Ok(inserted_key)
     }
 
@@ -88,14 +88,13 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
         R: DeriveKey<Key = K> + DatabaseEntry<Key = K> + Clone + 'static,
         for<'f> &'f (K, R): Into<M::Record<'f>>,
         M: Manifests<R>,
-        C: CacheAccess<R>,
+        C: CacheAccess<R> + CacheExpiry<M, S::Unifiers>,
     {
         let mut transaction = self.create_transaction();
         let inserted_key = transaction
             .insert::<K, R>(record)
             .map_err(DatabaseError::from_transaction_error)?;
         self.commit(transaction)?;
-        self.cache.access().expire(&inserted_key);
         Ok(inserted_key)
     }
 
@@ -110,6 +109,12 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
     ///
     /// All operations are applied using the storage backend's `batch_mixed` method.
     ///
+    /// The cached entry of every record the transaction touches — written or deleted — is
+    /// expired first, so a later [`get`](Self::get) never returns a value the transaction
+    /// replaced. Expiry happens before the write rather than after it, so a commit that fails
+    /// part-way through cannot leave a stale entry behind; the cost is a cache miss on a
+    /// transaction that fails.
+    ///
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if writing to the underlying storage fails.
@@ -119,7 +124,9 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
     ) -> Result<(), DatabaseError<S>>
     where
         S::Unifiers: 'static,
+        C: CacheExpiry<M, S::Unifiers>,
     {
+        transaction.expire_cached(&mut self.cache);
         transaction.commit(&mut self.storage)?;
         Ok(())
     }
@@ -193,7 +200,7 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
         R::Key: RecordKey<Record = R> + Clone + 'static,
         for<'f> &'f (K, R): Into<M::Record<'f>>,
         M: Manifests<R> + Manifests<K::Record>,
-        C: CacheAccess<R>,
+        C: CacheAccess<R> + CacheExpiry<M, S::Unifiers>,
     {
         let Some(record) = self.get(key)? else {
             return Ok(());
@@ -203,7 +210,6 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
             .remove(key, &record)
             .map_err(DatabaseError::from_transaction_error)?;
         self.commit(transaction)?;
-        self.cache.access().expire(key);
         Ok(())
     }
 

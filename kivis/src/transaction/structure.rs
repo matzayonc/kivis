@@ -1,6 +1,6 @@
 use crate::{
-    ApplyError, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, Manifest, Manifests,
-    RecordKey, Repository, Storage, UnifierPair,
+    ApplyError, CacheExpiry, DatabaseEntry, DatabaseError, DeriveKey, Incrementable, Manifest,
+    Manifests, RecordKey, Repository, Storage, UnifierPair,
     transaction::{buffer::PreBufferOps, errors::TransactionError},
 };
 
@@ -87,6 +87,19 @@ impl<M: Manifest<U>, U: UnifierPair + 'static> DatabaseTransaction<M, U> {
         self.pre_buffer.is_empty()
     }
 
+    /// Expires the cached entry of every record this transaction is going to write or delete.
+    ///
+    /// [`Database::commit`](crate::Database::commit) calls this for you; it is only needed when
+    /// driving [`commit`](Self::commit) directly against a storage backend while keeping a cache
+    /// coherent. Call it before [`commit`](Self::commit) — once the buffer has been drained this
+    /// does nothing.
+    pub fn expire_cached<C>(&self, cache: &mut C)
+    where
+        C: CacheExpiry<M, U>,
+    {
+        self.pre_buffer.expire_cached(cache);
+    }
+
     /// Commits all pending operations to the storage.
     ///
     /// All records are serialised into [`BatchOp`](crate::BatchOp)s and submitted to storage in
@@ -95,6 +108,10 @@ impl<M: Manifest<U>, U: UnifierPair + 'static> DatabaseTransaction<M, U> {
     /// For every write, the version of the record currently stored under the same key (if any)
     /// is read first and its secondary-index entries are deleted in the same batch, so an
     /// overwrite never leaves stale index entries behind.
+    ///
+    /// This writes to storage only and does not touch any cache; call
+    /// [`expire_cached`](Self::expire_cached) first, or go through
+    /// [`Database::commit`](crate::Database::commit), which does both.
     ///
     /// The transaction is consumed by this operation.
     ///

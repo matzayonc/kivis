@@ -3,7 +3,10 @@ use core::marker::PhantomData;
 use ouroboros::self_referencing;
 
 use super::errors::TransactionError;
-use crate::{BatchOp, DatabaseError, Manifest, Repository, Storage, Unified, Unifier, UnifierPair};
+use crate::{
+    BatchOp, CacheExpiry, DatabaseError, Manifest, Repository, Storage, Unified, Unifier,
+    UnifierPair,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum PreBufferOps {
@@ -196,6 +199,24 @@ impl<M: Manifest<U>, U: UnifierPair + 'static> TransactionBuffer<M, U> {
             d.records.start_iterating(d.bump, Some(stale));
         });
         result
+    }
+
+    /// Expires the cached entry of every buffered record, whatever its operation: a write and a
+    /// delete both invalidate the cached value.
+    ///
+    /// Must be called before [`into_iter`](Self::into_iter) or
+    /// [`resolve_previous`](Self::resolve_previous) drain the buffer; afterwards it does nothing.
+    pub(crate) fn expire_cached<C>(&self, cache: &mut C)
+    where
+        C: CacheExpiry<M, U>,
+    {
+        self.with_records(|records| {
+            if let Records::Collecting(vec) = records {
+                for (_, record) in vec {
+                    cache.expire_record(*record);
+                }
+            }
+        });
     }
 
     /// Consumes the buffer and returns a flat iterator of serialised [`BatchOp`]s.
