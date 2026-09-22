@@ -206,6 +206,47 @@ macro_rules! manifest {
                     )*
                 }
             }
+
+            fn main_key<'a>(
+                record: Self::Record<'a>,
+                unifiers: __U,
+            ) -> ::core::result::Result<
+                <<__U as $crate::UnifierPair>::KeyUnifier as $crate::Unifier>::D,
+                $crate::TransactionError<__U>,
+            >
+            where
+                __U: 'a,
+            {
+                match record {
+                    $(
+                        [<$manifest_name Record>]::[<$ty>](key, _) => {
+                            $crate::build_main_key::<$ty, __U>(key, unifiers.key_unifier())
+                        }
+                    )*
+                }
+            }
+
+            fn stale_index_ops<'a>(
+                record: Self::Record<'a>,
+                previous: &<<__U as $crate::UnifierPair>::ValueUnifier as $crate::Unifier>::D,
+                unifiers: __U,
+            ) -> ::core::result::Result<
+                Self::Iter<'a>,
+                <<__U as $crate::UnifierPair>::ValueUnifier as $crate::Unifier>::DeError,
+            >
+            where
+                __U: 'a,
+            {
+                match record {
+                    $(
+                        [<$manifest_name Record>]::[<$ty>](key, _) => {
+                            ::core::result::Result::Ok([<$manifest_name Ops>]::[<$ty>](
+                                $crate::build_stale_index_ops::<$ty, __U>(key, previous, unifiers)?
+                            ))
+                        }
+                    )*
+                }
+            }
         }
         }
     };

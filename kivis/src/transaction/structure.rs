@@ -89,16 +89,19 @@ impl<M: Manifest<U>, U: UnifierPair + 'static> DatabaseTransaction<M, U> {
 
     /// Commits all pending operations to the storage.
     ///
-    /// All records are serialised into [`BatchOp`]s via [`TransactionBuffer::into_ops`] and
-    /// submitted to storage in a single [`Repository::apply`] call, which backends can wrap
-    /// in a native atomic batch write.
+    /// All records are serialised into [`BatchOp`](crate::BatchOp)s and submitted to storage in
+    /// a single [`Repository::apply`] call, which backends can wrap in a native atomic batch write.
+    ///
+    /// For every write, the version of the record currently stored under the same key (if any)
+    /// is read first and its secondary-index entries are deleted in the same batch, so an
+    /// overwrite never leaves stale index entries behind.
     ///
     /// The transaction is consumed by this operation.
     ///
     /// # Errors
     ///
-    /// Returns a [`DatabaseError`] if serialisation of any record fails or if the
-    /// underlying storage operation fails.
+    /// Returns a [`DatabaseError`] if serialisation of any record fails, if a previously stored
+    /// version cannot be read or deserialised, or if the underlying storage operation fails.
     pub fn commit<S>(self, storage: &mut S) -> Result<(), DatabaseError<S>>
     where
         S: Storage<Unifiers = U>,
@@ -108,9 +111,11 @@ impl<M: Manifest<U>, U: UnifierPair + 'static> DatabaseTransaction<M, U> {
         }
 
         let DatabaseTransaction {
-            pre_buffer,
+            mut pre_buffer,
             unifiers,
         } = self;
+
+        pre_buffer.resolve_previous::<S>(storage.repository(), unifiers)?;
 
         storage
             .repository_mut()

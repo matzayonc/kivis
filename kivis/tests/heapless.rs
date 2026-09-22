@@ -7,6 +7,13 @@ const BUFFER_SIZE: usize = 16;
 #[derive(Clone, Default)]
 struct Bytes([u8; BUFFER_SIZE], usize);
 
+// Only the first `len` bytes are meaningful; bytes past it are stale and must not be compared.
+impl PartialEq for Bytes {
+    fn eq(&self, other: &Self) -> bool {
+        self.0[..self.1] == other.0[..other.1]
+    }
+}
+
 impl AsRef<Bytes> for Bytes {
     fn as_ref(&self) -> &Bytes {
         self

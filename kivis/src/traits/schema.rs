@@ -117,6 +117,38 @@ pub trait Manifest<U: UnifierPair>: Default + 'static {
     fn iter_ops<'a>(op: PreBufferOps, record: Self::Record<'a>, unifiers: U) -> Self::Iter<'a>
     where
         U: 'a;
+
+    /// Serialises the storage key of `record`'s main entry.
+    ///
+    /// Implementations should delegate to [`build_main_key`](crate::build_main_key) for each
+    /// record variant.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`TransactionError`] if serialising the key fails.
+    fn main_key<'a>(
+        record: Self::Record<'a>,
+        unifiers: U,
+    ) -> Result<<U::KeyUnifier as Unifier>::D, TransactionError<U>>
+    where
+        U: 'a;
+
+    /// Returns an iterator deleting the index entries of `previous`, the stored value of the
+    /// version of `record` that is about to be overwritten.
+    ///
+    /// Implementations should delegate to [`build_stale_index_ops`](crate::build_stale_index_ops)
+    /// for each record variant.
+    ///
+    /// # Errors
+    ///
+    /// Returns the value unifier's error if `previous` cannot be deserialised.
+    fn stale_index_ops<'a>(
+        record: Self::Record<'a>,
+        previous: &<U::ValueUnifier as Unifier>::D,
+        unifiers: U,
+    ) -> Result<Self::Iter<'a>, <U::ValueUnifier as Unifier>::DeError>
+    where
+        U: 'a;
 }
 
 pub trait Scope {

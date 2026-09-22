@@ -13,7 +13,7 @@ struct Wrapped<R> {
     key: R,
 }
 
-pub trait Unified: Default + Clone {
+pub trait Unified: Default + Clone + PartialEq {
     /// The borrowed view type for this buffer (e.g., &[u8] for Vec<u8>, &str for String)
     type View<'a>;
 

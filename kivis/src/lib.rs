@@ -79,7 +79,9 @@ pub use transaction::TransactionError;
 pub use transaction::DatabaseTransaction;
 
 #[doc(hidden)]
-pub use transaction::{PreBufferOps, RecordOps, build_record_ops};
+pub use transaction::{
+    PreBufferOps, RecordOps, build_main_key, build_record_ops, build_stale_index_ops,
+};
 
 #[cfg(any(feature = "std", feature = "alloc"))]
 pub use integrations::{OrderedKeyConfig, ordered_key_config};

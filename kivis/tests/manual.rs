@@ -177,6 +177,45 @@ impl<U: UnifierPair> kivis::Manifest<U> for Manifest {
             }
         }
     }
+
+    fn main_key<'a>(
+        record: Self::Record<'a>,
+        unifiers: U,
+    ) -> Result<<U::KeyUnifier as kivis::Unifier>::D, kivis::TransactionError<U>>
+    where
+        U: 'a,
+    {
+        match record {
+            ManifestRecord::User(key, _) => {
+                kivis::build_main_key::<User, U>(key, unifiers.key_unifier())
+            }
+            ManifestRecord::Pet(key, _) => {
+                kivis::build_main_key::<Pet, U>(key, unifiers.key_unifier())
+            }
+        }
+    }
+
+    fn stale_index_ops<'a>(
+        record: Self::Record<'a>,
+        previous: &<U::ValueUnifier as kivis::Unifier>::D,
+        unifiers: U,
+    ) -> Result<Self::Iter<'a>, <U::ValueUnifier as kivis::Unifier>::DeError>
+    where
+        U: 'a,
+    {
+        match record {
+            ManifestRecord::User(key, _) => {
+                Ok(ManifestOps::User(kivis::build_stale_index_ops::<User, U>(
+                    key, previous, unifiers,
+                )?))
+            }
+            ManifestRecord::Pet(key, _) => {
+                Ok(ManifestOps::Pet(kivis::build_stale_index_ops::<Pet, U>(
+                    key, previous, unifiers,
+                )?))
+            }
+        }
+    }
 }
 impl kivis::Manifests<User> for Manifest {
     fn last(&mut self) -> &mut Option<<User as kivis::DatabaseEntry>::Key> {
