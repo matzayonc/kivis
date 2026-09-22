@@ -102,7 +102,8 @@ fn test_index() -> anyhow::Result<()> {
     let retrieved = store.get(&user_key)?.context("Missing")?;
     assert_eq!(retrieved, user);
 
-    assert_eq!(store.dissolve().len(), 2);
+    // Main record, its name index entry, and the persisted autoincrement counter.
+    assert_eq!(store.dissolve().len(), 3);
     Ok(())
 }
 

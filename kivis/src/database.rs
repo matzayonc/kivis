@@ -10,6 +10,7 @@ use core::ops::Range;
 use serde::de::DeserializeOwned;
 
 type StorageKU<S> = <<S as Storage>::Unifiers as UnifierPair>::KeyUnifier;
+type StorageVU<S> = <<S as Storage>::Unifiers as UnifierPair>::ValueUnifier;
 
 type DatabaseIteratorItem<R, S> = Result<<R as DatabaseEntry>::Key, DatabaseError<S>>;
 
@@ -64,6 +65,7 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
         let mut transaction = self.create_transaction();
         let inserted_key = transaction.put(record, &mut self.manifest)?;
         self.commit(transaction)?;
+        self.persist_counter(&inserted_key)?;
         self.cache.access().expire(&inserted_key);
         Ok(inserted_key)
     }
@@ -313,6 +315,83 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
         let mut keys = self.iter_all_keys::<K>()?;
 
         Ok(keys.next_back().transpose()?.unwrap_or_default())
+    }
+
+    /// Serialized key of the slot holding the autoincrement counter for `R`.
+    ///
+    /// The counter lives in the [`Subtable::Reserved`] slot, which sorts immediately after every
+    /// main-table key and before every index entry, and is exactly the exclusive end bound used by
+    /// [`Self::iter_all_keys`] — so it is never yielded by a record or index scan.
+    fn counter_key<R: DatabaseEntry>(
+        &self,
+    ) -> Result<<StorageKU<S> as Unifier>::D, DatabaseError<S>> {
+        let mut buffer = <StorageKU<S> as Unifier>::D::default();
+        let unifier = self.unifiers.key_unifier();
+        unifier
+            .serialize(&mut buffer, &WrapPrelude::new::<R>(Subtable::Reserved))
+            .map_err(DatabaseError::from_buffer_overflow_or)?;
+        unifier
+            .serialize(&mut buffer, &())
+            .map_err(DatabaseError::from_buffer_overflow_or)?;
+        Ok(buffer)
+    }
+
+    /// Records `key` as the highest id ever issued for `K::Record`.
+    ///
+    /// Written after the record batch rather than inside it: a counter that is momentarily too low
+    /// is harmless because [`Self::load_counter`] also considers the highest stored key, whereas a
+    /// counter that is too high would skip ids.
+    fn persist_counter<K: RecordKey>(&mut self, key: &K) -> Result<(), DatabaseError<S>>
+    where
+        K::Record: DatabaseEntry<Key = K>,
+    {
+        let counter_key = self.counter_key::<K::Record>()?;
+        let mut value = <StorageVU<S> as Unifier>::D::default();
+        self.unifiers
+            .value_unifier()
+            .serialize(&mut value, key)
+            .map_err(DatabaseError::from_value_buffer_overflow_or)?;
+        self.storage
+            .repository_mut()
+            .insert_entry(counter_key.as_view(), value.as_view())
+            .map_err(DatabaseError::Storage)
+    }
+
+    /// Recovers the autoincrement counter for `K::Record` when opening a database.
+    ///
+    /// Returns the greater of the persisted counter and the highest stored key. Consulting the
+    /// persisted counter is what stops a deleted trailing record from having its id handed out
+    /// again, which would silently repoint any stored key referring to it; falling back to the
+    /// highest stored key keeps databases written before the counter existed — and ones where the
+    /// counter write was lost — correct.
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`DatabaseError`] if the underlying storage fails or the counter cannot be read.
+    pub fn load_counter<K: RecordKey + Ord + Default>(&mut self) -> Result<K, DatabaseError<S>>
+    where
+        K::Record: DatabaseEntry<Key = K>,
+        M: Manifests<K::Record>,
+    {
+        let highest_stored = self.last_id::<K>()?;
+
+        let counter_key = self.counter_key::<K::Record>()?;
+        let Some(value) = self
+            .storage
+            .repository()
+            .get_entry(counter_key.as_view())
+            .map_err(DatabaseError::Storage)?
+        else {
+            return Ok(highest_stored);
+        };
+
+        let persisted: K = self
+            .unifiers
+            .value_unifier()
+            .deserialize(&value)
+            .map_err(DatabaseError::ValueDeserialization)?;
+
+        Ok(persisted.max(highest_stored))
     }
 
     /// Iterates over all index entries in the database within the specified range and returns their primary keys.

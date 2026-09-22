@@ -188,7 +188,7 @@ macro_rules! manifest {
                 Self: $crate::Manifest<S::Unifiers>,
             {
                 $(
-                    self.[<last_ $ty:snake>] = ::core::option::Option::Some(db.last_id()?);
+                    self.[<last_ $ty:snake>] = ::core::option::Option::Some(db.load_counter()?);
                 )*
                 ::core::result::Result::Ok(())
             }

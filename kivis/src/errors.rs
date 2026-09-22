@@ -124,6 +124,16 @@ where
         }
     }
 
+    /// Maps a value-serialization buffer overflow into a [`DatabaseError`].
+    pub(crate) fn from_value_buffer_overflow_or(
+        e: BufferOverflowOr<<StorageVU<S> as Unifier>::SerError>,
+    ) -> Self {
+        match e.0 {
+            Some(err) => DatabaseError::ValueSerialization(err),
+            None => DatabaseError::Storage(BufferOverflowError.into()),
+        }
+    }
+
     /// Creates a new `DatabaseError` from a transaction error.
     #[doc(hidden)]
     pub fn from_transaction_error(e: TransactionError<S::Unifiers>) -> Self {
