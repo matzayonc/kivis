@@ -35,7 +35,12 @@ pub struct DeviceConfig {
 
 manifest![EmbeddedManifest: SensorReading, DeviceConfig];
 
-/// Postcard unifier for no_std environments with heapless buffers
+/// Postcard unifier for no_std environments with heapless buffers.
+///
+/// Note: postcard encodes integers as LEB128 varints, which are *not* order-preserving beyond
+/// 127. This example only uses `u8`/`u16` keys below that limit; a real deployment should use
+/// an order-preserving key encoding (see `kivis::OrderedKeyConfig`) so range scans and
+/// autoincrement recovery behave correctly.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PostcardUnifier<const N: usize>;
 
@@ -182,6 +187,9 @@ impl From<BufferOverflowError> for EkvError {
     }
 }
 
+/// Maximum number of keys a single `scan_range` call can buffer.
+const MAX_SCAN: usize = 64;
+
 /// Storage implementation using ekv with postcard serialization
 pub struct EkvStorage<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> {
     db: ekv::Database<MockFlash<SIZE>, NoopRawMutex>,
@@ -259,8 +267,11 @@ impl<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> Reposito
     fn scan_range(
         &self,
         range: Range<Self::K>,
-    ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
-        let iter = CursorIterBuilder {
+    ) -> Result<impl DoubleEndedIterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
+        // `scan_range` must return a double-ended iterator in ascending key order. ekv cursors
+        // are forward-only, so buffer up to `MAX_SCAN` keys in a fixed-capacity vector.
+        // A range holding more keys than that is reported as an overflow.
+        let cursor = CursorIterBuilder {
             db: &self.db,
             range,
             txn_builder: |db| futures::executor::block_on(db.read_transaction()),
@@ -276,7 +287,13 @@ impl<const SIZE: usize, const KEY_SIZE: usize, const VALUE_SIZE: usize> Reposito
         }
         .build();
 
-        Ok(iter)
+        let mut keys = Vec::<Result<Self::K, Self::Error>, MAX_SCAN>::new();
+        for item in cursor {
+            if keys.push(item).is_err() {
+                return Err(EkvError::BufferOverflow(BufferOverflowError));
+            }
+        }
+        Ok(keys.into_iter())
     }
 
     fn apply<U, E>(

@@ -236,7 +236,7 @@ impl Repository for ManualStorage {
     fn scan_range(
         &self,
         range: Range<Vec<u8>>,
-    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {
+    ) -> Result<impl DoubleEndedIterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {
         let iter = self.data.range(range);
         Ok(iter.map(|(k, _v)| Ok(k.clone())))
     }

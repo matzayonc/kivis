@@ -204,7 +204,15 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
 
     /// Iterates over all keys in the database within the specified range.
     ///
-    /// The range is inclusive of the start and exclusive of the end.
+    /// The range is inclusive of the start and exclusive of the end, and keys are yielded in
+    /// ascending order of their serialized form. With the default [`OrderedKeyConfig`](crate::OrderedKeyConfig)
+    /// key encoding this matches numeric order for unsigned integers. Caveats:
+    ///
+    /// - Signed integers are two's complement, so negative values sort *after* positive ones.
+    /// - `String` and `Vec` keys are length-prefixed and sort by length first; use
+    ///   [`Lexicographic`](crate::Lexicographic) for lexicographically ordered string keys.
+    ///
+    /// The returned iterator is double-ended, so `.rev()` yields keys in descending order.
     /// The keys must implement the [`RecordKey`] trait, and the related [`DatabaseEntry`] must point back to it.
     /// # Errors
     ///
@@ -214,7 +222,7 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
         &self,
         range: Range<K>,
     ) -> Result<
-        impl Iterator<Item = DatabaseIteratorItem<K::Record, S>> + use<'_, K, S, M, C>,
+        impl DoubleEndedIterator<Item = DatabaseIteratorItem<K::Record, S>> + use<'_, K, S, M, C>,
         DatabaseError<S>,
     >
     where
@@ -250,6 +258,9 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
         }))
     }
 
+    /// Iterates over all keys of the record type `K::Record`, in ascending order.
+    ///
+    /// See [`Self::iter_keys`] for ordering caveats.
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if serializing the range bounds fails or if the
@@ -257,7 +268,7 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
     pub fn iter_all_keys<K: RecordKey + Ord>(
         &self,
     ) -> Result<
-        impl Iterator<Item = DatabaseIteratorItem<K::Record, S>> + use<'_, K, S, M, C>,
+        impl DoubleEndedIterator<Item = DatabaseIteratorItem<K::Record, S>> + use<'_, K, S, M, C>,
         DatabaseError<S>,
     >
     where
@@ -288,6 +299,9 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
         }))
     }
 
+    /// Returns the greatest key currently stored for `K::Record`, or `K::default()` if the
+    /// table is empty. Used to recover the autoincrement counter on open.
+    ///
     /// # Errors
     ///
     /// Returns a [`DatabaseError`] if retrieving keys from the underlying storage fails.
@@ -296,14 +310,15 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
         K::Record: DatabaseEntry<Key = K>,
         M: Manifests<K::Record>,
     {
-        let mut first = self.iter_all_keys::<K>()?;
+        let mut keys = self.iter_all_keys::<K>()?;
 
-        Ok(first.next().transpose()?.unwrap_or_default())
+        Ok(keys.next_back().transpose()?.unwrap_or_default())
     }
 
     /// Iterates over all index entries in the database within the specified range and returns their primary keys.
     ///
-    /// The range is inclusive of the start and exclusive of the end.
+    /// The range is inclusive of the start and exclusive of the end; entries are yielded in
+    /// ascending order of the serialized index value (see [`Self::iter_keys`] for ordering caveats).
     /// The index must implement the [`Index`] trait.
     /// The returned iterator yields items of type `Result<Index::Record, DatabaseError<S>>`.
     /// # Errors
@@ -313,7 +328,7 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
         &self,
         range: Range<I>,
     ) -> Result<
-        impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S, M, C>,
+        impl DoubleEndedIterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S, M, C>,
         DatabaseError<S>,
     > {
         let mut start = <StorageKU<S> as Unifier>::D::default();
@@ -357,7 +372,7 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
         &self,
         index_key: &I,
     ) -> Result<
-        impl Iterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S, M, C>,
+        impl DoubleEndedIterator<Item = DatabaseIteratorItem<I::Record, S>> + use<'_, I, S, M, C>,
         DatabaseError<S>,
     > {
         let index_prelude = WrapPrelude::new::<I::Record>(Subtable::Index(I::INDEX));

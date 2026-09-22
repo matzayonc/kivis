@@ -106,4 +106,35 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_sled_autoincrement_survives_reopen() -> Result<(), Box<dyn std::error::Error>> {
+        // Regression: postcard varint keys made `last_id` return 255 after reopen, so the next
+        // `put` overwrote record 256. Keys are now encoded with `OrderedKeyConfig`.
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let path = temp_dir.path().join("test.db");
+
+        let mut store = Database::<_, TestManifest>::new(sled::open(&path)?)?;
+        let mut keys = Vec::new();
+        for i in 0..300u16 {
+            keys.push(store.put(TestRecord {
+                data: i.to_le_bytes().to_vec(),
+            })?);
+        }
+        assert_eq!(keys.last(), Some(&TestRecordKey(300)));
+        drop(store.dissolve());
+
+        let mut store = Database::<_, TestManifest>::new(sled::open(&path)?)?;
+        assert_eq!(store.last_id::<TestRecordKey>()?, TestRecordKey(300));
+        let fresh = store.put(TestRecord { data: vec![255] })?;
+        assert_eq!(fresh, TestRecordKey(301));
+        assert!(!keys.contains(&fresh));
+
+        let all: Vec<u64> = store
+            .iter_all_keys::<TestRecordKey>()?
+            .map(|k| k.map(|k| k.0))
+            .collect::<Result<_, _>>()?;
+        assert_eq!(all, (1..=301).collect::<Vec<u64>>());
+        Ok(())
+    }
 }

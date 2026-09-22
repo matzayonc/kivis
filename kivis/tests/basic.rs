@@ -44,6 +44,6 @@ fn test_iter() -> anyhow::Result<()> {
     let iter = store
         .iter_keys(UserRecordKey(0)..UserRecordKey(3))?
         .collect::<Result<Vec<_>, _>>()?;
-    assert_eq!(iter, vec![another_key, user_key]);
+    assert_eq!(iter, vec![user_key, another_key]);
     Ok(())
 }

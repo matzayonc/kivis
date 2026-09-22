@@ -5,7 +5,7 @@ use kivis::{
     BufferOverflowError, BufferOverflowOr, Database, Record, Repository, Storage, Unifier, manifest,
 };
 use serde::{Deserialize, Serialize};
-use std::{cmp::Reverse, collections::BTreeMap, ops::Range};
+use std::{collections::BTreeMap, ops::Range};
 use thiserror::Error;
 
 /// Trait for providing a constant prefix
@@ -85,7 +85,7 @@ pub enum CustomError {
 
 #[derive(Debug, Default)]
 pub struct CustomStorage {
-    data: BTreeMap<Reverse<Vec<u8>>, Vec<u8>>,
+    data: BTreeMap<Vec<u8>, Vec<u8>>,
 }
 
 impl CustomStorage {
@@ -93,7 +93,7 @@ impl CustomStorage {
         Self::default()
     }
 
-    pub fn raw_data(&self) -> &BTreeMap<Reverse<Vec<u8>>, Vec<u8>> {
+    pub fn raw_data(&self) -> &BTreeMap<Vec<u8>, Vec<u8>> {
         &self.data
     }
 }
@@ -116,25 +116,23 @@ impl Repository for CustomStorage {
     type Error = CustomError;
 
     fn insert_entry(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
-        self.data.insert(Reverse(key.to_vec()), value.to_vec());
+        self.data.insert(key.to_vec(), value.to_vec());
         Ok(())
     }
 
     fn get_entry(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
-        Ok(self.data.get(&Reverse(key.to_vec())).cloned())
+        Ok(self.data.get(key).cloned())
     }
 
     fn remove_entry(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
-        Ok(self.data.remove(&Reverse(key.to_vec())))
+        Ok(self.data.remove(key))
     }
 
     fn scan_range(
         &self,
         range: Range<Self::K>,
-    ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
-        let reverse_range = Reverse(range.end)..Reverse(range.start);
-        let iter = self.data.range(reverse_range);
-        Ok(iter.map(|(k, _v)| Ok(k.0.clone())))
+    ) -> Result<impl DoubleEndedIterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
+        Ok(self.data.range(range).map(|(k, _v)| Ok(k.clone())))
     }
 }
 

@@ -1,5 +1,4 @@
 use std::{
-    cmp::Reverse,
     collections::BTreeMap,
     error::Error,
     fmt::{Debug, Display},
@@ -11,13 +10,14 @@ use bincode::{
     error::{DecodeError, EncodeError},
 };
 
-use crate::{BufferOverflowError, Repository, Storage};
+use crate::{BufferOverflowError, OrderedKeyConfig, Repository, Storage};
 
 /// A memory-based storage implementation using a [`BTreeMap`].
 ///
-/// This storage backend keeps all data in memory and uses reverse-ordered keys
-/// for efficient range queries. Implements the [`Storage`] trait to be used as a storage backend.
-pub type MemoryStorage = BTreeMap<Reverse<Vec<u8>>, Vec<u8>>;
+/// This storage backend keeps all data in memory, ordered by the raw key bytes.
+/// Keys are encoded with [`OrderedKeyConfig`] so that byte order matches key order.
+/// Implements the [`Storage`] trait to be used as a storage backend.
+pub type MemoryStorage = BTreeMap<Vec<u8>, Vec<u8>>;
 
 /// Error type for [`MemoryStorage`] operations.
 #[derive(Debug)]
@@ -74,7 +74,7 @@ impl From<BufferOverflowError> for MemoryStorageError {
 
 impl Storage for MemoryStorage {
     type Repo = Self;
-    type Unifiers = (Configuration, Configuration);
+    type Unifiers = (OrderedKeyConfig, Configuration);
     fn repository(&self) -> &Self::Repo {
         self
     }
@@ -90,25 +90,22 @@ impl Repository for MemoryStorage {
     type Error = MemoryStorageError;
 
     fn insert_entry(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
-        self.insert(Reverse(key.to_vec()), value.to_vec());
+        self.insert(key.to_vec(), value.to_vec());
         Ok(())
     }
 
     fn get_entry(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
-        Ok(self.get(&Reverse(key.to_vec())).cloned())
+        Ok(self.get(key).cloned())
     }
 
     fn remove_entry(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
-        Ok(self.remove(&Reverse(key.to_vec())))
+        Ok(self.remove(key))
     }
 
     fn scan_range(
         &self,
         range: Range<Self::K>,
-    ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
-        let reverse_range = Reverse(range.end)..Reverse(range.start);
-
-        let iter = self.range(reverse_range);
-        Ok(iter.map(|(k, _v)| Ok(k.0.clone())))
+    ) -> Result<impl DoubleEndedIterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
+        Ok(self.range(range).map(|(k, _v)| Ok(k.clone())))
     }
 }

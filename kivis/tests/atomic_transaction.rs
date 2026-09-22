@@ -1,4 +1,4 @@
-use std::{cmp::Reverse, collections::BTreeMap, ops::Range};
+use std::{collections::BTreeMap, ops::Range};
 
 use bincode::{
     config::Configuration,
@@ -31,7 +31,7 @@ manifest![Manifest: MockRecord];
 // Mock atomic storage implementation
 #[derive(Debug)]
 pub struct MockAtomicStorage {
-    data: BTreeMap<Reverse<Vec<u8>>, Vec<u8>>,
+    data: BTreeMap<Vec<u8>, Vec<u8>>,
     /// Fail on the (N+1)th write inside `apply`. Defaults to `usize::MAX` (never fails).
     fail_after: usize,
 }
@@ -69,25 +69,23 @@ impl Repository for MockAtomicStorage {
     type Error = MockError;
 
     fn insert_entry(&mut self, key: &[u8], value: &[u8]) -> Result<(), Self::Error> {
-        self.data.insert(Reverse(key.to_vec()), value.to_vec());
+        self.data.insert(key.to_vec(), value.to_vec());
         Ok(())
     }
 
     fn get_entry(&self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
-        Ok(self.data.get(&Reverse(key.to_vec())).cloned())
+        Ok(self.data.get(key).cloned())
     }
 
     fn remove_entry(&mut self, key: &[u8]) -> Result<Option<Self::V>, Self::Error> {
-        Ok(self.data.remove(&Reverse(key.to_vec())))
+        Ok(self.data.remove(key))
     }
 
     fn scan_range(
         &self,
         range: Range<Self::K>,
-    ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
-        let reverse_range = Reverse(range.end)..Reverse(range.start);
-        let iter = self.data.range(reverse_range);
-        Ok(iter.map(|(k, _v)| Ok(k.0.clone())))
+    ) -> Result<impl DoubleEndedIterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
+        Ok(self.data.range(range).map(|(k, _v)| Ok(k.clone())))
     }
 
     fn apply<U, E>(
@@ -110,10 +108,10 @@ impl Repository for MockAtomicStorage {
                 }
                 match op {
                     kivis::BatchOp::Insert { key, value } => {
-                        self.data.insert(Reverse(key), value);
+                        self.data.insert(key, value);
                     }
                     kivis::BatchOp::Delete { key } => {
-                        self.data.remove(&Reverse(key));
+                        self.data.remove(&key);
                     }
                 }
                 writes += 1;

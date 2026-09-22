@@ -81,5 +81,8 @@ pub use transaction::DatabaseTransaction;
 #[doc(hidden)]
 pub use transaction::{PreBufferOps, RecordOps, build_record_ops};
 
+#[cfg(any(feature = "std", feature = "alloc"))]
+pub use integrations::{OrderedKeyConfig, ordered_key_config};
+
 #[cfg(feature = "sled")]
 pub use integrations::{PostcardUnifier, SledStorageError};

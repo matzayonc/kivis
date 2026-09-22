@@ -48,7 +48,7 @@ impl Repository for FileStore {
     fn scan_range(
         &self,
         range: std::ops::Range<Self::K>,
-    ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
+    ) -> Result<impl DoubleEndedIterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
         let entries = fs::read_dir(&self.data_dir)?;
 
         let mut keys: Vec<String> = Vec::new();
@@ -63,7 +63,7 @@ impl Repository for FileStore {
         }
 
         keys.sort();
-        Ok(keys.into_iter().rev().map(Ok))
+        Ok(keys.into_iter().map(Ok))
     }
 }
 

@@ -3,10 +3,11 @@ use std::error::Error;
 use std::fmt::{Debug, Display};
 
 use crate::{
-    ApplyError, BufferOverflowError, BufferOverflowOr, Repository, Storage, Unified, Unifier,
+    ApplyError, BufferOverflowError, BufferOverflowOr, OrderedKeyConfig, Repository, Storage,
+    Unified, Unifier,
 };
 
-/// Error type for [`SledStorage`] operations.
+/// Error type for the [`sled::Db`] storage backend.
 #[derive(Debug)]
 pub enum SledStorageError {
     /// Sled database error
@@ -50,7 +51,10 @@ impl From<BufferOverflowError> for SledStorageError {
     }
 }
 
-/// Postcard unifier for sled storage with Vec<u8> buffers
+/// Postcard unifier for sled storage with `Vec<u8>` buffers.
+///
+/// Used for **values** only; keys use [`OrderedKeyConfig`] so that sled's byte order
+/// matches key order.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PostcardUnifier;
 
@@ -80,7 +84,7 @@ impl Unifier for PostcardUnifier {
 
 impl Storage for sled::Db {
     type Repo = Self;
-    type Unifiers = (PostcardUnifier, PostcardUnifier);
+    type Unifiers = (OrderedKeyConfig, PostcardUnifier);
     fn repository(&self) -> &Self::Repo {
         self
     }
@@ -117,16 +121,11 @@ impl Repository for sled::Db {
     fn scan_range(
         &self,
         range: Range<Self::K>,
-    ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
-        // Sled uses forward iteration, but kivis expects reverse order
-        // Collect all keys in range and reverse them
-        let keys: Vec<_> = self
-            .range(range.start..range.end)
-            .filter_map(Result::ok)
-            .map(|(k, _)| k.to_vec())
-            .collect();
-
-        Ok(keys.into_iter().rev().map(Ok))
+    ) -> Result<impl DoubleEndedIterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
+        // `sled::Iter` is double-ended and lazy; keys come back in ascending byte order.
+        Ok(self
+            .range(range)
+            .map(|res| res.map(|(k, _)| k.to_vec()).map_err(SledStorageError::Sled)))
     }
 
     fn apply<U, E>(

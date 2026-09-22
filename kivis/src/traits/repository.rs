@@ -50,13 +50,22 @@ pub trait Repository {
     ) -> Result<Option<Self::V>, Self::Error>;
     /// Iterate over the keys in the repository that are in range.
     ///
+    /// # Contract
+    ///
+    /// - Keys are yielded in **ascending** byte order of the serialized key.
+    /// - `range.start` is inclusive, `range.end` is exclusive (standard [`Range`] semantics).
+    /// - The iterator must be double-ended so callers can cheaply read the last key
+    ///   (used for autoincrement recovery); backends without native reverse iteration may
+    ///   collect into a `Vec` and return `vec.into_iter()`.
+    /// - `range.start <= range.end` is guaranteed by the caller.
+    ///
     /// # Errors
     ///
     /// Returns an error if the underlying storage fails during iteration.
     fn scan_range(
         &self,
         range: Range<Self::K>,
-    ) -> Result<impl Iterator<Item = IterationItem<Self::K, Self::Error>>, Self::Error>;
+    ) -> Result<impl DoubleEndedIterator<Item = IterationItem<Self::K, Self::Error>>, Self::Error>;
 
     /// Execute mixed insert and delete operations from a fallible iterator.
     ///

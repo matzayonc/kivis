@@ -157,7 +157,7 @@ impl Repository for Client {
     fn scan_range(
         &self,
         range: Range<Self::K>,
-    ) -> Result<impl Iterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
+    ) -> Result<impl DoubleEndedIterator<Item = Result<Self::K, Self::Error>>, Self::Error> {
         // Use hex encoding for binary data to avoid URL encoding issues
         let start = hex::encode(&range.start);
         let end = hex::encode(&range.end);

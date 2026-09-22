@@ -106,7 +106,7 @@ impl Repository for FileStore {
     fn scan_range(
         &self,
         range: std::ops::Range<Vec<u8>>,
-    ) -> Result<impl Iterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {
+    ) -> Result<impl DoubleEndedIterator<Item = Result<Vec<u8>, Self::Error>>, Self::Error> {
         let entries = fs::read_dir(&self.data_dir)?;
 
         let mut keys: Vec<Vec<u8>> = Vec::new();
@@ -121,8 +121,8 @@ impl Repository for FileStore {
             }
         }
 
+        // `scan_range` must yield keys in ascending byte order.
         keys.sort();
-        keys.reverse(); // Match the Reverse order used in MemoryStorage
         Ok(keys.into_iter().map(Ok))
     }
 }
