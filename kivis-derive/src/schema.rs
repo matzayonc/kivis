@@ -43,6 +43,19 @@ impl Schema {
             .cloned()
             .collect::<Vec<_>>();
 
+        // Generic records are not supported: the generated key struct carries none of the
+        // record's parameters, while the trait impls below reference them, so the generated
+        // code cannot compile. Reject it here with a message that says why.
+        if !generics.params.is_empty() {
+            return Err(Error::new_spanned(
+                &generics,
+                "kivis::Record cannot be derived for generic types: the generated key type \
+                 would not carry the type parameters. Derive it on a concrete type instead.",
+            )
+            .to_compile_error()
+            .into());
+        }
+
         // Ensure it's a struct
         let fields = match input.data {
             Data::Struct(ref data_struct) => &data_struct.fields,

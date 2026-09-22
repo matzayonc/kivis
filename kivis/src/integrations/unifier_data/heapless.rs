@@ -29,18 +29,19 @@ impl<const N: usize> Unified for heapless::Vec<u8, N> {
     }
 
     fn next(&mut self) -> Result<(), BufferOverflowError> {
-        for i in (0..self.len()).rev() {
-            // Add one if possible
-            if self[i] < 255 {
-                self[i] += 1;
+        // See the `Vec<u8>` implementation: drop trailing 0xFF bytes, then bump the last byte
+        // that can be bumped, so the result is the smallest buffer sorting after every buffer
+        // that starts with `self`.
+        while let Some(&last) = self.last() {
+            if last < u8::MAX {
+                let end = self.len() - 1;
+                self[end] = last + 1;
                 return Ok(());
             }
-            // Otherwise, set to zero and carry over
-            self[i] = 0;
+            self.pop();
         }
 
-        // If all bytes were 255, try to add a new byte (may fail if at capacity)
-        self.push(0).map_err(|_| BufferOverflowError)
+        Err(BufferOverflowError)
     }
 
     fn extend_from(&mut self, part: Self::View<'_>) -> Result<(), BufferOverflowError> {

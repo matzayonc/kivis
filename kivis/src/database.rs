@@ -47,6 +47,9 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
 
     /// Add a record with autoincremented key into the database, together with all related index entries.
     ///
+    /// Ids start at 1: the counter holds the last id issued, and an empty table starts from
+    /// `Key::default()`.
+    ///
     /// The record must implement the [`DatabaseEntry`] trait, with the key type implementing the [`RecordKey`] trait pointing back to it.
     /// The record's key must implement the [`Incrementable`] trait.
     /// For records that do not have an autoincremented key, use [`Self::insert`] instead.

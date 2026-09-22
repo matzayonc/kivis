@@ -1,0 +1,5 @@
+error: kivis::Record cannot be derived for generic types: the generated key type would not carry the type parameters. Derive it on a concrete type instead.
+ --> tests/ui/generic_record.rs:3:15
+  |
+3 | struct Generic<T> {
+  |               ^^^

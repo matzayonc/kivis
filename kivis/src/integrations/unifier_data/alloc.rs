@@ -19,19 +19,21 @@ impl Unified for Vec<u8> {
     }
 
     fn next(&mut self) -> Result<(), BufferOverflowError> {
-        for i in (0..self.len()).rev() {
-            // Add one if possible
-            if self[i] < 255 {
-                self[i] += 1;
+        // The smallest buffer that sorts after every buffer starting with `self`: drop trailing
+        // 0xFF bytes, then bump the last byte that can be bumped. Appending a byte instead would
+        // produce a bound that still admits some keys with a different prefix, and for an all-0xFF
+        // buffer it produced one that sorted *before* the input.
+        while let Some(&last) = self.last() {
+            if last < u8::MAX {
+                let end = self.len() - 1;
+                self[end] = last + 1;
                 return Ok(());
             }
-            // Otherwise, set to zero and carry over
-            self[i] = 0;
+            self.pop();
         }
 
-        // If all bytes were 255, we need to add a new byte
-        self.push(0);
-        Ok(())
+        // Every byte was 0xFF (or the buffer was empty): no buffer sorts after all of them.
+        Err(BufferOverflowError)
     }
 
     fn extend_from(&mut self, part: Self::View<'_>) -> Result<(), BufferOverflowError> {

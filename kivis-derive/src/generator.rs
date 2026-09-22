@@ -59,7 +59,14 @@ impl Generator {
         keys: &[SchemaKey],
         visibility: &syn::Visibility,
     ) -> proc_macro2::TokenStream {
-        let other_attrs = &self.0.attrs;
+        // Only doc and cfg carry over: attributes meant for the record (serde container
+        // options, repr, ...) are not valid for, or would silently change, the key type.
+        let other_attrs = self
+            .0
+            .attrs
+            .iter()
+            .filter(|a| a.path().is_ident("doc") || a.path().is_ident("cfg"))
+            .collect::<Vec<_>>();
 
         // Generate key type and implementation based on number of key fields
         let field_types: Vec<_> = keys.iter().map(|k| &k.ty).collect();
@@ -182,10 +189,15 @@ impl Generator {
         let name = &self.0.name;
         let (impl_generics, ty_generics, where_clause) = self.0.generics.split_for_impl();
 
-        let Ok(index_count) = u8::try_from(index_values.len()) else {
-            return quote! {
-                compile_error!("Too many indexes: maximum of 256 indexes allowed per record");
-            };
+        // Index discriminator `d` is stored as the subtable byte `d + 2` (0 is the main table,
+        // 1 the reserved slot), so the highest usable discriminator is 253.
+        let index_count = match u8::try_from(index_values.len()) {
+            Ok(count) if count <= 254 => count,
+            _ => {
+                return quote! {
+                    compile_error!("Too many indexes: maximum of 254 indexes allowed per record");
+                };
+            }
         };
         let indices = 0..index_count;
 
