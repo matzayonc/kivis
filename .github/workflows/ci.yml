@@ -5,8 +5,12 @@ on:
     branches: [master, dev]
   pull_request:
     branches: [master, dev]
+    # Every PR into master or dev gets checked, whatever route it takes there.
     # opened/reopened: the PR itself. synchronize: every later commit pushed to it.
-    types: [opened, reopened, synchronize]
+    # ready_for_review: a draft marked ready, which pushes no new commit.
+    # edited: a PR retargeted onto master or dev, which would otherwise reach a
+    # protected base having only ever been checked against its old one.
+    types: [opened, reopened, synchronize, ready_for_review, edited]
 
 env:
   CARGO_TERM_COLOR: always
