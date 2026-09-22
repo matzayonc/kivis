@@ -1,11 +1,45 @@
 # Known limitations
 
-Behaviour that is intentional, or known and not yet fixed. Each entry says what
-happens and what to do instead. If something here bites you, it is a known gap
-rather than a surprise — but please still open an issue, since that is how these
-get prioritised.
+Two kinds of thing: **known bugs**, which are defects awaiting a fix, and the
+**limitations** after them, which are consequences of the design and are not going
+to change soon. Each entry says what happens and what to do instead. If something
+here bites you it is a known gap rather than a surprise — but please still open an
+issue, since that is how these get prioritised.
 
 See also the [changelog](CHANGELOG.md) for what has already changed.
+
+## Known bugs
+
+Unlike the rest of this file, these are defects, not decisions. They are listed
+here so they are not rediscovered the hard way; each will be fixed.
+
+### A transaction commit does not invalidate the cache
+
+`Database::put`, `insert` and `remove` expire the affected cache entry, but
+`Database::commit` does not. A record written through a user transaction leaves
+any previously cached value in place, so a later `get` returns the stale record:
+
+```rust,ignore
+db.insert(Acct { id: 1, balance: 100 })?;
+db.get(&AcctKey(1))?;                     // caches balance 100
+
+let mut tx = db.create_transaction();
+tx.insert(Acct { id: 1, balance: 999 })?;
+db.commit(tx)?;
+
+db.get(&AcctKey(1))?;                     // still reports 100
+```
+
+Only affects databases configured with a cache via `manifest![Name + Cache: ...]`;
+the default `NoCache` is unaffected, which is why it went unnoticed.
+
+**Workaround:** expire the keys you wrote after committing, or route writes that
+must stay cache-coherent through `put`/`insert`/`remove`.
+
+**Why it is not a one-line fix:** `commit` would have to know which keys the
+transaction touched, and the buffer holds manifest enum values rather than typed
+keys, so it needs manifest-level dispatch and the cache type threaded through
+commit.
 
 ## Schema and derive
 
@@ -68,29 +102,6 @@ at runtime that the referenced record exists:
 
 Autoincrement ids are never reissued, so a dangling key stays dangling rather than
 silently resolving to an unrelated record that later took the same id.
-
-## Caching
-
-**A transaction commit does not invalidate the cache.** `Database::put`, `insert`
-and `remove` expire the affected entry, but `Database::commit` does not, so a
-record written through a user transaction leaves any previously cached value in
-place and a later `get` returns the stale record:
-
-```rust,ignore
-db.insert(Acct { id: 1, balance: 100 })?;
-db.get(&AcctKey(1))?;                     // caches balance 100
-
-let mut tx = db.create_transaction();
-tx.insert(Acct { id: 1, balance: 999 })?;
-db.commit(tx)?;
-
-db.get(&AcctKey(1))?;                     // still reports 100
-```
-
-This only affects databases configured with a cache via `manifest![Name + Cache: ...]`;
-the default `NoCache` is unaffected. **Until it is fixed, expire the keys you wrote
-yourself after committing**, or route writes that must stay cache-coherent through
-`put`/`insert`/`remove`.
 
 ## Transactions and autoincrement ids
 
