@@ -9,10 +9,10 @@ use crate::{ApplyError, BatchOp, BufferOverflowError, Unified, Unifier, UnifierP
 /// without knowledge of how they are serialized. This allows for better
 /// separation of concerns between data storage and serialization logic.
 pub trait Repository {
-    /// Key type for the repository (the buffer type, e.g., Vec<u8> or String).
+    /// Key type for the repository (the buffer type, e.g., `Vec<u8>` or `String`).
     type K: Unified;
 
-    /// Value type for the repository (the buffer type, e.g., Vec<u8> or String).
+    /// Value type for the repository (the buffer type, e.g., `Vec<u8>` or `String`).
     type V: Unified;
 
     /// Error type returned by repository operations.

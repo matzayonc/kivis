@@ -18,5 +18,10 @@ proc-macro = true
 syn = { workspace = true }
 quote = { workspace = true }
 proc-macro2 = { workspace = true }
-serde = { workspace = true }
+# Proc-macro crate: runs on the host, so std is always available here.
+serde = { workspace = true, features = ["std"] }
 convert_case = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

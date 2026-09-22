@@ -1,6 +1,6 @@
 [package]
 name = "kivis-fs"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "File system storage backend for kivis databases with human-readable CSV persistence"
 license = "MIT"
@@ -13,7 +13,7 @@ authors = ["Mateusz Zając <matzayonc@gmail.com>"]
 
 [dependencies]
 kivis = { workspace = true }
-serde = { workspace = true }
+serde = { workspace = true, features = ["std"] }
 csv = { workspace = true }
 
 [dev-dependencies]
@@ -21,3 +21,7 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 tempfile = { workspace = true }
 proptest = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

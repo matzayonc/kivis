@@ -14,7 +14,7 @@ struct Wrapped<R> {
 }
 
 pub trait Unified: Default + Clone + PartialEq {
-    /// The borrowed view type for this buffer (e.g., &[u8] for Vec<u8>, &str for String)
+    /// The borrowed view type for this buffer (e.g., `&[u8]` for `Vec<u8>`, `&str` for `String`)
     type View<'a>;
 
     /// Converts the buffer to a view with explicit lifetime
@@ -92,7 +92,7 @@ pub trait Unifier: Copy {
     /// Returns an error if deserialization fails.
     fn deserialize<T: DeserializeOwned>(&self, data: &Self::D) -> Result<T, Self::DeError>;
 
-    /// Deserializes a value that was stored with a [`WrapPrelude`] prefix, discarding the prelude.
+    /// Deserializes a value that was stored with a table prefix, discarding that prefix.
     ///
     /// # Errors
     ///

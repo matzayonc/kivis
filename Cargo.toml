@@ -4,15 +4,15 @@ exclude = []
 resolver = "2"
 
 [workspace.package]
-version = "0.5.3"
+version = "0.6.0"
 edition = "2024"
 
 [workspace.dependencies]
-kivis = { path = "kivis", features = ["heapless"], version = "0.5.3" }
-kivis-derive = { path = "kivis-derive", version = "0.5.2" }
+kivis = { path = "kivis", features = ["heapless"], version = "=0.6.0" }
+kivis-derive = { path = "kivis-derive", version = "=0.6.0" }
 
-serde = { version = "1.0", features = ["derive"] }
-bincode = { version = "2.0", features = ["serde"] }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+bincode = { version = "2.0", default-features = false, features = ["serde"] }
 hex = "0.4"
 paste = "1.0"
 trybuild = "1.0"

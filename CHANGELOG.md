@@ -1,0 +1,61 @@
+# Changelog
+
+All notable changes to this project are documented here.
+This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html);
+while below 1.0, breaking changes bump the minor version.
+
+## [0.6.0] — unreleased
+
+First release after a full correctness audit. **The on-disk format changed in
+ways that are not backward compatible**: a database written by 0.5.x cannot be
+opened by 0.6.0. There is no migration path yet; export and re-import.
+
+### Fixed
+
+- **Autoincrement keys could silently overwrite existing records.** Keys were
+  encoded little-endian varint, so byte order did not match numeric order, and
+  the counter was recovered on open as the byte-wise greatest key. After 600
+  inserts a reopened database issued 512 again and overwrote that record.
+  Keys now use a big-endian fixed-int encoding (`OrderedKeyConfig`).
+- **Range scans returned the wrong records in the wrong order.**
+  `iter_keys(1..4)` yielded `[4, 3, 2]` — descending, and off by one at both
+  ends — against documentation promising ascending, start-inclusive and
+  end-exclusive. `Repository::scan_range` now specifies that contract and
+  returns a `DoubleEndedIterator`.
+- **Autoincrement ids were reused after a delete.** The counter is now
+  persisted in the reserved subtable slot, so deleting the most recent record
+  no longer lets its id be handed out again to a different record.
+- **Updating a record left stale secondary index entries**, so index lookups
+  returned keys whose records no longer held the indexed value. The previous
+  version's index entries are now deleted in the same atomic batch.
+- **`kivis-fs` could not reopen a non-empty database at all**, and its index
+  keys were ambiguous: a lookup for `"bob"` also matched `"bobby"`. It now uses
+  a prefix-free, order-preserving key encoding.
+- **Most feature combinations did not compile**, including `std` and `alloc` on
+  their own and `--no-default-features`.
+- **A record type named `Item` broke `manifest!`** with an ambiguous associated
+  item error.
+- `sled`'s `scan_range` collected every key in range into memory on each call
+  and discarded iteration errors.
+- `Unified::next` produced a buffer that sorted *before* its input when every
+  byte was `0xFF`, and otherwise an upper bound that could admit unrelated keys.
+- The derive copied container attributes such as `#[serde(deny_unknown_fields)]`
+  onto the generated key type.
+- Deriving `Record` on a generic type failed with errors pointing into generated
+  code; it is now rejected with an explanatory message.
+- The index limit is 254; the error message claimed 256 and the check allowed 255.
+
+### Added
+
+- `Database::manifest()` / `manifest_mut()`, so a transaction can issue
+  autoincrement keys via `DatabaseTransaction::put`.
+- `Database::persist_counter()` and `load_counter()`.
+- `OrderedKeyConfig` and `ordered_key_config()`.
+
+### Changed
+
+- `Unified` now requires `PartialEq`.
+- `Manifest` gained `main_key` and `stale_index_ops`; manual implementors must
+  provide them.
+- `kivis-derive` is now pinned to an exact version by `kivis`, so the macro and
+  the library can never be resolved to mismatched versions.

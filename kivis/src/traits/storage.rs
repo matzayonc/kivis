@@ -1,6 +1,6 @@
 use crate::{Repository, Unifier, UnifierPair};
 
-/// Error returned by [`Repository::try_apply`]: either the iterator produced an error or
+/// Error returned by [`Repository::apply`]: either the iterator produced an error or
 /// the underlying storage did.
 pub enum ApplyError<SerializationError, ApplicationError> {
     /// The fallible iterator yielded an error before all operations were applied.

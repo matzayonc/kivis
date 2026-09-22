@@ -14,8 +14,8 @@ readme = "../readme.md"
 
 [features]
 default = ["std", "atomic", "memory-storage"]
-std = []
-alloc = []
+std = ["alloc", "serde/std", "bincode/std"]
+alloc = ["serde/alloc", "bincode/alloc"]
 atomic = []
 memory-storage = ["std"]
 heapless = ["dep:heapless"]
@@ -53,3 +53,7 @@ heapless = { workspace = true }
 [[example]]
 name = "embedded"
 required-features = ["heapless", "atomic"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
