@@ -160,7 +160,12 @@ macro_rules! manifest {
                 $crate::TransactionError<__U>,
             >;
 
-            fn next(&mut self) -> ::core::option::Option<Self::Item> {
+            // Spelled out rather than `Self::Item`: a record type named `Item` would make
+            // `Self::Item` ambiguous between the enum variant and the associated type.
+            fn next(&mut self) -> ::core::option::Option<::core::result::Result<
+                $crate::BatchOp<__U>,
+                $crate::TransactionError<__U>,
+            >> {
                 match self {
                     $(
                         Self::[<$ty>](it) => it.next(),
