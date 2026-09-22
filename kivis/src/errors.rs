@@ -3,14 +3,13 @@ use core::{
     fmt::{self, Debug, Display},
 };
 
-use bincode::config::Configuration;
+use bincode::error::{DecodeError, EncodeError};
 
 use crate::{Repository, Storage, Unifier, UnifierPair};
 
 type StorageKU<S> = <<S as Storage>::Unifiers as UnifierPair>::KeyUnifier;
 type StorageVU<S> = <<S as Storage>::Unifiers as UnifierPair>::ValueUnifier;
 
-#[cfg(feature = "atomic")]
 use crate::transaction::TransactionError;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -105,9 +104,9 @@ pub enum InternalDatabaseError {
     /// Internal error caused by a missing index entry.
     MissingIndexEntry,
     /// Internal serialization error, should never occur.
-    Serialization(<Configuration as Unifier>::SerError),
+    Serialization(EncodeError),
     /// Internal deserialization error, most likely caused by database corruption.
-    Deserialization(<Configuration as Unifier>::DeError),
+    Deserialization(DecodeError),
 }
 
 // This cannot be a [`From`] implementation because of orphan rules.

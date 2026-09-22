@@ -50,3 +50,14 @@ repos:
         language: system
         pass_filenames: false
         types: [rust]
+
+      - id: cargo-check-feature-combos
+        name: cargo check (feature combos)
+        description: Every advertised feature flag must build on its own
+        entry: >-
+          bash -c 'for f in "" std alloc atomic heapless memory-storage
+          std,atomic alloc,atomic heapless,atomic; do
+          cargo check -p kivis --no-default-features ${f:+--features $f} || exit 1; done'
+        language: system
+        pass_filenames: false
+        types: [rust]
