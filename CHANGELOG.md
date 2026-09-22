@@ -29,9 +29,6 @@ opened by 0.6.0. There is no migration path yet; export and re-import.
   ends — against documentation promising ascending, start-inclusive and
   end-exclusive. `Repository::scan_range` now specifies that contract and
   returns a `DoubleEndedIterator`.
-- **Autoincrement ids were reused after a delete.** The counter is now
-  persisted in the reserved subtable slot, so deleting the most recent record
-  no longer lets its id be handed out again to a different record.
 - **Updating a record left stale secondary index entries**, so index lookups
   returned keys whose records no longer held the indexed value. The previous
   version's index entries are now deleted in the same atomic batch.
@@ -56,7 +53,6 @@ opened by 0.6.0. There is no migration path yet; export and re-import.
 
 - `Database::manifest()` / `manifest_mut()`, so a transaction can issue
   autoincrement keys via `DatabaseTransaction::put`.
-- `Database::persist_counter()` and `load_counter()`.
 - `OrderedKeyConfig` and `ordered_key_config()`.
 - `lexkey`, a new crate in this repository holding the order-preserving, prefix-free,
   filename-safe key encoding that `kivis-fs` uses. It is a plain `serde` serializer with

@@ -67,8 +67,9 @@ Three strategies, one per record:
 | Field key | one or more `#[key]` fields | `UserKey(field types…)`, assigned by `insert` |
 | Derived | `#[derived_key(T)]` + your `DeriveKey` impl | whatever you compute — a hash, a UUID |
 
-Autoincrement ids start at 1 and are never reissued, including after the most recent
-record is deleted.
+Autoincrement ids start at 1. The counter is recovered from the highest stored key when
+the database is opened, so deleting the most recent record lets its id be issued again —
+see [LIMITATIONS.md](LIMITATIONS.md).
 
 ## Foreign keys
 

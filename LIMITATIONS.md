@@ -66,19 +66,22 @@ at runtime that the referenced record exists:
   it. Their keys are left dangling and `get` on them returns `None`.
 - There are no cascade deletes and no foreign-key constraints.
 
-Autoincrement ids are never reissued, so a dangling key stays dangling rather than
-silently resolving to an unrelated record that later took the same id.
+Autoincrement ids of deleted records can be issued again (see below), so a dangling
+key can later resolve to an unrelated record that took the same id.
 
 ## Transactions and autoincrement ids
 
-- **Rolled back transactions burn ids.** The counter advances when a key is issued
-  inside `DatabaseTransaction::put`, not at commit, so ids from a transaction that
-  is rolled back or fails to commit are never handed out. This keeps ids unique at
-  the cost of gaps.
-- **Ids issued inside a transaction are not persisted automatically.**
-  `Database::put` records the counter for you; after committing a transaction that
-  issued keys via `DatabaseTransaction::put`, call `Database::persist_counter` so
-  the id cannot be reused if that record is later deleted.
+- **Ids of deleted trailing records are reused after a reopen.** The counter is
+  not persisted; on open it is recovered as the highest key still stored. Delete
+  the record with the highest id (or empty the table), reopen, and the next `put`
+  issues that id again. Any stored key that pointed at the deleted record now
+  resolves to the new one. If ids must never repeat, use a `#[derived_key]` such as
+  a UUID, or never delete the most recent record.
+- **Rolled back transactions burn ids until the next reopen.** The counter
+  advances when a key is issued inside `DatabaseTransaction::put`, not at commit,
+  so ids from a transaction that is rolled back or fails to commit are skipped for
+  the rest of the session. After a reopen, ids above the highest stored key are
+  issued again.
 
 ## Storage format stability
 
