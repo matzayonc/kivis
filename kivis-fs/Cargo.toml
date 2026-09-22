@@ -13,6 +13,7 @@ authors = ["Mateusz Zając <matzayonc@gmail.com>"]
 
 [dependencies]
 kivis = { workspace = true }
+lexkey = { workspace = true, features = ["kivis"] }
 serde = { workspace = true, features = ["std"] }
 csv = { workspace = true }
 

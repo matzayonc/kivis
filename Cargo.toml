@@ -1,5 +1,5 @@
 [workspace]
-members = ["kivis", "kivis-derive", "kivis-fs"]
+members = ["kivis", "kivis-derive", "kivis-fs", "lexkey"]
 exclude = []
 resolver = "2"
 
@@ -10,6 +10,7 @@ edition = "2024"
 [workspace.dependencies]
 kivis = { path = "kivis", features = ["heapless"], version = "=0.6.0" }
 kivis-derive = { path = "kivis-derive", version = "=0.6.0" }
+lexkey = { path = "lexkey", version = "=0.6.0" }
 
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 bincode = { version = "2.0", default-features = false, features = ["serde"] }

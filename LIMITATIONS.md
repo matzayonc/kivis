@@ -86,9 +86,9 @@ numeric order for unsigned integers. Two cases do not:
   before content: `"z"` sorts before `"aa"`. For lexicographic ordering wrap the
   field in `Lexicographic<String>`.
 
-Floating-point keys are not ordered correctly by any of the built-in encodings and
-are rejected outright by the `kivis-fs` key encoding, which also does not support
-maps as key components.
+Floating-point keys are not ordered correctly by any of the built-in encodings, and are
+rejected outright by [`lexkey`](lexkey), the encoding `kivis-fs` uses, which also does not
+support maps as key components.
 
 ## Referential integrity is a compile-time property only
 

@@ -51,6 +51,11 @@ opened by 0.6.0. There is no migration path yet; export and re-import.
   autoincrement keys via `DatabaseTransaction::put`.
 - `Database::persist_counter()` and `load_counter()`.
 - `OrderedKeyConfig` and `ordered_key_config()`.
+- `lexkey`, a new crate in this repository holding the order-preserving, prefix-free,
+  filename-safe key encoding that `kivis-fs` uses. It is a plain `serde` serializer with
+  `encode`/`encode_into`/`decode`, and depends on kivis only behind its `kivis` feature,
+  which supplies the `Unifier` impl. `kivis-fs` re-exports `KeyCodec` and `KeyError`, so its
+  own API is unchanged.
 
 ### Changed
 

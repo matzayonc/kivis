@@ -1,14 +1,48 @@
-//! Order-preserving, prefix-free, filesystem-safe key encoding.
+//! Order-preserving, prefix-free, filename-safe key encoding for `serde`.
 //!
-//! `kivis` builds storage keys by *concatenating* several independently serialized
-//! components (table prelude, then the record key; for index entries the index value and
-//! then the primary key) and later reads a main key back as a single `Wrap { prelude, key }`
-//! struct. That only works if the encoding of a struct is exactly the concatenation of the
-//! encodings of its fields and every scalar is self-delimiting. It also has to be
-//! order-preserving when compared as plain strings, because range scans and autoincrement
-//! recovery compare keys that way.
+//! Sorting a database by its serialized keys only works if the encoding preserves order, and
+//! scanning a key prefix only works if no encoded value can be a prefix of another. Most
+//! formats give you neither: bincode's varints are little-endian, JSON and CSV write integers
+//! as bare decimals where `"10"` sorts before `"2"`, and none of them delimit a string in a way
+//! that stops `"bob"` from prefixing `"bobby"`.
 //!
-//! The encoding produced here satisfies all of that while staying readable:
+//! This crate is a `serde` serializer and deserializer that gives you all of it, while staying
+//! readable enough to use as a file name.
+//!
+//! ```rust
+//! # fn main() -> Result<(), lexkey::KeyError> {
+//! // Order is preserved: comparing encoded keys compares the values.
+//! assert!(lexkey::encode(&9u32)? < lexkey::encode(&10u32)?);
+//!
+//! // Components are self-delimiting, so no key can be a prefix of another.
+//! let bob = lexkey::encode(&"bob")?;
+//! let bobby = lexkey::encode(&"bobby")?;
+//! assert!(!bobby.starts_with(&bob));
+//!
+//! // Concatenation equals struct encoding, so composite keys compose.
+//! let mut composed = String::new();
+//! lexkey::encode_into(&mut composed, &1u8)?;
+//! lexkey::encode_into(&mut composed, &"x")?;
+//! assert_eq!(composed, lexkey::encode(&(1u8, "x"))?);
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Guarantees
+//!
+//! 1. **Order preserving.** For any two values of the same type, comparing their encodings as
+//!    strings gives the same answer as comparing the values — including negative integers,
+//!    which are stored in offset binary rather than two's complement.
+//! 2. **Prefix-free.** Every scalar ends with the terminator `.`, which sorts below every
+//!    character that can appear inside a component, so `encode("bob")` is never a prefix of
+//!    `encode("bobby")` and `"bob" + 13` never collides with `"bob1" + 3`.
+//! 3. **Concatenation is composition.** Encoding two values into one buffer produces exactly
+//!    what encoding a struct or tuple of them produces, so a composite key can be built a
+//!    piece at a time and parsed back as a whole.
+//! 4. **Filename-safe.** The output alphabet is `[A-Za-z0-9._]`, so an encoded key can be used
+//!    directly as a file name with no further escaping.
+//!
+//! # Format
 //!
 //! | Rust type              | Encoding                                                     |
 //! |------------------------|--------------------------------------------------------------|
@@ -22,15 +56,30 @@
 //! | enums                  | variant index as `u32`, then the payload                     |
 //! | `()`                   | nothing                                                      |
 //!
-//! Every scalar ends with the terminator `.`, which sorts below every character that can
-//! appear inside a component (`0-9`, `A-Z`, `_`, `a-z`), so `bob.` never prefixes `bobby.`
-//! and `[prefix, next(prefix))` scans match exactly one value. The output alphabet is
-//! `[A-Za-z0-9._]`, so keys are used directly as file names without further escaping.
+//! Fixed-width integers are what make guarantee 1 hold, and they are why the encoding is
+//! verbose: a `u64` always takes 20 characters. Strings sort lexicographically rather than by
+//! length, since they are terminated rather than length-prefixed.
 //!
-//! Floats and maps are not supported as key components.
+//! # Not supported
+//!
+//! Floats and maps are rejected: no fixed-width decimal form of a float preserves order across
+//! the whole range including negative zero and NaN, and a map has no canonical field order to
+//! encode. Both return [`KeyError`].
+//!
+//! # Use with kivis
+//!
+//! With the `kivis` feature, [`KeyCodec`] implements `kivis::Unifier` and can serve as the key
+//! codec of a storage backend. This is what [`kivis-fs`](https://docs.rs/kivis-fs) uses to name
+//! its files.
+
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![warn(clippy::pedantic)]
+#![deny(clippy::unwrap_used)]
+#![deny(clippy::expect_used)]
 
 use core::fmt::{self, Display, Write};
 
+#[cfg(feature = "kivis")]
 use kivis::{BufferOverflowOr, Unifier};
 use serde::{
     Serialize,
@@ -65,10 +114,16 @@ impl de::Error for KeyError {
     }
 }
 
-/// [`Unifier`] for keys: encodes with the order-preserving format described in the module docs.
+/// [`kivis::Unifier`] for keys: encodes with the order-preserving format described in
+/// the crate docs.
+///
+/// Requires the `kivis` feature.
+#[cfg(feature = "kivis")]
+#[cfg_attr(docsrs, doc(cfg(feature = "kivis")))]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct KeyCodec;
 
+#[cfg(feature = "kivis")]
 impl Unifier for KeyCodec {
     type D = String;
     type SerError = KeyError;
@@ -88,6 +143,61 @@ impl Unifier for KeyCodec {
         let mut de = KeyDeserializer { input: data };
         T::deserialize(&mut de)
     }
+}
+
+/// Encodes `value` into its key representation.
+///
+/// # Errors
+///
+/// Returns a [`KeyError`] if `value` contains a type this encoding does not support,
+/// such as a float or a map.
+///
+/// # Example
+///
+/// ```rust
+/// # fn main() -> Result<(), lexkey::KeyError> {
+/// // Integers are fixed width, so byte order matches numeric order.
+/// assert!(lexkey::encode(&9u32)? < lexkey::encode(&10u32)?);
+/// # Ok(())
+/// # }
+/// ```
+pub fn encode<T: Serialize + ?Sized>(value: &T) -> Result<String, KeyError> {
+    let mut out = String::new();
+    value.serialize(&mut KeySerializer { out: &mut out })?;
+    Ok(out)
+}
+
+/// Appends the key representation of `value` to `out`.
+///
+/// Concatenating encodings is how composite keys are built: the result is exactly what
+/// encoding a struct of those fields produces.
+///
+/// # Errors
+///
+/// Returns a [`KeyError`] if `value` contains an unsupported type.
+pub fn encode_into<T: Serialize + ?Sized>(out: &mut String, value: &T) -> Result<(), KeyError> {
+    value.serialize(&mut KeySerializer { out })
+}
+
+/// Decodes a value from its key representation.
+///
+/// # Errors
+///
+/// Returns a [`KeyError`] if `input` is malformed or does not describe a `T`.
+///
+/// # Example
+///
+/// ```rust
+/// # fn main() -> Result<(), lexkey::KeyError> {
+/// let encoded = lexkey::encode(&(1u8, "hi"))?;
+/// let (n, s): (u8, String) = lexkey::decode(&encoded)?;
+/// assert_eq!((n, s.as_str()), (1, "hi"));
+/// # Ok(())
+/// # }
+/// ```
+pub fn decode<T: de::DeserializeOwned>(input: &str) -> Result<T, KeyError> {
+    let mut de = KeyDeserializer { input };
+    T::deserialize(&mut de)
 }
 
 // ---------------------------------------------------------------------------
@@ -692,19 +802,21 @@ impl<'de> VariantAccess<'de> for &mut KeyDeserializer<'de> {
 }
 
 #[cfg(test)]
+// Panicking on a bad result is what a failing test should do.
+#[allow(clippy::expect_used)]
 mod tests {
     use super::*;
     use proptest::prelude::*;
     use serde::Deserialize;
 
+    // Thin wrappers over the public API, so these tests exercise what callers use and
+    // build whether or not the `kivis` feature is on.
     fn encode<T: Serialize>(value: &T) -> String {
-        let mut buf = String::new();
-        KeyCodec.serialize(&mut buf, value).expect("encode");
-        buf
+        super::encode(value).expect("encode")
     }
 
     fn decode<T: de::DeserializeOwned>(s: &str) -> T {
-        KeyCodec.deserialize(&s.to_string()).expect("decode")
+        super::decode(s).expect("decode")
     }
 
     #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -748,16 +860,15 @@ mod tests {
         // This is what kivis does: serialize prelude, then key, into one buffer,
         // and later read it back as one struct.
         let mut buf = String::new();
-        KeyCodec
-            .serialize(
-                &mut buf,
-                &Prelude {
-                    scope: 1,
-                    subtable: 0,
-                },
-            )
-            .expect("prelude");
-        KeyCodec.serialize(&mut buf, &42u64).expect("key");
+        encode_into(
+            &mut buf,
+            &Prelude {
+                scope: 1,
+                subtable: 0,
+            },
+        )
+        .expect("prelude");
+        encode_into(&mut buf, &42u64).expect("key");
         let wrapped: Wrapped<u64> = decode(&buf);
         assert_eq!(
             wrapped,

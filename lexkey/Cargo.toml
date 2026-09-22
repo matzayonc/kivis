@@ -1,0 +1,34 @@
+[package]
+name = "lexkey"
+version.workspace = true
+edition.workspace = true
+description = "Order-preserving, prefix-free, filename-safe key encoding for serde"
+license = "MIT"
+repository = "https://github.com/matzayonc/kivis"
+homepage = "https://github.com/matzayonc/kivis"
+documentation = "https://docs.rs/lexkey"
+keywords = ["serde", "key", "encoding", "ordered", "database"]
+categories = ["encoding", "database"]
+authors = ["Mateusz Zając <matzayonc@gmail.com>"]
+readme = "README.md"
+
+[features]
+default = []
+# Implements kivis's `Unifier` trait, so this encoding can be used as the key
+# codec of a kivis storage backend. Off by default: the encoding is useful
+# on its own and this pulls in kivis.
+kivis = ["dep:kivis"]
+
+[dependencies]
+# Uses String and std::error::Error, so serde needs std here.
+serde = { workspace = true, features = ["std"] }
+kivis = { workspace = true, optional = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+proptest = { workspace = true }
+kivis = { workspace = true }
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

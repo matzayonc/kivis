@@ -165,10 +165,24 @@ Known gaps — generic records, key ordering for signed and string keys, cache
 coherence after a transaction commit — are written down in
 [LIMITATIONS.md](LIMITATIONS.md).
 
+## Crates in this repository
+
+| Crate | What it is |
+|---|---|
+| [`kivis`](kivis) | the database: derive, manifest, transactions, indexes |
+| [`kivis-derive`](kivis-derive) | the `Record` derive macro |
+| [`kivis-fs`](kivis-fs) | filesystem backend, one readable file per record |
+| [`lexkey`](lexkey) | the key encoding, usable on its own |
+
+`lexkey` is order-preserving, prefix-free and filename-safe, and does not depend on kivis
+unless you ask it to. It was extracted from `kivis-fs`, which needs all three properties to
+turn a composite key into a file name that still sorts correctly.
+
 ## Related work
 
-- **Order-preserving key encoding** (`bytekey`, `storekey`) — kivis ships `Lexicographic`
-  for the string case rather than a general-purpose encoder.
+- **Order-preserving key encoding** (`bytekey`, `storekey`) — both binary; [`lexkey`](lexkey)
+  in this repository is the readable counterpart, and kivis ships `Lexicographic` for
+  ordering plain string fields under the default binary key encoding.
 - **Schema-from-struct modeling** (`native_model`, `struct_db`) — kivis is
   backend-agnostic and keeps its type-safe key wrappers as the referencing mechanism.
 

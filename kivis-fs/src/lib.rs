@@ -88,16 +88,17 @@
 //! Version 0.2 changed the key encoding; directories written by 0.1 cannot be opened.
 
 mod error;
-mod key;
 mod repository;
 mod serializer;
 
 use kivis::Storage;
 
 pub use crate::error::FileStoreError;
-pub use crate::key::{KeyCodec, KeyError};
+// The key encoding lives in its own crate; re-exported so backend users do not need to
+// depend on it directly.
 pub use crate::repository::FileStore;
 pub use crate::serializer::CsvSerializer;
+pub use lexkey::{KeyCodec, KeyError};
 
 impl Storage for FileStore {
     type Repo = Self;
