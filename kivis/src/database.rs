@@ -338,10 +338,20 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
 
     /// Records `key` as the highest id ever issued for `K::Record`.
     ///
+    /// [`Self::put`] calls this for you. Call it yourself after committing a transaction in which
+    /// you issued autoincrement keys via
+    /// [`DatabaseTransaction::put`](crate::DatabaseTransaction::put): without it the counter is
+    /// recovered from the highest stored key, so deleting that record would let its id be issued
+    /// again.
+    ///
     /// Written after the record batch rather than inside it: a counter that is momentarily too low
     /// is harmless because [`Self::load_counter`] also considers the highest stored key, whereas a
     /// counter that is too high would skip ids.
-    fn persist_counter<K: RecordKey>(&mut self, key: &K) -> Result<(), DatabaseError<S>>
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`DatabaseError`] if the key cannot be serialized or the write fails.
+    pub fn persist_counter<K: RecordKey>(&mut self, key: &K) -> Result<(), DatabaseError<S>>
     where
         K::Record: DatabaseEntry<Key = K>,
     {
@@ -482,6 +492,41 @@ impl<S: Storage, M: Manifest<S::Unifiers>, C: Cache> Database<S, M, C> {
     /// Consumes the database and returns the underlying storage.
     pub fn dissolve(self) -> S {
         self.storage
+    }
+
+    /// Returns a reference to the manifest.
+    pub fn manifest(&self) -> &M {
+        &self.manifest
+    }
+
+    /// Returns a mutable reference to the manifest, for use with
+    /// [`DatabaseTransaction::put`](crate::DatabaseTransaction::put).
+    ///
+    /// [`Self::put`] covers the common case; this is needed only to issue autoincrement keys
+    /// inside a transaction you commit yourself:
+    ///
+    /// ```rust
+    /// # use kivis::{Database, MemoryStorage, Record, manifest};
+    /// # #[derive(Record, serde::Serialize, serde::Deserialize, Debug, Clone)]
+    /// # struct Note { body: String }
+    /// # manifest![Notes: Note];
+    /// # fn main() -> Result<(), kivis::DatabaseError<MemoryStorage>> {
+    /// let mut db = Database::<MemoryStorage, Notes>::new(MemoryStorage::new())?;
+    /// let mut tx = db.create_transaction();
+    /// let key = tx.put(Note { body: "hello".into() }, db.manifest_mut())?;
+    /// db.commit(tx)?;
+    /// # let _ = key;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Note that the counter advances when the key is issued, not at commit time, so keys taken
+    /// from a transaction that is rolled back or fails to commit are not handed out again.
+    ///
+    /// Unlike [`Self::put`], this path does not persist the counter; call
+    /// [`Self::persist_counter`] after the commit if the record may later be deleted.
+    pub fn manifest_mut(&mut self) -> &mut M {
+        &mut self.manifest
     }
 
     /// Returns a reference to the cache.
